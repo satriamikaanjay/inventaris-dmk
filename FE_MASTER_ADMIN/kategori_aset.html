@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  	<meta charset="utf-8">
+  	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  	<title>Kategori Aset - Sistem Master Admin</title>
+  	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
+  	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+  	
+  	<style>
+    		:root {
+      			--primary-color: #1a4f91;
+      			--secondary-color: #10b981;
+      			--warning-color: #f59e0b;
+      			--danger-color: #ef4444;
+      			--bg-light: #f8fafc;
+      			--text-color: #000;
+      			--text-muted: rgba(0, 0, 0, 0.45);
+      			--border-color: rgba(0, 0, 0, 0.15);
+      			--sidebar-width: 270px;
+    		}
+
+    		* {
+      			box-sizing: border-box;
+      			margin: 0;
+      			padding: 0;
+    		}
+
+    		body {
+      			font-family: 'Inter', sans-serif;
+      			background-color: var(--bg-light);
+      			color: var(--text-color);
+      			display: flex;
+      			min-height: 100vh;
+      			overflow-x: hidden;
+    		}
+
+    		/* Sidebar Layout */
+    		sidebar {
+      			width: var(--sidebar-width);
+      			background-color: #ffffff;
+      			border-right: 1px solid var(--border-color);
+      			display: flex;
+      			flex-direction: column;
+      			position: fixed;
+      			top: 0;
+      			bottom: 0;
+      			left: 0;
+      			z-index: 100;
+      			overflow-y: auto;
+      			transition: transform 0.3s ease;
+    		}
+
+    		.sidebar-brand {
+      			display: flex;
+      			align-items: center;
+      			padding: 20px;
+      			gap: 12px;
+    		}
+
+    		.brand-logo {
+      			background-color: var(--primary-color);
+      			color: #fff;
+      			font-family: 'Coda Caption', sans-serif;
+      			font-size: 24px;
+      			font-weight: 800;
+      			width: 48px;
+      			height: 40px;
+      			display: flex;
+      			align-items: center;
+      			justify-content: center;
+      			border-radius: 8px;
+    		}
+
+    		.brand-text span {
+      			display: block;
+    		}
+
+    		.brand-text .sistem {
+      			font-weight: 800;
+      			font-size: 18px;
+    		}
+
+    		.brand-text .master-admin {
+      			font-size: 13px;
+      			color: var(--text-muted);
+    		}
+
+    		.sidebar-menu {
+      			padding: 10px 20px;
+      			flex-grow: 1;
+    		}
+
+    		.menu-section-title {
+      			font-size: 12px;
+      			font-weight: 700;
+      			color: rgba(0, 0, 0, 0.35);
+      			margin: 15px 0 8px 0;
+      			letter-spacing: 0.5px;
+    		}
+
+    		.menu-item {
+      			display: flex;
+      			align-items: center;
+      			gap: 12px;
+      			padding: 10px 12px;
+      			color: var(--text-muted);
+      			text-decoration: none;
+      			border-radius: 8px;
+      			font-weight: 500;
+      			font-size: 14px;
+      			margin-bottom: 4px;
+      			transition: background 0.2s, color 0.2s;
+    		}
+
+    		.menu-item svg {
+      			width: 20px;
+      			height: 20px;
+      			fill: currentColor;
+      			flex-shrink: 0;
+    		}
+
+    		.menu-item:hover, .menu-item.active {
+      			background-color: var(--primary-color);
+      			color: #fff;
+    		}
+
+    		.sidebar-user {
+      			padding: 15px 20px;
+      			border-top: 1px solid var(--border-color);
+      			display: flex;
+      			align-items: center;
+      			gap: 12px;
+      			background: #fff;
+    		}
+
+    		.user-avatar {
+      			background-color: var(--primary-color);
+      			color: #fff;
+      			font-family: 'Coda Caption', sans-serif;
+      			font-size: 18px;
+      			width: 40px;
+      			height: 40px;
+      			display: flex;
+      			align-items: center;
+      			justify-content: center;
+      			border-radius: 50%;
+    		}
+
+    		.user-info .user-name {
+      			font-size: 14px;
+      			font-weight: 600;
+    		}
+
+    		.user-info .user-role {
+      			font-size: 12px;
+      			color: var(--text-muted);
+    		}
+
+    		/* Main Content Layout */
+    		main {
+      			margin-left: var(--sidebar-width);
+      			flex-grow: 1;
+      			padding: 25px;
+      			display: flex;
+      			flex-direction: column;
+      			gap: 25px;
+      			width: calc(100% - var(--sidebar-width));
+    		}
+
+    		.main-header {
+      			display: flex;
+      			justify-content: space-between;
+      			align-items: center;
+      			flex-wrap: wrap;
+      			gap: 15px;
+    		}
+
+    		.header-title h1 {
+      			font-size: 26px;
+      			font-weight: 700;
+    		}
+
+    		.header-title p {
+      			font-size: 14px;
+      			color: var(--text-muted);
+      			font-weight: 500;
+    		}
+
+    		.header-actions {
+      			display: flex;
+      			gap: 10px;
+    		}
+
+    		.btn {
+      			padding: 9px 16px;
+      			border-radius: 8px;
+      			font-size: 13px;
+      			font-weight: 600;
+      			cursor: pointer;
+      			border: 1px solid var(--border-color);
+      			background: #fff;
+      			color: var(--text-color);
+      			text-decoration: none;
+      			display: inline-flex;
+      			align-items: center;
+      			gap: 6px;
+    		}
+
+    		.btn-primary {
+      			background: var(--primary-color);
+      			color: #fff;
+      			border: none;
+    		}
+
+    		.btn:hover {
+      			opacity: 0.9;
+    		}
+
+    		/* Table Section Styles */
+    		.card-box {
+      			background: #fff;
+      			padding: 20px;
+      			border-radius: 20px;
+      			box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+      			border: 1px solid var(--border-color);
+    		}
+
+    		.table-toolbar {
+      			display: flex;
+      			justify-content: space-between;
+      			align-items: center;
+      			margin-bottom: 20px;
+      			flex-wrap: wrap;
+      			gap: 15px;
+    		}
+
+    		.search-box {
+      			background: #e5e7eb;
+      			padding: 8px 15px;
+      			border-radius: 10px;
+      			display: flex;
+      			align-items: center;
+      			gap: 10px;
+      			width: 280px;
+    		}
+
+    		.search-box input {
+      			border: none;
+      			background: transparent;
+      			outline: none;
+      			width: 100%;
+      			font-size: 13px;
+    		}
+
+    		.data-table {
+      			width: 100%;
+      			border-collapse: collapse;
+    		}
+
+    		.data-table th {
+      			font-size: 11px;
+      			color: var(--text-muted);
+      			text-align: left;
+      			padding: 12px 10px;
+      			border-bottom: 1px solid var(--border-color);
+      			letter-spacing: 0.5px;
+    		}
+
+    		.data-table td {
+      			font-size: 13px;
+      			padding: 14px 10px;
+      			border-bottom: 1px solid rgba(0,0,0,0.05);
+      			vertical-align: middle;
+    		}
+
+    		.data-table tr:last-child td {
+      			border-bottom: none;
+    		}
+
+    		.badge {
+      			padding: 5px 10px;
+      			border-radius: 20px;
+      			font-size: 11px;
+      			font-weight: 600;
+      			display: inline-block;
+      			background-color: #e0f2fe;
+      			color: #0369a1;
+    		}
+
+    		.action-links {
+      			display: flex;
+      			gap: 10px;
+    		}
+
+    		.action-links a {
+      			font-size: 12px;
+      			font-weight: 600;
+      			text-decoration: none;
+    		}
+
+    		.action-edit { color: var(--primary-color); }
+    		.action-delete { color: var(--danger-color); }
+
+    		@media (max-width: 768px) {
+      			sidebar {
+        				transform: translateX(-100%);
+      			}
+      			main {
+        				margin-left: 0;
+        				width: 100%;
+        				padding: 15px;
+      			}
+    		}
+  	</style>
+</head>
+<body>
+
+  	<!-- Sidebar Navigation -->
+  	<sidebar>
+    		<div class="sidebar-brand">
+      			<div class="brand-logo">SM</div>
+      			<div class="brand-text">
+        				<span class="sistem">Sistem</span>
+        				<span class="master-admin">Master Admin</span>
+      			</div>
+    		</div>
+
+    		<div class="sidebar-menu">
+      			<div class="menu-section-title">MENU UTAMA</div>
+      			<a href="dashboard_admin.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        				Dashboard
+      			</a>
+      			<a href="notivikasi.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        				Notifikasi
+      			</a>
+
+      			<div class="menu-section-title">MANAJEMEN ASET</div>
+      			<a href="data_aset.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM10 4h4v2h-4V4zm10 15H4V8h16v11z"/></svg>
+        				Data Aset
+      			</a>
+      			<a href="barcode_aset.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h3v14H9V5zm4 0h2v14h-2V5zm3 0h1v14h-1V5zm3 0h2v14h-2V5z"/></svg>
+        				Barcode Aset
+      			</a>
+
+      			<div class="menu-section-title">MASTER DATA</div>
+      			<a href="kategori_aset.html" class="menu-item active">
+        				<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+        				Kategori Aset
+      			</a>
+      			<a href="lokasi.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        				Lokasi
+      			</a>
+      			<a href="divisi.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+        				Divisi
+      			</a>
+      			<a href="jabatan.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        				Jabatan
+      			</a>
+
+      			<div class="menu-section-title">AKSES & KEAMANAN</div>
+      			<a href="#" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        				Kelola Akun
+      			</a>
+      			<a href="roles&permission.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        				Roles & Permission
+      			</a>
+
+      			<div class="menu-section-title">LAPORAN & PEMANTAUAN</div>
+      			<a href="laporan.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        				Laporan
+      			</a>
+      			<a href="riwayat_aktivitas.html" class="menu-item">
+        				<svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+        				Riwayat Aktivitas
+      			</a>
+    		</div>
+
+    		<div class="sidebar-user">
+      			<div class="user-avatar">SM</div>
+      			<div class="user-info">
+        				<div class="user-name">Satria Mika N.</div>
+        				<div class="user-role">Administrator</div>
+      			</div>
+    		</div>
+  	</sidebar>
+
+  	<!-- Main Content Layout -->
+  	<main>
+    		<header class="main-header">
+      			<div class="header-title">
+        				<h1>Kategori Aset</h1>
+        				<p>Kelola klasifikasi dan jenis pengelompokan inventaris kantor</p>
+      			</div>
+      			<div class="header-actions">
+        				<button class="btn btn-primary">+ Tambah Kategori</button>
+      			</div>
+    		</header>
+
+    		<!-- Table Container -->
+    		<div class="card-box">
+      			<div class="table-toolbar">
+        				<div class="search-box">
+          					<input type="text" placeholder="Cari kategori atau kode...">
+        				</div>
+      			</div>
+
+      			<table class="data-table">
+        				<thead>
+          					<tr>
+            						<th>KODE KATEGORI</th>
+            						<th>NAMA KATEGORI</th>
+            						<th>DESKRIPSI</th>
+            						<th>JUMLAH ASET</th>
+            						<th>AKSI</th>
+          					</tr>
+        				</thead>
+        				<tbody>
+          					<tr>
+            						<td style="font-weight: 600;">#KAT-01</td>
+            						<td>Elektronik</td>
+            						<td>Perangkat keras seperti laptop, PC, proyektor, dan monitor.</td>
+            						<td><span class="badge">42 Item</span></td>
+            						<td>
+              							<div class="action-links">
+                								<a href="#" class="action-edit">Edit</a>
+                								<a href="#" class="action-delete">Hapus</a>
+              							</div>
+            						</td>
+          					</tr>
+          					<tr>
+            						<td style="font-weight: 600;">#KAT-02</td>
+            						<td>Furniture</td>
+            						<td>Perabot kantor termasuk meja, kursi, lemari arsip, dan partisi.</td>
+            						<td><span class="badge">128 Item</span></td>
+            						<td>
+              							<div class="action-links">
+                								<a href="#" class="action-edit">Edit</a>
+                								<a href="#" class="action-delete">Hapus</a>
+              							</div>
+            						</td>
+          					</tr>
+          					<tr>
+            						<td style="font-weight: 600;">#KAT-03</td>
+            						<td>Multimedia</td>
+            						<td>Alat penunjang kreatif seperti kamera, gimbal, mikrofon, dan lampu studio.</td>
+            						<td><span class="badge">15 Item</span></td>
+            						<td>
+              							<div class="action-links">
+                								<a href="#" class="action-edit">Edit</a>
+                								<a href="#" class="action-delete">Hapus</a>
+              							</div>
+            						</td>
+          					</tr>
+          					<tr>
+            						<td style="font-weight: 600;">#KAT-04</td>
+            						<td>Kendaraan Operasional</td>
+            						<td>Transportasi dinas kantor berupa mobil operasional dan sepeda motor.</td>
+            						<td><span class="badge">8 Item</span></td>
+            						<td>
+              							<div class="action-links">
+                								<a href="#" class="action-edit">Edit</a>
+                								<a href="#" class="action-delete">Hapus</a>
+              							</div>
+            						</td>
+          					</tr>
+        				</tbody>
+      			</table>
+    		</div>
+  	</main>
+
+</body>
+</html>

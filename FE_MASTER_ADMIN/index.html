@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Master Admin</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #0d2642;
+            color: #fff;
+            width: 100vw;
+            height: 100vh; /* Kunci tinggi layar tepat 100% */
+            overflow: hidden; /* Hilangkan scrollbar pada desktop */
+        }
+
+        .login-master-admin {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Panel Kiri (Informasi) */
+        .info-panel {
+            flex: 1;
+            padding: 4% 6%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .brand-header {
+            margin-bottom: 2rem;
+        }
+
+        .pt-name {
+            display: block;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .logistics-solutions {
+            font-size: 13px;
+            color: #ef9b0c;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+
+        .hero-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .platfrom-terpercaya {
+            color: #f29c0c;
+            font-size: 14px;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 0.5rem;
+        }
+
+        .kirim-kargo-anda {
+            font-size: clamp(28px, 3.5vw, 42px);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        .kelola-pengiriman-kargo {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.5;
+            max-width: 450px;
+        }
+
+        .features-container {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .feature-card {
+            background-color: rgba(217, 217, 217, 0.1);
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            flex: 1;
+            min-width: 140px;
+            box-shadow: 5px 4px 10px rgba(0, 0, 0, 0.25);
+        }
+
+        .feature-title {
+            font-size: 14px;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
+        }
+
+        .feature-stat {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
+        }
+
+        /* Panel Kanan (Form Login) */
+        .login-panel {
+            flex: 1;
+            background-color: #fff;
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 2rem;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            background-color: #fff;
+            border-radius: 15px;
+            padding: 2rem 2.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .selamat-datang-kembali {
+            font-size: 22px;
+            margin-bottom: 0.5rem;
+        }
+
+        .masuk-ke-akun-desc {
+            font-size: 13px;
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        .role-toggle {
+            display: flex;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .role-btn {
+            flex: 1;
+            padding: 0.7rem;
+            border: none;
+            background: none;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .role-btn.active {
+            background-color: #008ce2;
+            color: #fff;
+            border-radius: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: #008ce2;
+        }
+
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            margin-bottom: 1.5rem;
+        }
+
+        .ingat-saya {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: rgba(0, 0, 0, 0.6);
+        }
+
+        .right-options {
+            display: flex;
+            gap: 0.8rem;
+        }
+
+        .koneksi-aman {
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        .lupa-password {
+            color: #008ce2;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 0.8rem;
+            background-color: #008ce2;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-bottom: 1.2rem;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background-color: #007bb5;
+        }
+
+        .halaman-ini-diperuntukkan {
+            font-size: 11px;
+            text-align: center;
+            color: rgba(0, 0, 0, 0.5);
+            line-height: 1.4;
+        }
+
+        /* Mode Mobile (Menyembunyikan panel kiri, hanya tampilkan login) */
+        @media screen and (max-width: 968px) {
+            body {
+                background-color: #fff;
+                overflow-y: auto; /* Aktifkan scroll di mobile jika ukuran layar ponsel terlalu kecil untuk form */
+            }
+
+            .info-panel {
+                display: none; /* Sembunyikan informasi kargo sepenuhnya */
+            }
+
+            .login-panel {
+                width: 100%;
+                min-height: 100vh;
+                padding: 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .login-card {
+                padding: 1.5rem;
+                box-shadow: none; /* Tampilan bersih tanpa bayangan berlebih di layar kecil */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-master-admin">
+        <!-- Bagian Kiri: Informasi Kargo (Hidden on Mobile) -->
+        <div class="info-panel">
+            <div class="brand-header">
+                <div class="brand-text">
+                    <span class="pt-name">PT. Dian Mega Kurnia</span>
+                    <span class="logistics-solutions">LOGISTICS SOLUTIONS</span>
+                </div>
+            </div>
+            
+            <div class="hero-section">
+                <div class="trust-badge">
+                    <span class="platfrom-terpercaya">Platform Terpercaya</span>
+                </div>
+                <h1 class="kirim-kargo-anda">Kirim Kargo Anda<br>Ke Seluruh Dunia</h1>
+                <p class="kelola-pengiriman-kargo">Kelola pengiriman kargo laut, udara, dan darat Anda<br>dalam satu platform. Cepat, aman, dan terpercaya.</p>
+            </div>
+
+            <div class="features-container">
+                <div class="feature-card">
+                    <h3 class="feature-title">Terpercaya<br>Keamanan Terjamin</h3>
+                    <p class="feature-stat">500+ Klien Aktif</p>
+                </div>
+                <div class="feature-card">
+                    <h3 class="feature-title">Cepat<br>Kiriman Tepat Waktu</h3>
+                    <p class="feature-stat">99.8% On-Time</p>
+                </div>
+                <div class="feature-card">
+                    <h3 class="feature-title">Global<br>Jangkauan 200+ negara</h3>
+                    <p class="feature-stat">4,9/5 Rating</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bagian Kanan: Form Login (Selalu Tampil) -->
+        <div class="login-panel">
+            <div class="login-card">
+                <div class="login-header">
+                    <h2 class="selamat-datang-kembali">Selamat Datang Kembali</h2>
+                    <p class="masuk-ke-akun-desc">Masuk ke akun Anda untuk mengelola pengiriman kargo</p>
+                </div>
+
+                <div class="role-toggle">
+                    <button class="role-btn">Admin</button>
+                    <button class="role-btn active">Master Admin</button>
+                </div>
+
+                <form class="login-form">
+                    <div class="form-group">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="form-input" placeholder="nama@perusahaan.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" placeholder="••••••••" required>
+                    </div>
+
+                    <div class="form-options">
+                        <label class="ingat-saya">
+                            <input type="checkbox"> Ingat saya
+                        </label>
+                        <div class="right-options">
+                            <span class="koneksi-aman">Koneksi aman</span>
+                            <a href="#" class="lupa-password">Lupa password?</a>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-btn">
+                        Masuk ke Akun
+                    </button>
+                </form>
+
+                <p class="halaman-ini-diperuntukkan">
+                    Halaman ini diperuntukkan bagi Master Admin dengan hak akses penuh terhadap pengelolaan sistem inventaris.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
