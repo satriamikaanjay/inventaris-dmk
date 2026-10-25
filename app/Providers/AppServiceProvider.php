@@ -14,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Kode yang kamu tambahkan sebelumnya
-        if (request()->server('HTTP_X_FORWARDED_PROTO') == 'https') {
+        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
             URL::forceScheme('https');
         }
 

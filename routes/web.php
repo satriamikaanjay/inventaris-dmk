@@ -1,6 +1,18 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminAsetController;
+use App\Http\Controllers\AdminBarcodeController;
+use App\Http\Controllers\AdminKategoriController;
+use App\Http\Controllers\AdminCabangController;
+use App\Http\Controllers\AdminNotifikasiController;
+use App\Http\Controllers\AdminRiwayatController;
+use App\Http\Controllers\AdminLokasiController;
+use App\Http\Controllers\AdminAuthController;
+use App\Http\Controllers\AdminDivisiController;
+use App\Http\Controllers\AdminJabatanController;
+use App\Http\Controllers\AdminLaporanController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\AssetController;
@@ -165,3 +177,82 @@ Route::post('/masteradmin/status-aset', [StatusAsetController::class, 'store'])-
 Route::put('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'update']);
 Route::delete('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'destroy']);
 Route::post('/masteradmin/data-aset/import', [\App\Http\Controllers\ItemController::class, 'importExcel'])->name('aset.import');
+
+
+/*
+|--------------------------------------------------------------------------
+| Web Routes - Sistem Inventaris Admin
+|--------------------------------------------------------------------------
+*/
+
+
+// Halaman Login & Proses Login Utama
+Route::get('/', [AdminAuthController::class, 'showLogin'])->name('login');
+Route::get('/login', [AdminAuthController::class, 'showLogin'])->name('login');
+Route::post('/login/proses', [AdminAuthController::class, 'prosesLogin'])->name('login.proses');
+
+// Rute untuk proses logout
+Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
+                  
+// Rute langsung /admin-dashboard untuk role admin
+Route::get('/admin-dashboard', [AdminDashboardController::class, 'index'])->middleware('auth')->name('admin.dashboard');
+
+// Grup Route untuk Admin (Prefix URL /admin)
+Route::middleware(['auth'])->prefix('admin')->group(function () {
+    
+    // 1. Dashboard Admin
+    Route::get('/', [AdminDashboardController::class, 'index']);
+    Route::get('/dashboard', [AdminDashboardController::class, 'index']);
+
+    // 2. Data Aset Fisik & Import
+    Route::get('/data-aset', [AdminAsetController::class, 'index'])->name('dataaset.index');
+    Route::post('/data-aset', [AdminAsetController::class, 'store'])->name('detailaset.store');
+    Route::put('/data-aset/{id}', [AdminAsetController::class, 'update'])->name('detailaset.update');
+    Route::delete('/data-aset/{id}', [AdminAsetController::class, 'destroy'])->name('detailaset.destroy');
+    Route::post('/import-aset', [AdminAsetController::class, 'importExcel'])->name('aset.import');
+    Route::get('/view-lampiran/{filename}', [AdminAsetController::class, 'viewLampiran']);
+    Route::get('/download-lampiran/{filename}', [AdminAsetController::class, 'downloadLampiran']);
+
+    // 3. Barcode & QR Aset
+    Route::get('/barcode-aset', [AdminBarcodeController::class, 'index'])->name('barcode.index');
+    Route::post('/generate-qr/{id}', [AdminBarcodeController::class, 'generateSingleQr']);
+    Route::post('/generate-qr-all', [AdminBarcodeController::class, 'generateAllQr']);
+
+    // 4. Master Kategori & Aset
+    Route::get('/master-kategori-aset', [AdminKategoriController::class, 'index'])->name('master.kategori');
+    Route::post('/kategori', [AdminKategoriController::class, 'storeKategori'])->name('kategori.store');
+    Route::put('/kategori/{id}', [AdminKategoriController::class, 'updateKategori'])->name('kategori.update');
+    Route::delete('/kategori/{id}', [AdminKategoriController::class, 'destroyKategori'])->name('kategori.destroy');
+
+    Route::post('/items', [AdminKategoriController::class, 'storeItem'])->name('items.store');
+    Route::put('/items/{id}', [AdminKategoriController::class, 'updateItem'])->name('items.update');
+    Route::delete('/items/{id}', [AdminKategoriController::class, 'destroyItem'])->name('items.destroy');
+
+    Route::post('/status-aset', [AdminKategoriController::class, 'storeStatusAset'])->name('status-aset.store');
+    Route::put('/status-aset/{id}', [AdminKategoriController::class, 'updateStatusAset'])->name('status-aset.update');
+    Route::delete('/status-aset/{id}', [AdminKategoriController::class, 'destroyStatusAset'])->name('status-aset.destroy');
+
+    // 5. Master Cabang
+    Route::get('/master-cabang', [AdminCabangController::class, 'index'])->name('cabang.index');
+    Route::post('/cabang', [AdminCabangController::class, 'store'])->name('cabang.store');
+    Route::put('/cabang/{id}', [AdminCabangController::class, 'update'])->name('cabang.update');
+    Route::delete('/cabang/{id}', [AdminCabangController::class, 'destroy'])->name('cabang.destroy');
+
+    // 6. Notifikasi Aset
+    Route::get('/notifikasi', [AdminNotifikasiController::class, 'index'])->name('notifikasi.index');
+
+    // 7. Riwayat Aktivitas
+    Route::get('/riwayat-aktivitas', [AdminRiwayatController::class, 'index'])->name('riwayat_aktivitas.index');
+    Route::delete('/riwayat-aktivitas/clear', [AdminRiwayatController::class, 'clear'])->name('riwayat_aktivitas.clear');
+
+    // 8. Master Lokasi Ruangan
+    Route::get('/master-lokasi', [AdminLokasiController::class, 'index'])->name('lokasi.index');
+    Route::post('/master-lokasi', [AdminLokasiController::class, 'store'])->name('lokasi.store');
+    Route::put('/master-lokasi/{id}', [AdminLokasiController::class, 'update'])->name('lokasi.update');
+    Route::delete('/master-lokasi/{id}', [AdminLokasiController::class, 'destroy'])->name('lokasi.destroy');
+
+    // 9. Halaman Pengembangan (Divisi, Jabatan, Laporan)
+    Route::get('/divisi', [AdminDivisiController::class, 'index'])->name('divisi.index');
+    Route::get('/jabatan', [AdminJabatanController::class, 'index'])->name('jabatan.index');
+    Route::get('/laporan', [AdminLaporanController::class, 'index'])->name('laporan.index');
+});
