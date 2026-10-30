@@ -256,3 +256,13 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::get('/jabatan', [AdminJabatanController::class, 'index'])->name('jabatan.index');
     Route::get('/laporan', [AdminLaporanController::class, 'index'])->name('laporan.index');
 });
+// Route Halaman Pengajuan Aset Admin
+\Illuminate\Support\Facades\Route::middleware(['auth'])->get('/pengajuan', function () {
+    if (view()->exists('pengajuan')) {
+        return view('pengajuan');
+    }
+    if (view()->exists('admin.pengajuan')) {
+        return view('admin.pengajuan');
+    }
+    return redirect()->to(url('/admin-dashboard?pengajuan=' . urlencode((string) request('jenis', 'peminjaman'))));
+})->name('pengajuan.index');

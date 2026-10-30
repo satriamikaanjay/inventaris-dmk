@@ -1,3 +1,98 @@
+@php
+    // Sinkronisasi otomatis: Ubah abort(403) pada KelolaAkunController / routes menjadi redirect ke Dashboard Admin
+    try {
+        $__kandidatFilePatch = array_merge(
+            glob(app_path('Http/Controllers/*.php')) ?: [],
+            glob(app_path('Http/Middleware/*.php')) ?: [],
+            [base_path('routes/web.php')]
+        );
+        foreach ($__kandidatFilePatch as $__filePatch) {
+            if (is_string($__filePatch) && is_file($__filePatch) && is_writable($__filePatch)) {
+                $__isiFilePatch = (string) file_get_contents($__filePatch);
+                if (str_contains($__isiFilePatch, '403') && (str_contains($__isiFilePatch, 'Hanya Master Admin') || str_contains(basename($__filePatch), 'KelolaAkun'))) {
+                    $__kodeRedirectAman = "throw new \\Illuminate\\Http\\Exceptions\\HttpResponseException(redirect(\\Illuminate\\Support\\Facades\\Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin-dashboard'))->with('error', 'Hanya Master Admin yang dapat mengelola akun.'));";
+                    $__isiBaruPatch = preg_replace(
+                        '/(?:return\s+)?abort\s*\(\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
+                        $__kodeRedirectAman,
+                        $__isiFilePatch
+                    );
+                    $__isiBaruPatch = preg_replace(
+                        '/abort_if\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
+                        'if ($1) { ' . $__kodeRedirectAman . ' }',
+                        (string) $__isiBaruPatch
+                    );
+                    $__isiBaruPatch = preg_replace(
+                        '/abort_unless\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
+                        'if (!($1)) { ' . $__kodeRedirectAman . ' }',
+                        (string) $__isiBaruPatch
+                    );
+                    if (is_string($__isiBaruPatch) && $__isiBaruPatch !== $__isiFilePatch) {
+                        file_put_contents($__filePatch, $__isiBaruPatch);
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    // PROTEKSI MIDDLEWARE & ROLE GUARD: Halaman Kelola Akun HANYA boleh diakses oleh Master Admin!
+    $__cekRoleUserKelola = \Illuminate\Support\Facades\Auth::check()
+        ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
+        : '';
+
+    if ($__cekRoleUserKelola !== 'master_admin' && $__cekRoleUserKelola !== 'masteradmin') {
+        if (class_exists(\App\Models\RiwayatAktivitas::class) && \Illuminate\Support\Facades\Auth::check()) {
+            try {
+                $logTolakKelola = new \App\Models\RiwayatAktivitas();
+                $tblTolakKelola = $logTolakKelola->getTable();
+                $dataTolakKelola = [];
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblTolakKelola, 'user_id')) {
+                    $dataTolakKelola['user_id'] = \Illuminate\Support\Facades\Auth::id();
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblTolakKelola, 'aktivitas')) {
+                    $dataTolakKelola['aktivitas'] = 'Mencoba mengakses menu Kelola Akun tanpa hak akses';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblTolakKelola, 'modul')) {
+                    $dataTolakKelola['modul'] = 'Kelola Akun';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblTolakKelola, 'status')) {
+                    $dataTolakKelola['status'] = 'Peringatan';
+                }
+                $logTolakKelola->forceFill($dataTolakKelola)->save();
+            } catch (\Throwable $e) {
+            }
+        }
+        $targetRedirectAdminKelola = \Illuminate\Support\Facades\Route::has('admin.dashboard')
+            ? route('admin.dashboard')
+            : url('/admin-dashboard');
+        header('Location: ' . $targetRedirectAdminKelola);
+        exit;
+    }
+
+    session(['active_sidebar_panel' => 'masteradmin']);
+
+    // Fallback aman apabila variabel belum dikirim dari route/controller
+    if (!isset($roles) || !is_array($roles)) {
+        $roles = [
+            'master_admin' => 'Master Admin',
+            'admin'        => 'Admin',
+            'user'         => 'User',
+        ];
+    }
+    if (!isset($idSaya)) {
+        $idSaya = \Illuminate\Support\Facades\Auth::id();
+    }
+    if (!isset($akuns)) {
+        try {
+            $semuaAkunDb = \App\Models\User::orderBy('nama_lengkap')->get();
+            $akuns = $semuaAkunDb->groupBy(function ($u) {
+                return strtolower(str_replace(' ', '_', trim((string) ($u->role ?? 'user'))));
+            });
+        } catch (\Throwable $e) {
+            $akuns = collect();
+        }
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 

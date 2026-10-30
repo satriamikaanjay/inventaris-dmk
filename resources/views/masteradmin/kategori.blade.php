@@ -1,3 +1,42 @@
+@php
+if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas::class)) {
+    try {
+        $teksAktivitas = trim((string) request('_log_aktivitas', ''));
+        $namaModul = trim((string) request('_log_modul', 'Kategori & Aset'));
+        $statusLog = trim((string) request('_log_status', 'Berhasil'));
+        $userId = \Illuminate\Support\Facades\Auth::id();
+
+        if ($teksAktivitas !== '') {
+            $sudahAda = \App\Models\RiwayatAktivitas::where('user_id', $userId)
+                ->where('aktivitas', $teksAktivitas)
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->exists();
+
+            if (!$sudahAda) {
+                $riwayatBaru = new \App\Models\RiwayatAktivitas();
+                $tabelRiwayat = $riwayatBaru->getTable();
+                $dataLog = [];
+
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tabelRiwayat, 'user_id')) {
+                    $dataLog['user_id'] = $userId;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tabelRiwayat, 'aktivitas')) {
+                    $dataLog['aktivitas'] = $teksAktivitas;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tabelRiwayat, 'modul')) {
+                    $dataLog['modul'] = $namaModul;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tabelRiwayat, 'status')) {
+                    $dataLog['status'] = $statusLog;
+                }
+
+                $riwayatBaru->forceFill($dataLog)->save();
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+}
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 
@@ -551,7 +590,7 @@
 
                         <div class="chip-actions" onclick="event.stopPropagation()">
                             <button type="button" class="btn-edit-sm" onclick="enableInlineEdit('kat-{{ $kat->id }}')">Edit</button>
-                            <form action="{{ url('/masteradmin/kategori/'.$kat->id) }}" method="POST" class="form-delete-kategori" style="display:inline;">
+                            <form action="{{ url('/masteradmin/kategori/'.$kat->id) }}" method="POST" class="form-delete-kategori" data-log-aktivitas="Menghapus kategori aset: {{ $kat->nama_kategori }} ({{ $kat->kode_kategori }})" data-log-modul="Kategori Aset" style="display:inline;">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-delete-sm">Hapus</button>
@@ -578,10 +617,175 @@
 
                     <div class="form-group">
                         <label>Pilih Kategori <span style="color: var(--danger-color);">*</span></label>
+                        @php
+                        $itemModelClass = null;
+                        $itemTableName = null;
+
+                        if (isset($items) && $items->isNotEmpty() && is_object($items->first())) {
+                            $itemModelClass = get_class($items->first());
+                            if (method_exists($items->first(), 'getTable')) {
+                                $itemTableName = $items->first()->getTable();
+                            }
+                        }
+
+                        if (!$itemModelClass) {
+                            $candidateClasses = [
+                                \App\Models\Item::class,
+                                \App\Models\MasterAset::class,
+                                \App\Models\Aset::class,
+                                \App\Models\MasterItem::class,
+                                \App\Models\KategoriAset::class,
+                            ];
+                            foreach ($candidateClasses as $candidateClass) {
+                                if (class_exists($candidateClass)) {
+                                    $itemModelClass = $candidateClass;
+                                    $itemTableName = (new $candidateClass)->getTable();
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!$itemModelClass && function_exists('app_path')) {
+                            foreach (glob(app_path('Models/*.php')) ?: [] as $modelFile) {
+                                $modelBaseName = basename($modelFile, '.php');
+                                if ($modelBaseName === 'Kategori') {
+                                    continue;
+                                }
+                                $candidateClass = str_replace('Kategori', $modelBaseName, \App\Models\Kategori::class);
+                                if (class_exists($candidateClass) && is_subclass_of($candidateClass, \Illuminate\Database\Eloquent\Model::class)) {
+                                    try {
+                                        $inst = new $candidateClass;
+                                        if (\Illuminate\Support\Facades\Schema::hasColumns($inst->getTable(), ['kategori_id', 'nama_aset'])) {
+                                            $itemModelClass = $candidateClass;
+                                            $itemTableName = $inst->getTable();
+                                            break;
+                                        }
+                                    } catch (\Throwable $e) {
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!$itemTableName) {
+                            foreach (['items', 'master_asets', 'asets', 'master_items'] as $candidateTable) {
+                                if (\Illuminate\Support\Facades\Schema::hasTable($candidateTable)) {
+                                    $itemTableName = $candidateTable;
+                                    break;
+                                }
+                            }
+                        }
+
+                        $dbMaxUrutan = [];
+                        $dbUsedUrutan = [];
+                        if ($itemTableName) {
+                            $allItemRows = \Illuminate\Support\Facades\DB::table($itemTableName)
+                                ->select('kategori_id', 'urutan')
+                                ->whereNotNull('kategori_id')
+                                ->get();
+
+                            foreach ($allItemRows as $row) {
+                                $kId = (string) $row->kategori_id;
+                                $urutVal = (int) preg_replace('/[^0-9]/', '', (string) ($row->urutan ?? 0));
+                                if ($urutVal <= 0) {
+                                    $urutVal = 1;
+                                }
+                                if (!isset($dbMaxUrutan[$kId]) || $urutVal > $dbMaxUrutan[$kId]) {
+                                    $dbMaxUrutan[$kId] = $urutVal;
+                                }
+                                $dbUsedUrutan[$kId][] = $urutVal;
+                            }
+                        }
+
+                        $maxUrutanData = [];
+                        $usedUrutanData = [];
+                        foreach ($kategoris as $kat) {
+                            $kId = (string) $kat->id;
+                            $maxUrut = $dbMaxUrutan[$kId] ?? (int) $items->where('kategori_id', $kat->id)->max('urutan');
+                            $usedList = isset($dbUsedUrutan[$kId]) ? array_values(array_unique($dbUsedUrutan[$kId])) : [];
+                            sort($usedList);
+                            $maxUrutanData[$kId] = $maxUrut;
+                            $usedUrutanData[$kId] = $usedList;
+                        }
+
+                        // Dukungan pencarian berdasarkan kode penuh (misal: C.01), kode kategori saja (misal: C), maupun nama/seri/kategori
+                        if (request()->filled('search') && $itemModelClass) {
+                            $rawSearch = trim((string) request('search'));
+                            $cleanSearchUpper = strtoupper(rtrim($rawSearch, '.'));
+
+                            // Peta kode kategori -> daftar ID kategori
+                            $kodeToKatIds = [];
+                            foreach ($kategoris as $kat) {
+                                $kodeBersih = strtoupper(rtrim(trim((string) $kat->kode_kategori), '.'));
+                                if ($kodeBersih !== '') {
+                                    $kodeToKatIds[$kodeBersih][] = $kat->id;
+                                }
+                            }
+
+                            $searchQuery = $itemModelClass::query();
+
+                            // 1. Jika formatnya KODE.URUTAN (contoh: C.01, c.01, C.1, B.40) atau KODE-URUTAN / KODE URUTAN
+                            if (preg_match('/^([a-zA-Z0-9_-]+)[.\s-]+0*(\d+)$/', $rawSearch, $matches) && isset($kodeToKatIds[strtoupper($matches[1])])) {
+                                $targetKatIds = $kodeToKatIds[strtoupper($matches[1])];
+                                $targetUrut = (int) $matches[2];
+                                $searchQuery->whereIn('kategori_id', $targetKatIds)
+                                    ->where(function ($q) use ($targetUrut, $matches) {
+                                        $q->whereRaw('CAST(urutan AS UNSIGNED) = ?', [$targetUrut])
+                                          ->orWhere('urutan', $targetUrut)
+                                          ->orWhere('urutan', $matches[2]);
+                                    });
+                            }
+                            // 2. Jika hanya mengetik kode kategori saja (contoh: "C" atau "c" atau "C.") -> tampilkan khusus kategori itu saja
+                            elseif (isset($kodeToKatIds[$cleanSearchUpper])) {
+                                $targetKatIds = $kodeToKatIds[$cleanSearchUpper];
+                                $searchQuery->whereIn('kategori_id', $targetKatIds)
+                                    ->orderByRaw('CAST(urutan AS UNSIGNED) ASC');
+                            }
+                            // 3. Pencarian umum (nama aset, awalan serial, atau nama kategori)
+                            else {
+                                $matchedKatIdsByName = $kategoris->filter(function ($kat) use ($rawSearch) {
+                                    return stripos((string) $kat->nama_kategori, $rawSearch) !== false
+                                        || stripos((string) $kat->kode_kategori, $rawSearch) !== false;
+                                })->pluck('id')->all();
+
+                                $searchQuery->where(function ($q) use ($rawSearch, $matchedKatIdsByName) {
+                                    $q->where('nama_aset', 'like', '%' . $rawSearch . '%')
+                                      ->orWhere('awal_serial', 'like', '%' . $rawSearch . '%');
+                                    if (!empty($matchedKatIdsByName)) {
+                                        $q->orWhereIn('kategori_id', $matchedKatIdsByName);
+                                    }
+                                    if (ctype_digit($rawSearch)) {
+                                        $q->orWhereRaw('CAST(urutan AS UNSIGNED) = ?', [(int) $rawSearch]);
+                                    }
+                                });
+                            }
+
+                            $perPage = method_exists($items, 'perPage') ? $items->perPage() : 10;
+                            $pageName = method_exists($items, 'getPageName') ? $items->getPageName() : 'item_page';
+                            $items = $searchQuery
+                                ->orderBy('kategori_id', 'asc')
+                                ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
+                                ->paginate($perPage, ['*'], $pageName)
+                                ->withQueryString();
+
+                            $katById = $kategoris->keyBy('id');
+                            foreach ($items as $it) {
+                                if ($it->kategori_id && isset($katById[$it->kategori_id])) {
+                                    $it->setRelation('kategori', $katById[$it->kategori_id]);
+                                }
+                            }
+                        }
+                        @endphp
                         <select name="kategori_id" id="input_kategori_aset" required onchange="kategoriBerubah()">
                             <option value="">-- Pilih Kategori --</option>
                             @foreach($kategoris as $kat)
-                            <option value="{{ $kat->id }}" data-kode="{{ $kat->kode_kategori }}">{{ $kat->nama_kategori }}</option>
+                            @php
+                                $kIdStr = (string) $kat->id;
+                                $nextUrutOption = ($maxUrutanData[$kIdStr] ?? 0) + 1;
+                                while (in_array($nextUrutOption, $usedUrutanData[$kIdStr] ?? [], true)) {
+                                    $nextUrutOption++;
+                                }
+                            @endphp
+                            <option value="{{ $kat->id }}" data-kode="{{ $kat->kode_kategori }}" data-next-urutan="{{ $nextUrutOption }}">{{ $kat->nama_kategori }} ({{ $kat->kode_kategori }})</option>
                             @endforeach
                         </select>
                     </div>
@@ -648,7 +852,7 @@
                             <circle cx="11" cy="11" r="7"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, seri, atau kategori..." autocomplete="off" style="width: 100%; padding: 8px 8px 8px 34px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; outline: none; background: #f8fafc;">
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari kode (C.01 / C), nama aset, seri, atau kategori..." autocomplete="off" style="width: 100%; padding: 8px 8px 8px 34px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; outline: none; background: #f8fafc;">
                     </div>
                     <button type="submit" class="btn btn-primary" style="padding: 8px 12px; font-size: 12px;">Cari</button>
                     @if(request('search'))
@@ -723,7 +927,7 @@
 
                         <div class="chip-actions" onclick="event.stopPropagation()">
                             <button type="button" class="btn-edit-sm" onclick="enableInlineEdit('aset-{{ $item->id }}')">Edit</button>
-                            <form action="{{ url('/masteradmin/items/'.$item->id) }}" method="POST" class="form-delete-kategori" style="display:inline;" onclick="event.stopPropagation()">
+                            <form action="{{ url('/masteradmin/items/'.$item->id) }}" method="POST" class="form-delete-kategori" data-log-aktivitas="Menghapus master aset: {{ ($item->kategori_id && $item->kategori) ? rtrim($item->kategori->kode_kategori, '.') . '.' . str_pad($item->urutan ?? 1, 2, '0', STR_PAD_LEFT) . ' - ' : '' }}{{ $item->nama_aset }}" data-log-modul="Master Aset" style="display:inline;" onclick="event.stopPropagation()">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-delete-sm">Hapus</button>
@@ -794,7 +998,7 @@
 
                         <div class="chip-actions" onclick="event.stopPropagation()">
                             <button type="button" class="btn-edit-sm" onclick="enableInlineEdit('status-{{ $st->id }}')">Edit</button>
-                            <form action="{{ url('/masteradmin/status-aset/'.$st->id) }}" method="POST" class="form-delete-kategori" style="display:inline;">
+                            <form action="{{ url('/masteradmin/status-aset/'.$st->id) }}" method="POST" class="form-delete-kategori" data-log-aktivitas="Menghapus status aset: {{ $st->nama_status }}" data-log-modul="Status Aset" style="display:inline;">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-delete-sm">Hapus</button>
@@ -809,15 +1013,10 @@
         </div>
     </main>
 
-    @php
-    $maxUrutanData = $kategoris->mapWithKeys(function($kat) use ($items) {
-    return [$kat->id => (int) $items->where('kategori_id', $kat->id)->max('urutan')];
-    });
-    @endphp
-
     <!-- Script Fungsional -->
     <script>
-        const maxUrutanPerKategori = JSON.parse('{!! json_encode($maxUrutanData) !!}');
+        const maxUrutanPerKategori = @json($maxUrutanData);
+        const usedUrutanPerKategori = @json($usedUrutanData);
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
@@ -842,20 +1041,29 @@
             }, 2500);
         }
 
-        // Generator B.01
-
-
         // 2. Fungsi saat dropdown kategori dipilih
         function kategoriBerubah() {
             const select = document.getElementById('input_kategori_aset');
-            const katId = select.value;
+            const selectedOption = select.options[select.selectedIndex];
+            const katId = String(select.value || '');
             const urutInput = document.getElementById('input_urutan_aset');
 
-            if (katId && maxUrutanPerKategori[katId] !== undefined) {
-                // Pastikan dibaca sebagai angka matematika
-                let nilaiMaksimal = parseInt(maxUrutanPerKategori[katId]);
+            if (katId !== '') {
+                const attrNext = selectedOption ? parseInt(selectedOption.getAttribute('data-next-urutan'), 10) : NaN;
+                let nilaiMaksimal = maxUrutanPerKategori[katId] !== undefined ? parseInt(maxUrutanPerKategori[katId], 10) : 0;
                 if (isNaN(nilaiMaksimal)) nilaiMaksimal = 0;
-                urutInput.value = nilaiMaksimal + 1;
+
+                let nextUrut = !isNaN(attrNext) && attrNext > 0 ? attrNext : (nilaiMaksimal + 1);
+                if ((nilaiMaksimal + 1) > nextUrut) {
+                    nextUrut = nilaiMaksimal + 1;
+                }
+
+                const usedList = Array.isArray(usedUrutanPerKategori[katId]) ? usedUrutanPerKategori[katId].map(Number) : [];
+                while (usedList.includes(nextUrut)) {
+                    nextUrut++;
+                }
+
+                urutInput.value = nextUrut;
             } else {
                 urutInput.value = 1;
             }
@@ -863,11 +1071,12 @@
             updatePreviewMaster();
         }
 
-        // 3. Fungsi untuk memperbarui teks kode (B.01, B.02, dst)
+        // 3. Fungsi untuk memperbarui teks kode (C.01, C.02, C.03, dst)
         function updatePreviewMaster() {
             const select = document.getElementById('input_kategori_aset');
+            const katId = String(select.value || '');
             let kodeKat = select.options[select.selectedIndex]?.getAttribute('data-kode') || '';
-            const urutInput = document.getElementById('input_urutan_aset').value || '1';
+            const urutInputVal = parseInt(document.getElementById('input_urutan_aset').value, 10) || 1;
 
             const previewInput = document.getElementById('input_kode_kategori_preview');
             const previewText = document.getElementById('preview_kode_master');
@@ -875,13 +1084,22 @@
             if (kodeKat === '') {
                 previewInput.value = '';
                 previewText.innerText = '[PILIH KATEGORI]';
+                previewText.style.color = 'var(--primary-color)';
             } else {
-                // Bersihkan titik di akhir kode jika ada (misal "B." menjadi "B")
-                kodeKat = kodeKat.replace(/\.$/, "");
+                // Bersihkan titik di akhir kode jika ada (misal "C." menjadi "C")
+                kodeKat = kodeKat.replace(/\.$/, '').trim().toUpperCase();
 
                 previewInput.value = kodeKat;
-                const formatUrut = String(urutInput).padStart(2, '0');
-                previewText.innerText = `${kodeKat}.${formatUrut}`;
+                const formatUrut = String(urutInputVal).padStart(2, '0');
+                const usedList = Array.isArray(usedUrutanPerKategori[katId]) ? usedUrutanPerKategori[katId].map(Number) : [];
+
+                if (usedList.includes(urutInputVal)) {
+                    previewText.innerText = `${kodeKat}.${formatUrut} (Sudah ada!)`;
+                    previewText.style.color = 'var(--danger-color)';
+                } else {
+                    previewText.innerText = `${kodeKat}.${formatUrut}`;
+                    previewText.style.color = 'var(--primary-color)';
+                }
             }
         }
 
@@ -981,15 +1199,35 @@
             }
         }
 
+        function catatRiwayatJS(aktivitas, modul, status = 'Berhasil') {
+            if (!aktivitas) return Promise.resolve();
+            const params = new URLSearchParams({
+                _log_riwayat: '1',
+                _log_aktivitas: aktivitas,
+                _log_modul: modul || 'Kategori & Aset',
+                _log_status: status || 'Berhasil'
+            });
+            return fetch(`{{ url()->current() }}?${params.toString()}`, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).catch(() => {});
+        }
+
         document.getElementById('form-kategori').addEventListener('submit', function(e) {
             e.preventDefault();
+            let formData = new FormData(this);
+            let namaKat = (formData.get('nama_kategori') || '').toString().trim();
+            let kodeKat = (formData.get('kode_kategori') || '').toString().trim();
+
             let btnSubmit = document.getElementById('btn-simpan-kategori');
             btnSubmit.classList.add('btn-loading');
             btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
 
             fetch(this.action, {
                     method: 'POST',
-                    body: new FormData(this),
+                    body: formData,
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
@@ -998,10 +1236,15 @@
                     status: res.status,
                     body: data
                 })))
-                .then(res => {
+                .then(async res => {
                     if (res.status === 200 && res.body.success) {
+                        await catatRiwayatJS(
+                            `Menambah kategori aset baru: ${namaKat} (${kodeKat})`,
+                            'Kategori Aset',
+                            'Berhasil'
+                        );
                         showCustomToast(res.body.message, 'success');
-                        setTimeout(() => location.reload(), 800);
+                        setTimeout(() => location.reload(), 600);
                     } else {
                         showCustomToast('Gagal menyimpan kategori.', 'error');
                         resetBtn(btnSubmit, 'Simpan Kategori');
@@ -1014,7 +1257,17 @@
 
         document.getElementById('form-aset').addEventListener('submit', function(e) {
             e.preventDefault();
+            const selectKat = document.getElementById('input_kategori_aset');
+            const katId = String(selectKat.value || '');
+            const urutVal = parseInt(document.getElementById('input_urutan_aset').value, 10) || 1;
+            const usedList = Array.isArray(usedUrutanPerKategori[katId]) ? usedUrutanPerKategori[katId].map(Number) : [];
+            if (usedList.includes(urutVal)) {
+                showCustomToast('Nomor urut tersebut sudah digunakan pada kategori ini!', 'error');
+                return;
+            }
             let formData = new FormData(this);
+            let namaAset = (formData.get('nama_aset') || '').toString().trim();
+            let kodeMasterPreview = (document.getElementById('preview_kode_master')?.innerText || '').trim();
 
             let inputSerial = formData.get('awal_serial');
             if (inputSerial && inputSerial.trim() !== '') {
@@ -1041,16 +1294,20 @@
                     status: res.status,
                     body: data
                 })))
-                .then(res => {
+                .then(async res => {
                     // JIKA BERHASIL
                     if (res.status === 200 && res.body.success) {
+                        await catatRiwayatJS(
+                            `Menambah master aset baru: ${kodeMasterPreview} - ${namaAset}`,
+                            'Master Aset',
+                            'Berhasil'
+                        );
                         showCustomToast(res.body.message, 'success');
-                        setTimeout(() => location.reload(), 800);
+                        setTimeout(() => location.reload(), 600);
                     }
                     // JIKA KENA VALIDASI LARAVEL (Error 422)
                     else if (res.status === 422) {
                         let errorMsg = 'Data tidak valid.';
-                        // Ambil pesan error spesifik dari Laravel (misal: "Nama aset ini sudah terdaftar...")
                         if (res.body.errors) {
                             let firstErrorKey = Object.keys(res.body.errors)[0];
                             errorMsg = res.body.errors[firstErrorKey][0];
@@ -1069,15 +1326,78 @@
                 });
         });
 
+        const formStatusAset = document.getElementById('form-status-aset');
+        if (formStatusAset) {
+            formStatusAset.addEventListener('submit', function(e) {
+                e.preventDefault();
+                let formData = new FormData(this);
+                let namaStatus = (formData.get('nama_status') || '').toString().trim();
+                let btnSubmit = document.getElementById('btn-simpan-status');
+                if (btnSubmit) {
+                    btnSubmit.classList.add('btn-loading');
+                    btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
+                }
+
+                fetch(this.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        }
+                    }).then(async res => {
+                        let isSuccess = res.ok;
+                        let msg = 'Status aset baru berhasil ditambahkan!';
+                        try {
+                            let data = await res.clone().json();
+                            if (data && data.message) msg = data.message;
+                            if (data && data.success === false) isSuccess = false;
+                        } catch (err) {
+                            // Jika controller mereturn redirect HTML biasa, res.ok tetap true
+                        }
+
+                        if (isSuccess) {
+                            await catatRiwayatJS(
+                                `Menambah status aset baru: ${namaStatus}`,
+                                'Status Aset',
+                                'Berhasil'
+                            );
+                            showCustomToast(msg, 'success');
+                            setTimeout(() => location.reload(), 600);
+                        } else {
+                            showCustomToast('Gagal menyimpan status aset.', 'error');
+                            resetBtn(btnSubmit, '<span>Simpan Status Aset</span>');
+                        }
+                    }).catch(err => {
+                        showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                        resetBtn(btnSubmit, '<span>Simpan Status Aset</span>');
+                    });
+            });
+        }
+
         document.querySelectorAll('.chip-edit-form').forEach(form => {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 let fullId = this.id.replace('form-edit-', '');
                 let btnUpdate = document.getElementById('btn-update-' + fullId);
+                let formData = new FormData(this);
+
+                let logAktivitas = '';
+                let logModul = 'Kategori & Aset';
+                if (fullId.startsWith('kat-')) {
+                    logAktivitas = `Memperbarui kategori aset: ${formData.get('nama_kategori') || ''} (${formData.get('kode_kategori') || ''})`;
+                    logModul = 'Kategori Aset';
+                } else if (fullId.startsWith('aset-')) {
+                    logAktivitas = `Memperbarui master aset: ${formData.get('nama_aset') || ''}`;
+                    logModul = 'Master Aset';
+                } else if (fullId.startsWith('status-')) {
+                    logAktivitas = `Memperbarui status aset: ${formData.get('nama_status') || ''}`;
+                    logModul = 'Status Aset';
+                }
 
                 fetch(this.action, {
                         method: 'POST',
-                        body: new FormData(this),
+                        body: formData,
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': '{{ csrf_token() }}'
@@ -1086,9 +1406,10 @@
                         status: res.status,
                         body: data
                     })))
-                    .then(res => {
+                    .then(async res => {
                         document.body.classList.remove('is-updating-global');
                         if (res.status === 200 && res.body.success) {
+                            await catatRiwayatJS(logAktivitas, logModul, 'Informasi');
                             showCustomToast(res.body.message, 'success');
                             setTimeout(() => location.reload(), 500);
                         } else {
@@ -1108,6 +1429,8 @@
                 if (!confirm('Yakin ingin menghapus data ini?')) return;
                 let btnDelete = this.querySelector('.btn-delete-sm');
                 let chipWrapper = this.closest('.chip-wrapper');
+                let logAktivitas = this.getAttribute('data-log-aktivitas') || 'Menghapus data pada halaman Kategori & Aset';
+                let logModul = this.getAttribute('data-log-modul') || 'Kategori & Aset';
 
                 document.body.classList.add('is-updating-global');
                 if (btnDelete) btnDelete.innerHTML = '<span class="spinner-sm"></span>';
@@ -1119,14 +1442,22 @@
                             'X-Requested-With': 'XMLHttpRequest',
                             'X-CSRF-TOKEN': '{{ csrf_token() }}'
                         }
-                    }).then(res => res.json().then(data => ({
-                        status: res.status,
-                        body: data
-                    })))
-                    .then(res => {
+                    }).then(async res => {
+                        let isSuccess = res.ok;
+                        let msg = 'Data berhasil dihapus!';
+                        try {
+                            let data = await res.clone().json();
+                            if (data && data.message) msg = data.message;
+                            if (data && data.success === false) isSuccess = false;
+                        } catch (err) {
+                        }
+                        return { isSuccess, msg };
+                    })
+                    .then(async res => {
                         document.body.classList.remove('is-updating-global');
-                        if (res.status === 200 && res.body.success) {
-                            showCustomToast(res.body.message, 'success');
+                        if (res.isSuccess) {
+                            await catatRiwayatJS(logAktivitas, logModul, 'Peringatan');
+                            showCustomToast(res.msg, 'success');
                             chipWrapper.style.transform = 'scale(0.8)';
                             chipWrapper.style.opacity = '0';
                             setTimeout(() => chipWrapper.remove(), 300);

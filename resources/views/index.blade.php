@@ -1,3 +1,107 @@
+@php
+    $lockFilePath = storage_path('app/admin_login_locks.json');
+    $lockData = [
+        'failed_count' => 0,
+        'is_blocked'   => false,
+        'last_email'   => '',
+        'blocked_at'   => null,
+        'updated_at'   => 0,
+    ];
+
+    if (is_file($lockFilePath)) {
+        $decodedLock = json_decode((string) file_get_contents($lockFilePath), true);
+        if (is_array($decodedLock)) {
+            $lockData = array_merge($lockData, $decodedLock);
+        }
+    }
+
+    // Endpoint AJAX ringan untuk sinkronisasi jumlah gagal login & status blokir Admin
+    if (request()->has('_login_lock_action')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+        $act = (string) request('_login_lock_action');
+
+        if ($act === 'status') {
+            echo json_encode(['success' => true, 'lock' => $lockData]);
+            exit;
+        }
+
+        if ($act === 'record_fail') {
+            $emailGagal = trim((string) request('email', ''));
+            $lockData['failed_count'] = ((int) ($lockData['failed_count'] ?? 0)) + 1;
+            if ($emailGagal !== '') {
+                $lockData['last_email'] = $emailGagal;
+            }
+            $baruTerblokir = false;
+            if ($lockData['failed_count'] >= 5) {
+                if (empty($lockData['is_blocked'])) {
+                    $baruTerblokir = true;
+                }
+                $lockData['is_blocked'] = true;
+                $lockData['blocked_at'] = now()->format('d M Y, H:i:s');
+            }
+            $lockData['updated_at'] = round(microtime(true) * 1000);
+
+            try {
+                file_put_contents($lockFilePath, json_encode($lockData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            } catch (\Throwable $e) {
+            }
+
+            // Catat ke RiwayatAktivitas agar Master Admin mendapat notifikasi real-time
+            if ($baruTerblokir && class_exists(\App\Models\RiwayatAktivitas::class)) {
+                try {
+                    $riwayat = new \App\Models\RiwayatAktivitas();
+                    $tbl = $riwayat->getTable();
+                    $dataLog = [];
+                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'user_id')) {
+                        $dataLog['user_id'] = null;
+                    }
+                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'aktivitas')) {
+                        $infoEmail = $emailGagal !== '' ? (' (' . $emailGagal . ')') : '';
+                        $dataLog['aktivitas'] = 'Peringatan Keamanan: Akses login Admin terblokir setelah 5 kali salah memasukkan data/kata sandi' . $infoEmail . '.';
+                    }
+                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'modul')) {
+                        $dataLog['modul'] = 'Autentikasi Sistem';
+                    }
+                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'status')) {
+                        $dataLog['status'] = 'Peringatan';
+                    }
+                    $riwayat->forceFill($dataLog)->save();
+                } catch (\Throwable $e) {
+                }
+            }
+
+            echo json_encode(['success' => true, 'lock' => $lockData]);
+            exit;
+        }
+
+        if ($act === 'reset_lock') {
+            $lockData = [
+                'failed_count' => 0,
+                'is_blocked'   => false,
+                'last_email'   => '',
+                'blocked_at'   => null,
+                'updated_at'   => round(microtime(true) * 1000),
+            ];
+            try {
+                file_put_contents($lockFilePath, json_encode($lockData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            } catch (\Throwable $e) {
+            }
+            echo json_encode(['success' => true, 'lock' => $lockData]);
+            exit;
+        }
+
+        echo json_encode(['success' => false]);
+        exit;
+    }
+
+    $adaErrorLoginServer = $errors->any();
+    $oldRoleLogin = old('login_as', '');
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -346,6 +450,81 @@
                 box-shadow: none; /* Tampilan bersih tanpa bayangan berlebih di layar kecil */
             }
         }
+            /* --- LABEL BLOKIR LOGIN ADMIN (5X GAGAL) --- */
+        .admin-blocked-box {
+            display: none;
+            background-color: #fef2f2;
+            border: 2px solid #ef4444;
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 1.2rem;
+            color: #991b1b;
+            animation: shake-lock 0.4s ease-in-out;
+        }
+        .admin-blocked-box.show {
+            display: block;
+        }
+        .admin-blocked-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 800;
+            color: #dc2626;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .admin-blocked-desc {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #7f1d1d;
+            font-weight: 500;
+        }
+        .admin-blocked-contact {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #fca5a5;
+            font-size: 12px;
+            font-weight: 700;
+            color: #b91c1c;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .admin-attempt-warning {
+            display: none;
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            line-height: 1.4;
+        }
+        .admin-attempt-warning.show {
+            display: block;
+        }
+        .form-input:disabled {
+            background-color: #f1f5f9 !important;
+            color: #94a3b8 !important;
+            cursor: not-allowed !important;
+            border-color: #cbd5e1 !important;
+        }
+        .submit-btn.blocked-btn {
+            background-color: #dc2626 !important;
+            color: #fff !important;
+            cursor: not-allowed !important;
+            opacity: 0.9 !important;
+        }
+        @keyframes shake-lock {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
     </style>
 </head>
 <body>
@@ -415,10 +594,30 @@
                         </div>
                     @endif
 
+                    <!-- LABEL PERINGATAN PERCOBAAN GAGAL (1 s/d 4 KALI) -->
+                    <div id="admin-attempt-warning" class="admin-attempt-warning"></div>
+
+                    <!-- LABEL TERBLOKIR SETELAH 5 KALI SALAH (KHUSUS ADMIN) -->
+                    <div id="admin-blocked-box" class="admin-blocked-box">
+                        <div class="admin-blocked-header">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            <span>Akses Login Admin Terblokir (5/5 Gagal)</span>
+                        </div>
+                        <div class="admin-blocked-desc">
+                            Anda telah memasukkan kata sandi atau data login yang salah sebanyak <strong>5 kali</strong> berturut-turut. Demi keamanan sistem, akses masuk untuk <strong>Admin</strong> telah dikunci sementara.
+                        </div>
+                        <div class="admin-blocked-contact">
+                            <span>📞 Silakan hubungi <strong>Master Admin</strong> untuk membuka blokir akun Anda.</span>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">Email Address</label>
                         <!-- Tambahkan name="email" -->
-                        <input type="email" name="email" class="form-input" placeholder="nama@perusahaan.com" value="{{ old('email') }}" required>
+                        <input type="email" name="email" id="email-input" class="form-input" placeholder="nama@perusahaan.com" value="{{ old('email') }}" required>
                     </div>
 
                     <div class="form-group">
@@ -466,66 +665,239 @@
     </div>
 
     <script>
+        const MAX_ADMIN_ATTEMPTS = 5;
+        const STORAGE_KEY_COUNT = 'admin_login_failed_count';
+        const STORAGE_KEY_BLOCKED = 'admin_login_is_blocked';
+        const SESSION_KEY_LAST_ROLE = 'login_last_selected_role';
+        const SESSION_KEY_PENDING_ADMIN = 'login_pending_admin_attempt';
+
+        const SERVER_LOCK_INIT = @json($lockData);
+        const ADA_ERROR_LOGIN_SERVER = @json($adaErrorLoginServer);
+        const OLD_ROLE_SERVER = @json($oldRoleLogin);
+
         const btnAdmin = document.getElementById('btn-admin');
         const btnMaster = document.getElementById('btn-master');
         const hiddenRole = document.getElementById('login_as');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const formLogin = document.getElementById('form-login');
+        const btnSubmit = document.getElementById('btn-submit');
+        const btnText = document.getElementById('btn-text');
+        const blockedBox = document.getElementById('admin-blocked-box');
+        const warningBox = document.getElementById('admin-attempt-warning');
+        const footerNote = document.querySelector('.halaman-ini-diperuntukkan');
+
+        let serverLockState = SERVER_LOCK_INIT || { failed_count: 0, is_blocked: false };
+
+        function getFailedCount() {
+            const localCount = parseInt(localStorage.getItem(STORAGE_KEY_COUNT) || '0', 10) || 0;
+            const srvCount = parseInt(serverLockState.failed_count || 0, 10) || 0;
+            return Math.max(localCount, srvCount);
+        }
+
+        function isBlockedAdmin() {
+            return localStorage.getItem(STORAGE_KEY_BLOCKED) === '1'
+                || !!serverLockState.is_blocked
+                || getFailedCount() >= MAX_ADMIN_ATTEMPTS;
+        }
+
+        function syncLockStateFromServerObj(lockObj) {
+            if (!lockObj) return;
+            serverLockState = lockObj;
+            const srvCount = parseInt(lockObj.failed_count || 0, 10) || 0;
+            localStorage.setItem(STORAGE_KEY_COUNT, String(srvCount));
+            if (lockObj.is_blocked || srvCount >= MAX_ADMIN_ATTEMPTS) {
+                localStorage.setItem(STORAGE_KEY_BLOCKED, '1');
+            } else {
+                localStorage.removeItem(STORAGE_KEY_BLOCKED);
+            }
+        }
+
+        function perbaruiTampilanFormBerdasarkanRole() {
+            const isRoleAdmin = (hiddenRole.value === 'admin');
+            const count = getFailedCount();
+            const terblokir = isBlockedAdmin();
+
+            if (footerNote) {
+                footerNote.textContent = isRoleAdmin
+                    ? 'Halaman login khusus Admin. Maksimal 5 kali percobaan gagal sebelum akses dikunci otomatis.'
+                    : 'Halaman ini diperuntukkan bagi Master Admin dengan hak akses penuh terhadap pengelolaan sistem inventaris.';
+            }
+
+            if (isRoleAdmin) {
+                if (terblokir) {
+                    blockedBox.classList.add('show');
+                    warningBox.classList.remove('show');
+                    emailInput.disabled = true;
+                    passwordInput.disabled = true;
+                    btnSubmit.disabled = true;
+                    btnSubmit.classList.add('blocked-btn');
+                    btnText.textContent = '🔒 Terblokir — Hubungi Master Admin';
+                } else {
+                    blockedBox.classList.remove('show');
+                    emailInput.disabled = false;
+                    passwordInput.disabled = false;
+                    btnSubmit.disabled = false;
+                    btnSubmit.classList.remove('blocked-btn');
+                    btnText.textContent = 'Masuk ke Akun';
+
+                    if (count > 0 && count < MAX_ADMIN_ATTEMPTS) {
+                        const sisa = MAX_ADMIN_ATTEMPTS - count;
+                        warningBox.innerHTML = `⚠️ Kata sandi / data salah (<strong>${count}/${MAX_ADMIN_ATTEMPTS}</strong>). Sisa <strong>${sisa} percobaan</strong> lagi sebelum akses Admin diblokir.`;
+                        warningBox.classList.add('show');
+                    } else {
+                        warningBox.classList.remove('show');
+                    }
+                }
+            } else {
+                // Mode Master Admin tetap bisa diakses agar Master Admin tidak ikut terkunci
+                blockedBox.classList.remove('show');
+                warningBox.classList.remove('show');
+                emailInput.disabled = false;
+                passwordInput.disabled = false;
+                btnSubmit.disabled = false;
+                btnSubmit.classList.remove('blocked-btn');
+                btnText.textContent = 'Masuk ke Akun';
+            }
+        }
+
+        function pilihTabRole(roleValue) {
+            if (roleValue === 'admin') {
+                btnAdmin.classList.add('active');
+                btnMaster.classList.remove('active');
+                hiddenRole.value = 'admin';
+            } else {
+                btnMaster.classList.add('active');
+                btnAdmin.classList.remove('active');
+                hiddenRole.value = 'master_admin';
+            }
+            sessionStorage.setItem(SESSION_KEY_LAST_ROLE, hiddenRole.value);
+            perbaruiTampilanFormBerdasarkanRole();
+        }
 
         btnAdmin.addEventListener('click', function() {
-            btnAdmin.classList.add('active');
-            btnMaster.classList.remove('active');
-            hiddenRole.value = 'admin'; // Set nilai ke admin
+            pilihTabRole('admin');
         });
 
         btnMaster.addEventListener('click', function() {
-            btnMaster.classList.add('active');
-            btnAdmin.classList.remove('active');
-            hiddenRole.value = 'master_admin'; // Set nilai ke master admin
+            pilihTabRole('master_admin');
+        });
+
+        // Cek apakah halaman baru saja reload karena gagal login pada tab Admin
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Sinkronkan status awal dari server (jika Master Admin sudah membuka blokir, otomatis terbuka)
+            if (!SERVER_LOCK_INIT.is_blocked && (SERVER_LOCK_INIT.failed_count || 0) === 0) {
+                localStorage.removeItem(STORAGE_KEY_COUNT);
+                localStorage.removeItem(STORAGE_KEY_BLOCKED);
+            } else {
+                syncLockStateFromServerObj(SERVER_LOCK_INIT);
+            }
+
+            const pendingAdminAttempt = sessionStorage.getItem(SESSION_KEY_PENDING_ADMIN) === '1';
+            const savedRole = OLD_ROLE_SERVER || sessionStorage.getItem(SESSION_KEY_LAST_ROLE) || 'master_admin';
+
+            if (ADA_ERROR_LOGIN_SERVER && (pendingAdminAttempt || savedRole === 'admin')) {
+                sessionStorage.removeItem(SESSION_KEY_PENDING_ADMIN);
+
+                // Tambah hitungan gagal login Admin
+                const nextCount = getFailedCount() + 1;
+                localStorage.setItem(STORAGE_KEY_COUNT, String(nextCount));
+                if (nextCount >= MAX_ADMIN_ATTEMPTS) {
+                    localStorage.setItem(STORAGE_KEY_BLOCKED, '1');
+                }
+
+                try {
+                    const params = new URLSearchParams({
+                        _login_lock_action: 'record_fail',
+                        email: emailInput ? emailInput.value : ''
+                    });
+                    const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                        method: 'GET',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.lock) {
+                            syncLockStateFromServerObj(data.lock);
+                        }
+                    }
+                } catch (e) {}
+
+                pilihTabRole('admin');
+            } else {
+                sessionStorage.removeItem(SESSION_KEY_PENDING_ADMIN);
+                pilihTabRole(savedRole);
+            }
+
+            // Polling ringan setiap 3 detik: jika Master Admin membuka blokir dari halaman Roles & Permission,
+            // form login Admin otomatis terbuka kembali secara real-time tanpa perlu refresh!
+            setInterval(async () => {
+                if (document.hidden) return;
+                try {
+                    const res = await fetch(`{{ url()->current() }}?_login_lock_action=status&_t=${Date.now()}`, {
+                        method: 'GET',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.lock) {
+                            const wasBlocked = isBlockedAdmin();
+                            syncLockStateFromServerObj(data.lock);
+                            if (wasBlocked !== isBlockedAdmin()) {
+                                perbaruiTampilanFormBerdasarkanRole();
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }, 3000);
         });
 
         const errorToast = document.getElementById('error-toast');
         if (errorToast) {
-            // Munculkan notifikasi setelah 100ms
             setTimeout(() => {
                 errorToast.classList.add('show');
             }, 100);
 
-            // Hilangkan notifikasi setelah 3000ms (3 detik)
             setTimeout(() => {
                 errorToast.classList.remove('show');
-            }, 3000);
+            }, 3500);
         }
 
-        // --- SCRIPT ANIMASI LOADING BUTTON ---
-        const formLogin = document.getElementById('form-login');
-        const btnSubmit = document.getElementById('btn-submit');
-        const btnText = document.getElementById('btn-text');
+        // --- PROTEKSI SUBMIT & ANIMASI LOADING BUTTON ---
+        formLogin.addEventListener('submit', function(e) {
+            if (hiddenRole.value === 'admin' && isBlockedAdmin()) {
+                e.preventDefault();
+                perbaruiTampilanFormBerdasarkanRole();
+                return false;
+            }
 
-        formLogin.addEventListener('submit', function() {
-            // Nonaktifkan tombol agar tidak bisa di-klik 2 kali
+            if (hiddenRole.value === 'admin') {
+                sessionStorage.setItem(SESSION_KEY_PENDING_ADMIN, '1');
+                sessionStorage.setItem(SESSION_KEY_LAST_ROLE, 'admin');
+            } else {
+                sessionStorage.removeItem(SESSION_KEY_PENDING_ADMIN);
+                sessionStorage.setItem(SESSION_KEY_LAST_ROLE, 'master_admin');
+            }
+
             btnSubmit.disabled = true;
-            
-            // Ubah teks tombol menjadi animasi spinner
             btnText.innerHTML = '<span class="spinner"></span> Memproses...';
         });
 
         const togglePasswordBtn = document.getElementById('toggle-password');
-        const passwordInput = document.getElementById('password-input');
         const eyeIcon = document.getElementById('eye-icon');
         const eyeOffIcon = document.getElementById('eye-off-icon');
 
         togglePasswordBtn.addEventListener('click', function () {
-            // Cek tipe input saat ini, lalu balik posisinya (toggle)
             const currentType = passwordInput.getAttribute('type');
             const newType = currentType === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', newType);
 
-            // Ganti ikon mata sesuai dengan tipe input
             if (newType === 'text') {
-                eyeIcon.style.display = 'none';       // Sembunyikan mata terbuka
-                eyeOffIcon.style.display = 'block';   // Tampilkan mata tercoret
+                eyeIcon.style.display = 'none';
+                eyeOffIcon.style.display = 'block';
             } else {
-                eyeIcon.style.display = 'block';      // Tampilkan mata terbuka
-                eyeOffIcon.style.display = 'none';    // Sembunyikan mata tercoret
+                eyeIcon.style.display = 'block';
+                eyeOffIcon.style.display = 'none';
             }
         });
     </script>

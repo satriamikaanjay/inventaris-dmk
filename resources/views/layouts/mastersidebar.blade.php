@@ -1,3 +1,60 @@
+@php
+    /* AUTO_ADMIN_SIDEBAR_GUARD */
+    $__roleLoginSaatIni = \Illuminate\Support\Facades\Auth::check()
+        ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
+        : '';
+    $__isAkunMasterAdmin = ($__roleLoginSaatIni === 'master_admin' || $__roleLoginSaatIni === 'masteradmin');
+    $__uriSekarang = strtolower(trim((string) request()->path(), '/'));
+
+    // 1. Jika user adalah ADMIN tetapi mengetik URL khusus Master Admin (/roles, /kelola-akun, atau dashboard /masteradmin),
+    //    catat pelanggaran ke RiwayatAktivitas dan paksa redirect ke /admin-dashboard!
+    $__isHalamanKhususMaster = ($__uriSekarang === 'masteradmin' || str_starts_with($__uriSekarang, 'masteradmin/dashboard') || str_starts_with($__uriSekarang, 'roles') || str_starts_with($__uriSekarang, 'kelola-akun') || request()->routeIs('masteradmin.dashboard', 'roles.*', 'kelola_akun.*'));
+
+    if (!$__isAkunMasterAdmin && $__isHalamanKhususMaster) {
+        if (class_exists(\App\Models\RiwayatAktivitas::class) && \Illuminate\Support\Facades\Auth::check()) {
+            try {
+                $namaMenuTerlarang = str_starts_with($__uriSekarang, 'roles')
+                    ? 'Roles & Permission'
+                    : (str_starts_with($__uriSekarang, 'kelola-akun') ? 'Kelola Akun' : 'Dashboard Master Admin');
+                $logPelanggaran = new \App\Models\RiwayatAktivitas();
+                $tblPlg = $logPelanggaran->getTable();
+                $dataPlg = [];
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblPlg, 'user_id')) {
+                    $dataPlg['user_id'] = \Illuminate\Support\Facades\Auth::id();
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblPlg, 'aktivitas')) {
+                    $dataPlg['aktivitas'] = 'Mencoba mengakses menu ' . $namaMenuTerlarang . ' tanpa hak akses';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblPlg, 'modul')) {
+                    $dataPlg['modul'] = $namaMenuTerlarang;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblPlg, 'status')) {
+                    $dataPlg['status'] = 'Peringatan';
+                }
+                $logPelanggaran->forceFill($dataPlg)->save();
+            } catch (\Throwable $e) {
+            }
+        }
+        $urlDashAdmin = \Illuminate\Support\Facades\Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin-dashboard');
+        header('Location: ' . $urlDashAdmin);
+        exit;
+    }
+
+    // 2. Jika user adalah MASTER ADMIN tetapi mengetik URL khusus Admin (/admin-dashboard atau ?panel=admin),
+    //    paksa redirect kembali ke Dashboard Master Admin!
+    $__isHalamanKhususAdmin = (str_starts_with($__uriSekarang, 'admin-dashboard') || str_starts_with($__uriSekarang, 'admin/dashboard') || request()->routeIs('admin.dashboard'));
+    if ($__isAkunMasterAdmin && $__isHalamanKhususAdmin) {
+        $urlDashMaster = \Illuminate\Support\Facades\Route::has('masteradmin.dashboard') ? route('masteradmin.dashboard') : url('/masteradmin');
+        header('Location: ' . $urlDashMaster);
+        exit;
+    }
+
+    // 3. Tentukan sidebar sesuai role akun yang sedang login (Master Admin -> mastersidebar, Admin -> adminsidebar)
+    $__pakaiAdminSidebar = !$__isAkunMasterAdmin;
+@endphp
+@if($__pakaiAdminSidebar)
+    @include('layouts.adminsidebar')
+@else
 <style>
     :root {
         --primary-color: #1a4f91;
@@ -198,6 +255,19 @@
                ->where('servis_berikutnya', '<=', $batasMendekatiNotif);
         })->orWhere('status_aset', 'like', '%Rusak%');
     })->count();
+
+    // Tambahkan jumlah permintaan reset password Admin yang masih pending ke badge Notifikasi Master Admin
+    try {
+        $resetReqFileSb = storage_path('app/password_reset_requests.json');
+        if (is_file($resetReqFileSb)) {
+            $listReqSb = json_decode((string) file_get_contents($resetReqFileSb), true);
+            if (is_array($listReqSb)) {
+                $jmlPendingSb = count(array_filter($listReqSb, fn($r) => ($r['status'] ?? 'pending') === 'pending'));
+                $jumlahNotifSidebar += $jmlPendingSb;
+            }
+        }
+    } catch (\Throwable $e) {
+    }
 
     // 2. Ambil daftar ID seluruh Riwayat Aktivitas (diurutkan dari terbaru) untuk mendeteksi riwayat baru
     $daftarIdRiwayat = [];
@@ -449,3 +519,4 @@
         });
     })();
 </script>
+@endif

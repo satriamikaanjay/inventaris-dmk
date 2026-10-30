@@ -176,7 +176,7 @@ class KelolaAkunController extends Controller
 
         if (!$pengguna || $this->normalisasiRole($pengguna->role) !== 'master_admin') {
             $this->catat('Mencoba mengakses menu Kelola Akun tanpa hak akses', 'Peringatan');
-            abort(403, 'Hanya Master Admin yang dapat mengelola akun.');
+            throw new \Illuminate\Http\Exceptions\HttpResponseException(redirect(\Illuminate\Support\Facades\Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin-dashboard'))->with('error', 'Hanya Master Admin yang dapat mengelola akun.'));
         }
     }
 

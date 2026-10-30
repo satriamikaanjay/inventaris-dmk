@@ -1,3 +1,20 @@
+@php
+    // PROTEKSI MIDDLEWARE & ROLE GUARD: Halaman Dashboard Admin (/admin-dashboard) HANYA boleh diakses oleh Admin!
+    // Jika Master Admin mencoba mengakses /admin-dashboard, langsung alihkan ke Dashboard Master Admin.
+    $__cekRoleUserDash = \Illuminate\Support\Facades\Auth::check()
+        ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
+        : '';
+
+    if ($__cekRoleUserDash === 'master_admin' || $__cekRoleUserDash === 'masteradmin') {
+        $targetRedirectMaster = \Illuminate\Support\Facades\Route::has('masteradmin.dashboard')
+            ? route('masteradmin.dashboard')
+            : url('/masteradmin');
+        header('Location: ' . $targetRedirectMaster);
+        exit;
+    }
+
+    session(['active_sidebar_panel' => 'admin']);
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>

@@ -280,18 +280,161 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
+            /* ===== REAL-TIME NOTIFIKASI KHUSUS MASTER ADMIN ===== */
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse-live 1.5s infinite;
+        }
+        @keyframes pulse-live {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+            70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .realtime-toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+            width: calc(100% - 48px);
+            pointer-events: none;
+        }
+        .realtime-toast {
+            pointer-events: auto;
+            background: #ffffff;
+            border-left: 5px solid var(--primary-color);
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+            border-top: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            transform: translateX(120%);
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        }
+        .realtime-toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .realtime-toast-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: #eff6ff;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .realtime-toast-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .realtime-toast-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 3px;
+        }
+        .realtime-toast-user {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 2px;
+        }
+        .realtime-toast-text {
+            font-size: 12px;
+            color: #475569;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+        .realtime-toast-meta {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        .realtime-toast-close {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+        .realtime-toast-close:hover {
+            color: var(--danger-color);
+        }
     </style>
 </head>
 <body>
 
+    @php
+        if (request('panel') === 'admin') {
+            session(['active_sidebar_panel' => 'admin']);
+        } elseif (request('panel') === 'master') {
+            session(['active_sidebar_panel' => 'masteradmin']);
+        }
+        $__roleUserSekarang = \Illuminate\Support\Facades\Auth::check()
+            ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
+            : '';
+        $__gunakanAdminSidebar = ($__roleUserSekarang === 'admin') || session('active_sidebar_panel') === 'admin';
+        // Fitur real-time notifikasi riwayat khusus untuk Master Admin
+        $__isMasterAdminRiwayat = ($__roleUserSekarang === 'master_admin' || $__roleUserSekarang === 'masteradmin') && !$__gunakanAdminSidebar;
+    @endphp
+
     <!-- Sidebar Navigation -->
-    @include('layouts.mastersidebar')
+    @if($__gunakanAdminSidebar)
+        @include('layouts.adminsidebar')
+    @else
+        @include('layouts.mastersidebar')
+    @endif
+
+    @if($__isMasterAdminRiwayat)
+        <div id="realtime-toast-container" class="realtime-toast-container"></div>
+    @endif
 
     <!-- Main Content Layout -->
     <main>
         <header class="main-header">
             <div class="header-title">
-                <h1>Riwayat Aktivitas 🕒</h1>
+                <h1>
+                    Riwayat Aktivitas 🕒
+                    @if($__isMasterAdminRiwayat)
+                        <span class="live-indicator" title="Pemantauan real-time aktif khusus Master Admin">
+                            <span class="live-dot"></span> Live Real-Time
+                        </span>
+                    @endif
+                </h1>
                 <p>Pantau catatan log aktivitas, penambahan aset, dan perubahan data pada sistem secara real-time</p>
             </div>
             <div class="header-actions">
@@ -365,7 +508,7 @@
                             <th>STATUS</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="riwayat-tbody">
                         @forelse($riwayats as $riwayat)
                             @php
                                 $idUnikRiwayat = (is_object($riwayat) && method_exists($riwayat, 'getKey') && $riwayat->getKey() !== null)
@@ -449,9 +592,9 @@
             }
 
             // 2. Gunakan sensor keterlihatan layar (IntersectionObserver) agar otomatis terbaca tanpa diklik
-            const barisBelumDibaca = document.querySelectorAll('tr.riwayat-row.belum-dibaca');
+            let observerRiwayat = null;
             if ('IntersectionObserver' in window) {
-                const observer = new IntersectionObserver(function (entries, obs) {
+                observerRiwayat = new IntersectionObserver(function (entries, obs) {
                     entries.forEach(function (entry) {
                         if (entry.isIntersecting) {
                             prosesOtomatisTerbaca(entry.target);
@@ -459,14 +602,137 @@
                         }
                     });
                 }, { threshold: 0.1 });
+            }
 
-                barisBelumDibaca.forEach(function (tr) {
-                    observer.observe(tr);
+            function pantauBarisBelumDibaca(trElement) {
+                if (!trElement) return;
+                if (observerRiwayat) {
+                    observerRiwayat.observe(trElement);
+                } else {
+                    prosesOtomatisTerbaca(trElement);
+                }
+            }
+
+            document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
+                pantauBarisBelumDibaca(tr);
+            });
+
+            // 3. FITUR REAL-TIME POLLING KHUSUS MASTER ADMIN (TANPA PERLU REFRESH)
+            const IS_MASTER_ADMIN_RIWAYAT = @json($__isMasterAdminRiwayat);
+
+            function tampilkanNotifRealtimeMasterAdmin(pengguna, role, aktivitas, modul, waktu) {
+                const container = document.getElementById('realtime-toast-container');
+                if (!container) return;
+
+                const toast = document.createElement('div');
+                toast.className = 'realtime-toast';
+                toast.innerHTML = `
+                    <div class="realtime-toast-icon">🔔</div>
+                    <div class="realtime-toast-body">
+                        <div class="realtime-toast-title">Aktivitas Baru Masuk</div>
+                        <div class="realtime-toast-user">${pengguna} <span style="font-weight:500; color:#64748b; font-size:11px;">(${role})</span></div>
+                        <div class="realtime-toast-text">${aktivitas}</div>
+                        <div class="realtime-toast-meta">${modul} • ${waktu || 'Baru saja'}</div>
+                    </div>
+                    <button type="button" class="realtime-toast-close" title="Tutup">&times;</button>
+                `;
+
+                toast.querySelector('.realtime-toast-close').addEventListener('click', function () {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 300);
                 });
-            } else {
-                barisBelumDibaca.forEach(function (tr) {
-                    prosesOtomatisTerbaca(tr);
+
+                container.prepend(toast);
+                requestAnimationFrame(() => {
+                    toast.classList.add('show');
                 });
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.classList.remove('show');
+                        setTimeout(() => toast.remove(), 350);
+                    }
+                }, 6000);
+            }
+
+            if (IS_MASTER_ADMIN_RIWAYAT) {
+                const knownRiwayatIds = new Set();
+                document.querySelectorAll('tr.riwayat-row[data-riwayat-id]').forEach(function (tr) {
+                    knownRiwayatIds.add(String(tr.getAttribute('data-riwayat-id')));
+                });
+
+                let sedangPolling = false;
+
+                async function cekRiwayatTerbaruRealtime() {
+                    if (sedangPolling || document.hidden) return;
+                    sedangPolling = true;
+
+                    try {
+                        const urlPoll = new URL(window.location.href);
+                        urlPoll.searchParams.set('_rt_poll', Date.now());
+
+                        const res = await fetch(urlPoll.toString(), {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Cache-Control': 'no-cache'
+                            }
+                        });
+
+                        if (!res.ok) {
+                            sedangPolling = false;
+                            return;
+                        }
+
+                        const htmlText = await res.text();
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(htmlText, 'text/html');
+                        const rowsBaruServer = Array.from(doc.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
+                        const tbodySekarang = document.getElementById('riwayat-tbody');
+
+                        if (rowsBaruServer.length > 0 && tbodySekarang) {
+                            // Cari baris yang belum ada di layar saat ini (diurutkan dari yang paling lama di antara yang baru agar urutan prepend tepat)
+                            const itemBaru = rowsBaruServer.filter(tr => !knownRiwayatIds.has(String(tr.getAttribute('data-riwayat-id'))));
+
+                            if (itemBaru.length > 0) {
+                                const emptyRow = tbodySekarang.querySelector('.empty-state')?.closest('tr');
+                                if (emptyRow) emptyRow.remove();
+
+                                itemBaru.reverse().forEach(function (trServer) {
+                                    const idBaru = String(trServer.getAttribute('data-riwayat-id'));
+                                    knownRiwayatIds.add(idBaru);
+
+                                    const trClone = trServer.cloneNode(true);
+                                    trClone.classList.add('belum-dibaca');
+                                    tbodySekarang.insertBefore(trClone, tbodySekarang.firstChild);
+
+                                    // Ambil detail untuk popup toast real-time
+                                    const tds = trClone.querySelectorAll('td');
+                                    const waktuTeks = tds[0] ? tds[0].childNodes[0]?.textContent?.trim() : 'Baru saja';
+                                    const namaUser = tds[1]?.querySelector('div:first-child')?.textContent?.trim() || 'Pengguna';
+                                    const roleUser = tds[1]?.querySelector('div:last-child')?.textContent?.trim() || 'Admin';
+                                    const teksAktivitas = tds[2]?.textContent?.trim() || 'Melakukan aktivitas baru';
+                                    const teksModul = tds[3]?.textContent?.trim() || 'Sistem';
+
+                                    tampilkanNotifRealtimeMasterAdmin(namaUser, roleUser, teksAktivitas, teksModul, waktuTeks);
+
+                                    if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                                        window.hitungRiwayatBelumDibaca();
+                                    }
+
+                                    pantauBarisBelumDibaca(trClone);
+                                });
+                            }
+                        }
+                    } catch (err) {
+                        // Abaikan gangguan jaringan sementara
+                    } finally {
+                        sedangPolling = false;
+                    }
+                }
+
+                // Cek otomatis setiap 3 detik khusus untuk Master Admin
+                setInterval(cekRiwayatTerbaruRealtime, 3000);
             }
         });
     </script>

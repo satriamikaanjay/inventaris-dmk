@@ -164,7 +164,7 @@
 
 <body>
 
-    @include('layouts.adminsidebar')
+    @include('layouts.mastersidebar')
 
     <main>
         <header class="main-header">
@@ -176,13 +176,13 @@
             <!-- TOMBOL CETAK SEMUA QR -->
             <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
                 
-                <button type="button" class="btn-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
+                <button type="button" class="btn-qr btn-generate-semua-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
                     Generate Semua
                 </button>
                 
                 <!-- TOMBOL UPDATE SEMUA (BARU) -->
-                <button type="button" class="btn-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
+                <button type="button" class="btn-qr btn-update-semua-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                     Update Semua
                 </button>
@@ -198,21 +198,22 @@
         </header>
 
         <div class="card-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between;">
-                
+            <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between; width: 100%;">
+                @if(request('panel'))
+                    <input type="hidden" name="panel" value="{{ request('panel') }}">
+                @endif
                 <!-- Kiri: Kotak Pencarian -->
-                <div style="display: flex; gap: 10px; flex: 1; min-width: 300px;">
+                <div style="display: flex; gap: 10px; flex: 1; min-width: 280px;">
                     <div style="position: relative; flex: 1;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #94a3b8;">
                             <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode qr, seri, merk, status..." autocomplete="off" style="width: 100%; padding: 12px 15px 12px 45px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 14px; outline: none; background: #f8fafc; font-weight: 500;">
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode qr, seri, merk, status..." autocomplete="off" style="width: 100%; padding: 11px 15px 11px 45px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13px; outline: none; background: #f8fafc; font-weight: 500;">
                     </div>
-                    <button type="submit" class="btn-qr" style="padding: 12px 20px; font-size: 14px; background: var(--primary-color);">Cari QR</button>
+                    <button type="submit" class="btn-qr" style="padding: 11px 20px; font-size: 13px; background: var(--primary-color);">Cari QR</button>
                     
                     @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
-                        <a href="{{ url()->current() }}" class="btn-qr" style="background: #fee2e2; color: #ef4444; border: none; text-decoration: none; padding: 12px 20px; font-size: 14px; box-shadow: none;">Reset</a>
+                        <a href="{{ url()->current() }}{{ request('panel') ? '?panel=' . request('panel') : '' }}" class="btn-qr" style="background: #fee2e2; color: #ef4444; border: none; text-decoration: none; padding: 11px 18px; font-size: 13px; box-shadow: none;">Reset</a>
                     @endif
                 </div>
 
@@ -228,16 +229,6 @@
             </form>
 
             <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">Galeri Label QR Aset Fisik</h3>
-
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe:</label>
-                    <select id="filterStatusBerjalan" onchange="filterGaleriQR()" style="padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; background: #f8fafc;">
-                        <option value="Semua">Tampilkan Semua</option>
-                        <option value="Aset Berjalan">Aset Berjalan Saja</option>
-                        <option value="Aset Tidak Berjalan">Aset Tidak Berjalan Saja</option>
-                    </select>
-                </div>
-            </div>
 
             <div class="asset-grid">
                 @forelse($detailAsets ?? [] as $detail)

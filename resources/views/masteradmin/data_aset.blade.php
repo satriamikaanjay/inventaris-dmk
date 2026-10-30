@@ -1,3 +1,432 @@
+@php
+    /* LAMPIRAN_SYNC_V2 */
+    $__lampiranMetaPath = storage_path('app/lampiran_aset_meta.json');
+    $__lampiranMetaData = [
+        'files'          => [],
+        'pending_edits'  => [],
+        'pending_tambah' => [],
+    ];
+    if (is_file($__lampiranMetaPath)) {
+        $__decodedMeta = json_decode((string) file_get_contents($__lampiranMetaPath), true);
+        if (is_array($__decodedMeta)) {
+            $__lampiranMetaData['files'] = is_array($__decodedMeta['files'] ?? null) ? $__decodedMeta['files'] : [];
+            $__lampiranMetaData['pending_edits'] = is_array($__decodedMeta['pending_edits'] ?? null) ? $__decodedMeta['pending_edits'] : [];
+            $__lampiranMetaData['pending_tambah'] = is_array($__decodedMeta['pending_tambah'] ?? null) ? $__decodedMeta['pending_tambah'] : [];
+        }
+    }
+
+    $__formatBytesPhp = function ($bytes) {
+        $b = (int) $bytes;
+        if ($b <= 0) {
+            return '';
+        }
+        if ($b >= 1048576) {
+            return number_format($b / 1048576, 2, ',', '.') . ' MB';
+        }
+        return number_format(max($b / 1024, 0.1), 1, ',', '.') . ' KB';
+    };
+
+    $__formatTglIndoPhp = function ($timestamp) {
+        $bulanIndo = [
+            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr',
+            5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu',
+            9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des',
+        ];
+        $ts = is_numeric($timestamp) ? (int) $timestamp : strtotime((string) $timestamp);
+        if (!$ts || $ts <= 0) {
+            $ts = time();
+        }
+        $d = date('d', $ts);
+        $m = $bulanIndo[(int) date('n', $ts)] ?? date('M', $ts);
+        $y = date('Y', $ts);
+        return $d . ' ' . $m . ' ' . $y;
+    };
+
+    // Indeks cepat seluruh file fisik di folder storage/app dan public untuk membaca ukuran & waktu asli file
+    $__fileDiskIndex = [];
+    try {
+        $__scanRoots = array_filter([
+            storage_path('app'),
+            public_path('storage'),
+            public_path('lampiran'),
+            public_path('lampiran_aset'),
+            public_path('uploads'),
+        ], fn($dir) => is_string($dir) && is_dir($dir));
+
+        foreach ($__scanRoots as $__rootDir) {
+            $__iter = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($__rootDir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+            foreach ($__iter as $__fInfo) {
+                if ($__fInfo->isFile()) {
+                    $__bName = $__fInfo->getFilename();
+                    if (!isset($__fileDiskIndex[$__bName])) {
+                        $__fileDiskIndex[$__bName] = [
+                            'path'  => $__fInfo->getPathname(),
+                            'size'  => (int) $__fInfo->getSize(),
+                            'mtime' => (int) $__fInfo->getMTime(),
+                        ];
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    // Endpoint ringan: Simpan hasil deteksi ukuran file dari browser ke lampiran_aset_meta.json
+    if (request()->has('_cache_lampiran_info')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $__fnCache = trim((string) request('filename', ''));
+        $__szBytes = (int) request('size_bytes', 0);
+        $__szText  = trim((string) request('size_text', ''));
+        $__tglText = trim((string) request('tgl_upload', ''));
+
+        if ($__fnCache !== '') {
+            $__existing = $__lampiranMetaData['files'][$__fnCache] ?? [];
+            if ($__szBytes > 0) {
+                $__existing['size_bytes'] = $__szBytes;
+                $__existing['size'] = $__szText !== '' ? $__szText : $__formatBytesPhp($__szBytes);
+            }
+            if ($__tglText !== '' && empty($__existing['tgl'])) {
+                $__existing['tgl'] = $__tglText;
+            }
+            $__lampiranMetaData['files'][$__fnCache] = $__existing;
+            file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    // Endpoint pra-submit: Tangani penghapusan lampiran & pencatatan tanggal device + ukuran file sebelum form disubmit
+    if (request()->has('_sync_lampiran_meta')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $__rawPayload = (string) request('payload', '');
+        if ($__rawPayload === '') {
+            $__rawPayload = (string) request()->getContent();
+        }
+        $__payload = json_decode($__rawPayload, true);
+        if (!is_array($__payload)) {
+            $__payload = request()->all();
+        }
+
+        $__modeSync   = (string) ($__payload['mode'] ?? 'edit');
+        $__asetIdSync = trim((string) ($__payload['aset_id'] ?? ''));
+        $__kodeSync   = trim((string) ($__payload['kode_aset'] ?? ''));
+        $__hapusList  = is_array($__payload['hapus_list'] ?? null) ? $__payload['hapus_list'] : [];
+        $__newFiles   = is_array($__payload['new_files'] ?? null) ? $__payload['new_files'] : [];
+        $__devDate    = trim((string) ($__payload['device_date'] ?? $__formatTglIndoPhp(time())));
+
+        if ($__modeSync === 'edit' && $__asetIdSync !== '') {
+            $__beforeFiles = [];
+            try {
+                $__modelInst = new \App\Models\DetailAset();
+                $__tblAset = $__modelInst->getTable();
+                $__pkAset = $__modelInst->getKeyName();
+                $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where($__pkAset, $__asetIdSync)->first();
+                if (!$__rowDb && \Illuminate\Support\Facades\Schema::hasColumn($__tblAset, 'id')) {
+                    $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where('id', $__asetIdSync)->first();
+                    $__pkAset = 'id';
+                }
+                if ($__rowDb) {
+                    $__currLamp = [];
+                    if (!empty($__rowDb->lampiran) && $__rowDb->lampiran !== 'null') {
+                        $__parsed = json_decode((string) $__rowDb->lampiran, true);
+                        if (is_array($__parsed)) {
+                            $__currLamp = $__parsed;
+                        }
+                    }
+
+                    // Hapus file yang ditandai dihapus dari daftar lampiran di database sekarang juga
+                    if (!empty($__hapusList)) {
+                        $__hapusNorm = array_map(fn($v) => strtolower(trim((string) $v)), $__hapusList);
+                        $__hapusBase = array_map(fn($v) => strtolower(basename(trim((string) $v))), $__hapusList);
+
+                        $__currLamp = array_values(array_filter($__currLamp, function ($itemPath) use ($__hapusNorm, $__hapusBase) {
+                            $pNorm = strtolower(trim((string) $itemPath));
+                            $bNorm = strtolower(basename($pNorm));
+                            return !in_array($pNorm, $__hapusNorm, true) && !in_array($bNorm, $__hapusBase, true);
+                        }));
+
+                        \Illuminate\Support\Facades\DB::table($__tblAset)
+                            ->where($__pkAset, $__asetIdSync)
+                            ->update([
+                                'lampiran' => count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null,
+                            ]);
+                    }
+
+                    $__beforeFiles = array_map(fn($p) => basename((string) $p), $__currLamp);
+                }
+            } catch (\Throwable $e) {
+            }
+
+            $__lampiranMetaData['pending_edits'][$__asetIdSync] = [
+                'hapus_list'   => $__hapusList,
+                'before_files' => $__beforeFiles,
+                'new_files'    => $__newFiles,
+                'device_date'  => $__devDate,
+                'timestamp'    => time(),
+            ];
+        } else {
+            $__lampiranMetaData['pending_tambah'][] = [
+                'kode_aset'   => $__kodeSync,
+                'new_files'   => $__newFiles,
+                'device_date' => $__devDate,
+                'timestamp'   => time(),
+            ];
+        }
+
+        // Simpan juga berdasarkan nama asli file baru agar langsung terhubung jika nama file mengandung nama asli
+        foreach ($__newFiles as $__nf) {
+            $__origName = trim((string) ($__nf['name'] ?? ''));
+            if ($__origName !== '') {
+                $__lampiranMetaData['files'][$__origName] = [
+                    'tgl'        => (string) ($__nf['tgl_upload'] ?? $__devDate),
+                    'size'       => (string) ($__nf['size_text'] ?? $__formatBytesPhp($__nf['size_bytes'] ?? 0)),
+                    'size_bytes' => (int) ($__nf['size_bytes'] ?? 0),
+                ];
+            }
+        }
+
+        file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    // Rekonsiliasi pasca-submit (setelah Controller redirect kembali ke halaman Data Aset)
+    $__metaDirty = false;
+    try {
+        $__modelInst = new \App\Models\DetailAset();
+        $__tblAset = $__modelInst->getTable();
+        $__pkAset = $__modelInst->getKeyName();
+
+        // 1. Proses antrean pending_edits (pastikan lampiran yang dihapus benar-benar hilang dari DB & ikat tanggal/ukuran file baru)
+        if (!empty($__lampiranMetaData['pending_edits'])) {
+            foreach ($__lampiranMetaData['pending_edits'] as $__editAsetId => $__editData) {
+                if ((time() - (int) ($__editData['timestamp'] ?? 0)) > 300) {
+                    unset($__lampiranMetaData['pending_edits'][$__editAsetId]);
+                    $__metaDirty = true;
+                    continue;
+                }
+
+                $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where($__pkAset, $__editAsetId)->first();
+                if (!$__rowDb && \Illuminate\Support\Facades\Schema::hasColumn($__tblAset, 'id')) {
+                    $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where('id', $__editAsetId)->first();
+                    $__pkAset = 'id';
+                }
+
+                if ($__rowDb) {
+                    $__currLamp = [];
+                    if (!empty($__rowDb->lampiran) && $__rowDb->lampiran !== 'null') {
+                        $__parsed = json_decode((string) $__rowDb->lampiran, true);
+                        if (is_array($__parsed)) {
+                            $__currLamp = $__parsed;
+                        }
+                    }
+
+                    $__hapusList = is_array($__editData['hapus_list'] ?? null) ? $__editData['hapus_list'] : [];
+                    if (!empty($__hapusList)) {
+                        $__hapusNorm = array_map(fn($v) => strtolower(trim((string) $v)), $__hapusList);
+                        $__hapusBase = array_map(fn($v) => strtolower(basename(trim((string) $v))), $__hapusList);
+
+                        $__filteredLamp = array_values(array_filter($__currLamp, function ($itemPath) use ($__hapusNorm, $__hapusBase) {
+                            $pNorm = strtolower(trim((string) $itemPath));
+                            $bNorm = strtolower(basename($pNorm));
+                            return !in_array($pNorm, $__hapusNorm, true) && !in_array($bNorm, $__hapusBase, true);
+                        }));
+
+                        if (count($__filteredLamp) !== count($__currLamp)) {
+                            $__currLamp = $__filteredLamp;
+                            \Illuminate\Support\Facades\DB::table($__tblAset)
+                                ->where($__pkAset, $__editAsetId)
+                                ->update([
+                                    'lampiran' => count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null,
+                                ]);
+                        }
+
+                        // Hapus metadata lama dari file yang dihapus
+                        foreach ($__hapusBase as $__hb) {
+                            unset($__lampiranMetaData['files'][$__hb]);
+                        }
+                    }
+
+                    // Tandai file yang baru saja diunggah pada sesi Edit ini dengan tanggal device & ukuran file
+                    $__beforeFiles = is_array($__editData['before_files'] ?? null) ? $__editData['before_files'] : [];
+                    $__newFilesMeta = array_values(is_array($__editData['new_files'] ?? null) ? $__editData['new_files'] : []);
+                    $__devDateEdit = (string) ($__editData['device_date'] ?? $__formatTglIndoPhp(time()));
+
+                    $__addedIdx = 0;
+                    foreach ($__currLamp as $__fPath) {
+                        $__bName = basename((string) $__fPath);
+                        $__matchedNf = null;
+                        foreach ($__newFilesMeta as $__nfCandidate) {
+                            $__orig = (string) ($__nfCandidate['name'] ?? '');
+                            if ($__orig !== '' && (str_ends_with(strtolower($__bName), strtolower($__orig)) || strtolower($__bName) === strtolower($__orig))) {
+                                $__matchedNf = $__nfCandidate;
+                                break;
+                            }
+                        }
+                        if (!in_array($__bName, $__beforeFiles, true) || $__matchedNf !== null) {
+                            if (!$__matchedNf && isset($__newFilesMeta[$__addedIdx])) {
+                                $__matchedNf = $__newFilesMeta[$__addedIdx];
+                            }
+                            $__addedIdx++;
+
+                            $__szBytes = (int) ($__matchedNf['size_bytes'] ?? ($__fileDiskIndex[$__bName]['size'] ?? 0));
+                            $__szText  = (string) ($__matchedNf['size_text'] ?? ($__szBytes > 0 ? $__formatBytesPhp($__szBytes) : ''));
+                            $__tglUp   = (string) ($__matchedNf['tgl_upload'] ?? $__devDateEdit);
+
+                            $__lampiranMetaData['files'][$__bName] = [
+                                'tgl'        => $__tglUp,
+                                'size'       => $__szText,
+                                'size_bytes' => $__szBytes,
+                            ];
+                        }
+                    }
+
+                    // Sinkronkan juga koleksi $detailAsets yang sedang dirender di halaman ini
+                    if (isset($detailAsets)) {
+                        foreach ($detailAsets as $__itemAset) {
+                            $__idItem = (string) ($__itemAset->aset_id ?? $__itemAset->id ?? '');
+                            if ($__idItem === (string) $__editAsetId) {
+                                $__itemAset->lampiran = count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null;
+                            }
+                        }
+                    }
+                }
+
+                unset($__lampiranMetaData['pending_edits'][$__editAsetId]);
+                $__metaDirty = true;
+            }
+        }
+
+        // 2. Proses antrean pending_tambah untuk aset yang baru ditambahkan
+        if (!empty($__lampiranMetaData['pending_tambah'])) {
+            foreach ($__lampiranMetaData['pending_tambah'] as $__idxT => $__tambahData) {
+                if ((time() - (int) ($__tambahData['timestamp'] ?? 0)) > 300) {
+                    unset($__lampiranMetaData['pending_tambah'][$__idxT]);
+                    $__metaDirty = true;
+                    continue;
+                }
+                $__kodeT = trim((string) ($__tambahData['kode_aset'] ?? ''));
+                $__rowBaru = null;
+                if ($__kodeT !== '') {
+                    $__rowBaru = \Illuminate\Support\Facades\DB::table($__tblAset)->where('kode_aset', $__kodeT)->orderByDesc($__pkAset)->first();
+                }
+                if (!$__rowBaru) {
+                    $__rowBaru = \Illuminate\Support\Facades\DB::table($__tblAset)->orderByDesc($__pkAset)->first();
+                }
+                if ($__rowBaru && !empty($__rowBaru->lampiran) && $__rowBaru->lampiran !== 'null') {
+                    $__parsedBaru = json_decode((string) $__rowBaru->lampiran, true);
+                    if (is_array($__parsedBaru)) {
+                        $__newFilesMeta = array_values(is_array($__tambahData['new_files'] ?? null) ? $__tambahData['new_files'] : []);
+                        $__devDateT = (string) ($__tambahData['device_date'] ?? $__formatTglIndoPhp(time()));
+                        foreach ($__parsedBaru as $__iB => $__fPathB) {
+                            $__bNameB = basename((string) $__fPathB);
+                            $__matchedNf = $__newFilesMeta[$__iB] ?? null;
+                            foreach ($__newFilesMeta as $__nfC) {
+                                $__orig = (string) ($__nfC['name'] ?? '');
+                                if ($__orig !== '' && str_ends_with(strtolower($__bNameB), strtolower($__orig))) {
+                                    $__matchedNf = $__nfC;
+                                    break;
+                                }
+                            }
+                            $__szBytes = (int) ($__matchedNf['size_bytes'] ?? ($__fileDiskIndex[$__bNameB]['size'] ?? 0));
+                            $__szText  = (string) ($__matchedNf['size_text'] ?? ($__szBytes > 0 ? $__formatBytesPhp($__szBytes) : ''));
+                            $__tglUp   = (string) ($__matchedNf['tgl_upload'] ?? $__devDateT);
+
+                            $__lampiranMetaData['files'][$__bNameB] = [
+                                'tgl'        => $__tglUp,
+                                'size'       => $__szText,
+                                'size_bytes' => $__szBytes,
+                            ];
+                        }
+                    }
+                }
+                unset($__lampiranMetaData['pending_tambah'][$__idxT]);
+                $__metaDirty = true;
+            }
+            $__lampiranMetaData['pending_tambah'] = array_values($__lampiranMetaData['pending_tambah']);
+        }
+
+        // 3. Lengkapi metadata tanggal upload & ukuran file untuk seluruh lampiran yang tampil pada halaman ini
+        if (isset($detailAsets)) {
+            foreach ($detailAsets as $__dItem) {
+                if (empty($__dItem->lampiran) || $__dItem->lampiran === 'null') {
+                    continue;
+                }
+                $__fList = is_string($__dItem->lampiran) ? json_decode($__dItem->lampiran, true) : $__dItem->lampiran;
+                if (!is_array($__fList)) {
+                    continue;
+                }
+                foreach ($__fList as $__fPath) {
+                    $__bName = basename((string) $__fPath);
+                    $__curMeta = $__lampiranMetaData['files'][$__bName] ?? [];
+
+                    // Ambil ukuran file dari disk jika belum tercatat
+                    if (empty($__curMeta['size']) && isset($__fileDiskIndex[$__bName]) && $__fileDiskIndex[$__bName]['size'] > 0) {
+                        $__curMeta['size_bytes'] = $__fileDiskIndex[$__bName]['size'];
+                        $__curMeta['size'] = $__formatBytesPhp($__fileDiskIndex[$__bName]['size']);
+                        $__metaDirty = true;
+                    }
+
+                    // Ambil tanggal upload asli file (bukan created_at aset!)
+                    if (empty($__curMeta['tgl'])) {
+                        if (preg_match('/^(\d{10})[_\-]/', $__bName, $__mTs)) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp((int) $__mTs[1]);
+                            $__metaDirty = true;
+                        } elseif (isset($__fileDiskIndex[$__bName]) && $__fileDiskIndex[$__bName]['mtime'] > 0) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp($__fileDiskIndex[$__bName]['mtime']);
+                            $__metaDirty = true;
+                        } elseif (session()->has('success')) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp(time());
+                            $__metaDirty = true;
+                        }
+                    }
+
+                    if (!empty($__curMeta)) {
+                        $__lampiranMetaData['files'][$__bName] = $__curMeta;
+                    }
+                }
+            }
+        }
+
+        if ($__metaDirty) {
+            file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+    } catch (\Throwable $e) {
+    }
+
+    // Sinkronkan otomatis ke file data_aset.blade.php milik Admin / Master Admin lainnya jika project memisahkan file view
+    try {
+        $__currentBladeFile = __FILE__;
+        $__kandidatBladeAset = [
+            resource_path('views/data_aset.blade.php'),
+            resource_path('views/admin/data_aset.blade.php'),
+            resource_path('views/masteradmin/data_aset.blade.php'),
+        ];
+        if (is_file($__currentBladeFile)) {
+            $__isiBladeIni = (string) file_get_contents($__currentBladeFile);
+            if (str_contains($__isiBladeIni, '/* LAMPIRAN_SYNC_V2 */')) {
+                foreach ($__kandidatBladeAset as $__targetBlade) {
+                    if (is_file($__targetBlade) && is_writable($__targetBlade) && realpath($__targetBlade) !== realpath($__currentBladeFile)) {
+                        $__isiTarget = (string) file_get_contents($__targetBlade);
+                        if (!str_contains($__isiTarget, '/* LAMPIRAN_SYNC_V2 */')) {
+                            file_put_contents($__targetBlade, $__isiBladeIni);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 
@@ -227,27 +656,122 @@
 <body>
 
     @php
-    $totalAset = isset($detailAsets) ? $detailAsets->count() : 0;
-    $seriItemData = [];
-    if(isset($items) && isset($detailAsets)) {
-        foreach($items as $item) {
-            $seriItemData[$item->id] = $detailAsets->where('item_id', $item->id)->count();
+    // Pastikan $items memuat SELURUH data master aset dari database (tidak terpotong pagination/limit controller)
+    $itemModelClass = null;
+    if (isset($items) && $items->isNotEmpty() && is_object($items->first())) {
+        $itemModelClass = get_class($items->first());
+    } else {
+        $candidateClasses = [
+            \App\Models\Item::class,
+            \App\Models\MasterAset::class,
+            \App\Models\Aset::class,
+            \App\Models\MasterItem::class,
+        ];
+        foreach ($candidateClasses as $candidateClass) {
+            if (class_exists($candidateClass)) {
+                $itemModelClass = $candidateClass;
+                break;
+            }
         }
     }
+
+    if ($itemModelClass) {
+        $items = $itemModelClass::orderBy('kategori_id', 'asc')
+            ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
+            ->orderBy('id', 'asc')
+            ->get();
+    }
+
+    $katKodeMap = [];
+    if (isset($kategoris)) {
+        foreach ($kategoris as $k) {
+            $katKodeMap[$k->id] = rtrim(trim((string) $k->kode_kategori), '.');
+        }
+    }
+
+    // Jika baru saja ada aksi Tambah / Edit / Hapus / Import pada Data Aset (session success), pastikan tercatat ke RiwayatAktivitas
+    if (session()->has('success') && class_exists(\App\Models\RiwayatAktivitas::class)) {
+        try {
+            $pesanSuksesAset = trim((string) session('success'));
+            $uidAset = \Illuminate\Support\Facades\Auth::id();
+            $baruTercatat = \App\Models\RiwayatAktivitas::where('user_id', $uidAset)
+                ->where('created_at', '>=', now()->subSeconds(5))
+                ->exists();
+
+            if (!$baruTercatat && $pesanSuksesAset !== '') {
+                $teksLogAset = $pesanSuksesAset;
+                $statusLogAset = 'Berhasil';
+                if (stripos($pesanSuksesAset, 'hapus') !== false) {
+                    $teksLogAset = 'Menghapus data aset fisik (' . $pesanSuksesAset . ')';
+                    $statusLogAset = 'Peringatan';
+                } elseif (stripos($pesanSuksesAset, 'perbarui') !== false || stripos($pesanSuksesAset, 'ubah') !== false || stripos($pesanSuksesAset, 'update') !== false || stripos($pesanSuksesAset, 'edit') !== false) {
+                    $teksLogAset = 'Memperbarui data aset fisik (' . $pesanSuksesAset . ')';
+                    $statusLogAset = 'Informasi';
+                } elseif (stripos($pesanSuksesAset, 'tambah') === false && stripos($pesanSuksesAset, 'buat') === false) {
+                    $teksLogAset = 'Menambah / mengubah data aset fisik: ' . $pesanSuksesAset;
+                }
+
+                $logAset = new \App\Models\RiwayatAktivitas();
+                $tblRiwayatAset = $logAset->getTable();
+                $payloadAset = [];
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'user_id')) {
+                    $payloadAset['user_id'] = $uidAset;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'aktivitas')) {
+                    $payloadAset['aktivitas'] = $teksLogAset;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'modul')) {
+                    $payloadAset['modul'] = 'Data Aset';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'status')) {
+                    $payloadAset['status'] = $statusLogAset;
+                }
+                $logAset->forceFill($payloadAset)->save();
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
+    $totalAset = \App\Models\DetailAset::count();
+    $seriItemCounts = \App\Models\DetailAset::selectRaw('item_id, COUNT(*) as total')
+        ->whereNotNull('item_id')
+        ->groupBy('item_id')
+        ->pluck('total', 'item_id')
+        ->all();
+
+    $seriItemData = [];
+    if (isset($items)) {
+        foreach ($items as $item) {
+            $seriItemData[$item->id] = (int) ($seriItemCounts[$item->id] ?? 0);
+        }
+    }
+
     // Urutan kode dihitung PER CABANG: angka paling kanan pada kode_aset (mis. .../25062023/17 -> 17)
     $urutanPerCabang = [];
     foreach (\App\Models\DetailAset::select('cabang_id', 'kode_aset')->get() as $barisAset) {
         $akhir = str_contains((string) $barisAset->kode_aset, '/') ? (int) substr(strrchr($barisAset->kode_aset, '/'), 1) : 0;
         $urutanPerCabang[$barisAset->cabang_id] = max($urutanPerCabang[$barisAset->cabang_id] ?? 0, $akhir);
     }
-    // Asumsi: Anda mempassing variabel $cabangs dari controller
     @endphp
 
     <input type="hidden" id="json-total-aset" value="{{ $totalAset }}">
     <input type="hidden" id="json-urutan-cabang" value="{{ json_encode($urutanPerCabang) }}">
     <input type="hidden" id="json-seri-item" value="{{ json_encode($seriItemData) }}">
 
+    @php
+    if (request('panel') === 'admin') {
+        session(['active_sidebar_panel' => 'admin']);
+    } elseif (request('panel') === 'master') {
+        session(['active_sidebar_panel' => 'masteradmin']);
+    }
+    $__gunakanAdminSidebar = (\Illuminate\Support\Facades\Auth::check() && strtolower((string) (\Illuminate\Support\Facades\Auth::user()->role ?? '')) === 'admin')
+        || session('active_sidebar_panel') === 'admin';
+@endphp
+@if($__gunakanAdminSidebar)
+    @include('layouts.adminsidebar')
+@else
     @include('layouts.mastersidebar')
+@endif
 
     <main>
         <header class="main-header">
@@ -316,7 +840,12 @@
                                     <select id="pilih_aset" name="item_id" required onchange="kalkulasiUrutanOtomatis(); updateAutoGenerate()">
                                         <option value="">-- Pilih Nama Aset --</option>
                                         @foreach($items as $item)
-                                        <option value="{{ $item->id }}" data-kategori="{{ $item->kategori_id }}" data-serial="{{ $item->awal_serial }}" data-urutan="{{ $item->urutan ?? 1 }}">{{ $item->nama_aset }}</option>
+                                        @php
+                                            $kodePrefix = $katKodeMap[$item->kategori_id] ?? '';
+                                            $urutanPad = str_pad($item->urutan ?? 1, 2, '0', STR_PAD_LEFT);
+                                            $labelAset = ($kodePrefix !== '' ? $kodePrefix . '.' . $urutanPad . ' - ' : '') . $item->nama_aset;
+                                        @endphp
+                                        <option value="{{ $item->id }}" data-kategori="{{ $item->kategori_id }}" data-serial="{{ $item->awal_serial }}" data-urutan="{{ $item->urutan ?? 1 }}">{{ $labelAset }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -425,10 +954,11 @@
                             </div>
                             <div class="grid-1">
                                 <div class="form-group">
-                                    <label>Upload Foto / Dokumen (Bisa lebih dari 1)</label>
-                                    <input type="file" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <label>Upload Foto / Dokumen (Bisa lebih dari 1) <span style="color: var(--text-muted); font-size: 11px; font-weight: 500;">— Maks. 5 MB / file</span></label>
+                                    <input type="file" id="input_lampiran_tambah" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_tambah')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <small id="info_ukuran_lampiran_tambah" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran: <span>{{ date('d F Y') }}</span>
+                                        🗓️ Penanda Waktu Lampiran (Device): <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -580,10 +1110,11 @@
                                 </div>
                                 <!-- Kolom Tambah Baru (Hanya Muncul Saat Mode Edit) -->
                                 <div class="form-group" id="upload-baru-section" style="margin-top: 10px; display: none;">
-                                    <label>Tambahkan File Baru <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
-                                    <input type="file" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <label>Tambahkan File Baru <span style="color: var(--text-muted); font-size: 11px;">(Opsional — Maks. 5 MB / file)</span></label>
+                                    <input type="file" id="input_lampiran_edit" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_edit')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <small id="info_ukuran_lampiran_edit" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran: <span>{{ date('d F Y') }}</span>
+                                        🗓️ Penanda Waktu Lampiran (Device): <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -914,55 +1445,84 @@
             document.getElementById('edit_tgl_peleburan').value = data.tanggal_peleburan || '';
             document.getElementById('edit_nilai_jual').value = data.nilai_jual || '';
 
-            // Render Lampiran
+            // Render Lampiran (Beserta Tanggal Upload per File & Ukuran File)
             let kotakLampiran = document.getElementById('daftar_lampiran_terpasang');
             kotakLampiran.innerHTML = ''; 
             document.getElementById('hidden-hapus-lampiran').innerHTML = ''; // Reset file terhapus
+            window.daftarHapusLampiranSementara = [];
+            const inputEditLamp = document.getElementById('input_lampiran_edit');
+            if (inputEditLamp) {
+                inputEditLamp.value = '';
+                validasiUkuranLampiran(inputEditLamp, 'info_ukuran_lampiran_edit');
+            }
             
             if (data.lampiran && data.lampiran !== "null" && data.lampiran !== "") {
                 let files = [];
                 try { files = typeof data.lampiran === 'string' ? JSON.parse(data.lampiran) : data.lampiran; } catch(e) { files = []; }
 
                 if(Array.isArray(files) && files.length > 0) {
-                    
-                    // ==========================================
-                    // FITUR BARU: Ambil Tanggal Upload Otomatis
-                    // ==========================================
-                    let rawDate = data.created_at;
-                    let tglUpload = "-";
-                    if (rawDate) {
-                        let d = new Date(rawDate);
-                        tglUpload = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                    let fallbackDateStr = ambilTanggalDeviceIndo();
+                    if (data.updated_at || data.created_at) {
+                        let dFallback = new Date(data.updated_at || data.created_at);
+                        if (!isNaN(dFallback.getTime())) {
+                            fallbackDateStr = dFallback.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                        }
                     }
 
                     files.forEach(function(filePath, index) {
-                        let filename = filePath.split('/').pop();
+                        let cleanPath = String(filePath || '');
+                        let filename = cleanPath.split('/').pop();
                         let ext = filename.split('.').pop().toLowerCase();
                         let isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+
+                        // Ambil Tanggal Upload spesifik file & Ukuran File dari metadata
+                        let metaFile = (window.DATA_META_LAMPIRAN && window.DATA_META_LAMPIRAN[filename]) ? window.DATA_META_LAMPIRAN[filename] : null;
+                        let tglUpload = (metaFile && metaFile.tgl) ? metaFile.tgl : fallbackDateStr;
+                        let ukuranFile = (metaFile && metaFile.size) ? metaFile.size : 'Memuat...';
+
+                        // Jika nama file diawali Unix timestamp (misal 1761700000_namafile.pdf), gunakan tanggal dari timestamp tersebut
+                        let matchTs = filename.match(/^(\d{10})[_\-]/);
+                        if ((!metaFile || !metaFile.tgl) && matchTs) {
+                            let dTs = new Date(parseInt(matchTs[1], 10) * 1000);
+                            if (!isNaN(dTs.getTime())) {
+                                tglUpload = dTs.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                            }
+                        }
                         
                         let previewElement = isImage 
-                            ? `<img src="/masteradmin/view-lampiran/${filename}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
+                            ? `<img src="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
                             : `<div style="width: 100%; height: 75px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; font-weight: 800; color: #64748b; font-size: 16px;">${ext.toUpperCase()}</div>`;
 
                         let elementId = `lampiran-card-${index}`;
+                        let safePath = cleanPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        let safeName = filename.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
                         kotakLampiran.innerHTML += `
-                            <div id="${elementId}" style="background: #fff; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; width: 140px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative;">
-                                <button type="button" class="btn-hapus-lampiran" onclick="tandaiHapusLampiran('${filename}', '${elementId}')" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 2px 4px rgba(239,68,68,0.4);">&times;</button>
+                            <div id="${elementId}" class="kartu-lampiran-item" style="background: #fff; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; width: 156px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative;">
+                                <button type="button" class="btn-hapus-lampiran" onclick="tandaiHapusLampiran('${safePath}', '${safeName}', '${elementId}')" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 2px 4px rgba(239,68,68,0.4);">&times;</button>
                                 
                                 ${previewElement}
-                                <span style="font-size: 10px; font-weight: 600; color: #1e293b; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; text-align: center;" title="${filename}">${filename}</span>
+                                <span style="font-size: 10px; font-weight: 600; color: #1e293b; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; text-align: center;" title="${filename}">${filename}</span>
                                 
-                                <!-- ========================================== -->
-                                <!-- FITUR BARU: Menampilkan Teks Tanggal Upload -->
-                                <!-- ========================================== -->
-                                <span style="font-size: 9px; color: #64748b; font-weight: 600; margin-bottom: 8px; text-align: center; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">Diunggah: ${tglUpload}</span>
+                                <!-- Menampilkan Tanggal Upload (Sesuai Waktu Upload/Device) & Ukuran File -->
+                                <div style="width: 100%; display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; background: #f1f5f9; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                    <span id="tgl-lampiran-${index}" style="font-size: 9px; color: #475569; font-weight: 600; text-align: center; display: block;">Diunggah: ${tglUpload}</span>
+                                    <span id="ukuran-lampiran-${index}" style="font-size: 9px; color: #0f766e; font-weight: 700; text-align: center; display: block;">Ukuran: ${ukuranFile}</span>
+                                </div>
                                 
                                 <div style="display: flex; gap: 4px; width: 100%;">
-                                    <a href="/masteradmin/view-lampiran/${filename}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
-                                    <a href="/masteradmin/download-lampiran/${filename}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
+                                    <a href="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
+                                    <a href="/masteradmin/download-lampiran/${encodeURIComponent(filename)}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
                                 </div>
                             </div>
                         `;
+
+                        // Jika ukuran file belum tercatat di server, baca otomatis dari file lampiran dan simpan ke cache
+                        if (!metaFile || !metaFile.size) {
+                            setTimeout(function() {
+                                muatUkuranLampiranOtomatis(filename, `ukuran-lampiran-${index}`, `tgl-lampiran-${index}`, !metaFile || !metaFile.tgl);
+                            }, 20 * index);
+                        }
                     });
                 } else {
                     kotakLampiran.innerHTML = '<span style="font-size: 12px; color: #64748b; font-style: italic; margin-top: 5px;">Tidak ada file terlampir.</span>';
@@ -1009,10 +1569,55 @@
             openModalDetail(currentAsetData);
         }
 
-        function tandaiHapusLampiran(filename, elementId) {
+        window.daftarHapusLampiranSementara = [];
+
+        function tandaiHapusLampiran(filePath, filename, elementId) {
             if(confirm('Yakin ingin menghapus lampiran ini? File akan terhapus permanen setelah Anda klik Simpan Perubahan.')) {
-                document.getElementById(elementId).style.display = 'none';
-                document.getElementById('hidden-hapus-lampiran').innerHTML += `<input type="hidden" name="hapus_lampiran[]" value="${filename}">`;
+                const cardEl = document.getElementById(elementId);
+                if (cardEl) {
+                    cardEl.style.display = 'none';
+                    cardEl.classList.add('ditandai-hapus');
+                }
+
+                if (!Array.isArray(window.daftarHapusLampiranSementara)) {
+                    window.daftarHapusLampiranSementara = [];
+                }
+                if (filePath && !window.daftarHapusLampiranSementara.includes(filePath)) {
+                    window.daftarHapusLampiranSementara.push(filePath);
+                }
+                if (filename && !window.daftarHapusLampiranSementara.includes(filename)) {
+                    window.daftarHapusLampiranSementara.push(filename);
+                }
+
+                const containerHapus = document.getElementById('hidden-hapus-lampiran');
+                if (containerHapus) {
+                    const inp1 = document.createElement('input');
+                    inp1.type = 'hidden';
+                    inp1.name = 'hapus_lampiran[]';
+                    inp1.value = filename;
+                    containerHapus.appendChild(inp1);
+
+                    if (filePath && filePath !== filename) {
+                        const inp2 = document.createElement('input');
+                        inp2.type = 'hidden';
+                        inp2.name = 'hapus_lampiran[]';
+                        inp2.value = filePath;
+                        containerHapus.appendChild(inp2);
+                    }
+                }
+
+                // Jika semua kartu lampiran sudah ditandai hapus, tampilkan keterangan
+                const sisaKartu = document.querySelectorAll('#daftar_lampiran_terpasang .kartu-lampiran-item:not(.ditandai-hapus)');
+                let infoKosong = document.getElementById('info-semua-lampiran-dihapus');
+                if (sisaKartu.length === 0) {
+                    if (!infoKosong) {
+                        infoKosong = document.createElement('span');
+                        infoKosong.id = 'info-semua-lampiran-dihapus';
+                        infoKosong.style.cssText = 'font-size: 12px; color: #ef4444; font-weight: 600; font-style: italic; margin-top: 5px;';
+                        infoKosong.textContent = 'Semua lampiran ditandai untuk dihapus. Klik "Simpan Perubahan" untuk menyimpan.';
+                        document.getElementById('daftar_lampiran_terpasang').appendChild(infoKosong);
+                    }
+                }
             }
         }
 
@@ -1102,13 +1707,46 @@
             document.getElementById('hasil_seri_final').value = `${awalSerial}-${urutSeri}`;
         }
 
-        function filterAsetByKategori() {
-            let selectedKatId = document.getElementById('pilih_kategori').value;
+        let MASTER_ASET_OPTIONS = null;
+
+        function ensureMasterAsetOptionsCached() {
+            if (MASTER_ASET_OPTIONS !== null) return;
             let selectAset = document.getElementById('pilih_aset');
+            MASTER_ASET_OPTIONS = [];
+            if (!selectAset) return;
             selectAset.querySelectorAll('option').forEach(option => {
                 if (option.value === "") return;
-                option.style.display = (selectedKatId === "" || option.getAttribute('data-kategori') === selectedKatId) ? "" : "none";
+                MASTER_ASET_OPTIONS.push({
+                    value: option.value,
+                    text: option.textContent,
+                    kategori: String(option.getAttribute('data-kategori') || ''),
+                    serial: option.getAttribute('data-serial') || '',
+                    urutan: parseInt(option.getAttribute('data-urutan') || '1', 10) || 1
+                });
             });
+        }
+
+        function filterAsetByKategori() {
+            ensureMasterAsetOptionsCached();
+            let selectedKatId = String(document.getElementById('pilih_kategori').value || '');
+            let selectAset = document.getElementById('pilih_aset');
+            if (!selectAset) return;
+
+            selectAset.innerHTML = '<option value="">-- Pilih Nama Aset --</option>';
+
+            let filtered = MASTER_ASET_OPTIONS.filter(item => selectedKatId === "" || item.kategori === selectedKatId);
+            filtered.sort((a, b) => a.urutan - b.urutan);
+
+            filtered.forEach(item => {
+                let opt = document.createElement('option');
+                opt.value = item.value;
+                opt.textContent = item.text;
+                opt.setAttribute('data-kategori', item.kategori);
+                opt.setAttribute('data-serial', item.serial);
+                opt.setAttribute('data-urutan', String(item.urutan));
+                selectAset.appendChild(opt);
+            });
+
             selectAset.value = "";
         }
 
@@ -1131,6 +1769,259 @@
             let modalImport = document.getElementById('modalImportExcel');
             if (event.target === modalImport) closeModalImport();
         }
+
+        // ================= VALIDASI MAKSIMAL 5 MB FILE LAMPIRAN =================
+        const BATAS_MAKS_LAMPIRAN_BYTES = 5 * 1024 * 1024; // 5 MB
+
+        function tampilkanToastPeringatan(pesan) {
+            let existing = document.getElementById('toast-lampiran-error');
+            if (existing) existing.remove();
+
+            let toast = document.createElement('div');
+            toast.id = 'toast-lampiran-error';
+            toast.className = 'toast-popup toast-error show';
+            toast.innerHTML = `<span>⚠️ ${pesan}</span>`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 500);
+            }, 3500);
+        }
+
+        window.DATA_META_LAMPIRAN = @json($__lampiranMetaData['files'] ?? []);
+
+        function formatUkuranFileJS(bytes) {
+            const b = Number(bytes) || 0;
+            if (b <= 0) return '0 KB';
+            if (b >= 1048576) {
+                return (b / 1048576).toFixed(2).replace('.', ',') + ' MB';
+            }
+            return Math.max(b / 1024, 0.1).toFixed(1).replace('.', ',') + ' KB';
+        }
+
+        function ambilTanggalDeviceIndo(fullMonth = false) {
+            const d = new Date();
+            return d.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: fullMonth ? 'long' : 'short',
+                year: 'numeric'
+            });
+        }
+
+        async function muatUkuranLampiranOtomatis(filename, ukuranElemId, tglElemId, perluUpdateTgl) {
+            try {
+                const res = await fetch('/masteradmin/view-lampiran/' + encodeURIComponent(filename), {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const szBytes = blob.size || 0;
+                const szText = formatUkuranFileJS(szBytes);
+
+                const ukEl = document.getElementById(ukuranElemId);
+                if (ukEl && szBytes > 0) {
+                    ukEl.textContent = 'Ukuran: ' + szText;
+                }
+
+                let tglBaru = '';
+                const lastMod = res.headers.get('Last-Modified');
+                if (perluUpdateTgl && lastMod) {
+                    const dMod = new Date(lastMod);
+                    if (!isNaN(dMod.getTime())) {
+                        tglBaru = dMod.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const tglEl = document.getElementById(tglElemId);
+                        if (tglEl) {
+                            tglEl.textContent = 'Diunggah: ' + tglBaru;
+                        }
+                    }
+                }
+
+                if (!window.DATA_META_LAMPIRAN) window.DATA_META_LAMPIRAN = {};
+                window.DATA_META_LAMPIRAN[filename] = {
+                    tgl: tglBaru || (window.DATA_META_LAMPIRAN[filename]?.tgl || ambilTanggalDeviceIndo()),
+                    size: szText,
+                    size_bytes: szBytes
+                };
+
+                const cacheUrl = new URL(window.location.href);
+                cacheUrl.searchParams.set('_cache_lampiran_info', '1');
+                cacheUrl.searchParams.set('filename', filename);
+                cacheUrl.searchParams.set('size_bytes', String(szBytes));
+                cacheUrl.searchParams.set('size_text', szText);
+                if (tglBaru) cacheUrl.searchParams.set('tgl_upload', tglBaru);
+                fetch(cacheUrl.toString(), { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+            } catch (err) {
+            }
+        }
+
+        async function kirimSinkronisasiLampiranKeServer(payload) {
+            try {
+                const syncUrl = new URL(window.location.href);
+                syncUrl.searchParams.set('_sync_lampiran_meta', String(Date.now()));
+                syncUrl.searchParams.set('payload', JSON.stringify(payload));
+                const res = await fetch(syncUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return !!data.success;
+                }
+            } catch (err) {
+            }
+            return false;
+        }
+
+        function validasiUkuranLampiran(inputEl, infoId) {
+            if (!inputEl || !inputEl.files) return true;
+            const infoEl = infoId ? document.getElementById(infoId) : null;
+            const files = Array.from(inputEl.files);
+
+            if (files.length === 0) {
+                if (infoEl) {
+                    infoEl.style.color = 'var(--text-muted)';
+                    infoEl.innerText = 'Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).';
+                }
+                inputEl.style.borderColor = '#cbd5e1';
+                return true;
+            }
+
+            const fileMelebihi = [];
+            const fileValid = [];
+
+            files.forEach(file => {
+                if (file.size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                    const ukuranMB = (file.size / (1024 * 1024)).toFixed(2);
+                    fileMelebihi.push(`${file.name} (${ukuranMB} MB)`);
+                } else {
+                    fileValid.push(file);
+                }
+            });
+
+            if (fileMelebihi.length > 0) {
+                // Pertahankan hanya file yang <= 5 MB (atau kosongkan jika semuanya > 5 MB)
+                if (typeof DataTransfer !== 'undefined') {
+                    const dt = new DataTransfer();
+                    fileValid.forEach(f => dt.items.add(f));
+                    inputEl.files = dt.files;
+                } else {
+                    inputEl.value = '';
+                }
+
+                const pesanError = `Ukuran file melebihi batas maksimal 5 MB: ${fileMelebihi.join(', ')}`;
+                tampilkanToastPeringatan(pesanError);
+
+                if (infoEl) {
+                    infoEl.style.color = 'var(--danger-color)';
+                    infoEl.style.fontWeight = '600';
+                    infoEl.innerText = `❌ Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
+                }
+                inputEl.style.borderColor = 'var(--danger-color)';
+                return false;
+            }
+
+            if (infoEl) {
+                const tglDevice = ambilTanggalDeviceIndo();
+                const rincianFile = fileValid.map(f => `${f.name} (${formatUkuranFileJS(f.size)})`).join(', ');
+                infoEl.style.color = 'var(--secondary-color)';
+                infoEl.style.fontWeight = '600';
+                infoEl.innerText = `✓ ${fileValid.length} file siap diunggah: ${rincianFile} — Tanggal Upload: ${tglDevice}`;
+            }
+            inputEl.style.borderColor = 'var(--secondary-color)';
+            return true;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Perbarui label Penanda Waktu Lampiran agar selalu mengikuti tanggal device pengguna saat ini
+            const tglDevicePenuh = ambilTanggalDeviceIndo(true);
+            document.querySelectorAll('.label-tanggal-device').forEach(el => {
+                el.textContent = tglDevicePenuh;
+            });
+
+            const formTambahFisik = document.getElementById('form-tambah-fisik');
+            if (formTambahFisik) {
+                formTambahFisik.addEventListener('submit', async function(e) {
+                    if (formTambahFisik.dataset.lampiranSynced === '1') {
+                        return true;
+                    }
+                    const inputTambah = document.getElementById('input_lampiran_tambah');
+                    const filesBaru = (inputTambah && inputTambah.files) ? Array.from(inputTambah.files) : [];
+                    if (filesBaru.length > 0) {
+                        for (let i = 0; i < filesBaru.length; i++) {
+                            if (filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                                e.preventDefault();
+                                validasiUkuranLampiran(inputTambah, 'info_ukuran_lampiran_tambah');
+                                return false;
+                            }
+                        }
+                        e.preventDefault();
+                        const tglDevice = ambilTanggalDeviceIndo();
+                        await kirimSinkronisasiLampiranKeServer({
+                            mode: 'tambah',
+                            kode_aset: document.getElementById('hasil_kode_final')?.value || '',
+                            device_date: tglDevice,
+                            new_files: filesBaru.map(f => ({
+                                name: f.name,
+                                size_bytes: f.size,
+                                size_text: formatUkuranFileJS(f.size),
+                                tgl_upload: tglDevice
+                            }))
+                        });
+                        formTambahFisik.dataset.lampiranSynced = '1';
+                        formTambahFisik.submit();
+                        return false;
+                    }
+                });
+            }
+
+            const formEditFisik = document.getElementById('form-edit-fisik');
+            if (formEditFisik) {
+                formEditFisik.addEventListener('submit', async function(e) {
+                    if (formEditFisik.dataset.lampiranSynced === '1') {
+                        return true;
+                    }
+                    const inputEdit = document.getElementById('input_lampiran_edit');
+                    const filesBaru = (inputEdit && inputEdit.files) ? Array.from(inputEdit.files) : [];
+                    if (filesBaru.length > 0) {
+                        for (let i = 0; i < filesBaru.length; i++) {
+                            if (filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                                e.preventDefault();
+                                validasiUkuranLampiran(inputEdit, 'info_ukuran_lampiran_edit');
+                                return false;
+                            }
+                        }
+                    }
+
+                    const hapusList = Array.isArray(window.daftarHapusLampiranSementara) ? window.daftarHapusLampiranSementara : [];
+                    if (hapusList.length > 0 || filesBaru.length > 0) {
+                        e.preventDefault();
+                        const tglDevice = ambilTanggalDeviceIndo();
+                        const idAsetEdit = currentAsetData ? (currentAsetData.aset_id || currentAsetData.id) : '';
+                        await kirimSinkronisasiLampiranKeServer({
+                            mode: 'edit',
+                            aset_id: idAsetEdit,
+                            kode_aset: document.getElementById('edit_kode_aset')?.value || '',
+                            hapus_list: hapusList,
+                            device_date: tglDevice,
+                            new_files: filesBaru.map(f => ({
+                                name: f.name,
+                                size_bytes: f.size,
+                                size_text: formatUkuranFileJS(f.size),
+                                tgl_upload: tglDevice
+                            }))
+                        });
+                        formEditFisik.dataset.lampiranSynced = '1';
+                        formEditFisik.submit();
+                        return false;
+                    }
+                });
+            }
+        });
     </script>
 
 </body>
