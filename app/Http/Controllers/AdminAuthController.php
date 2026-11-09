@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter; 
+use Illuminate\Support\Str;                 
+use Illuminate\Validation\ValidationException;
 
 class AdminAuthController extends Controller
 {
@@ -27,6 +30,20 @@ class AdminAuthController extends Controller
     // Memproses login
     public function prosesLogin(Request $request)
     {
+        // ==========================================
+        // 1. CEK BATAS PERCOBAAN LOGIN (MAX 3 KALI)
+        // ==========================================
+       $throttleKey = Str::lower($request->input('email')) . '|' . $request->ip();
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            
+            throw ValidationException::withMessages([
+                'email' => "Terlalu banyak percobaan login. Akun dikunci sementara, silakan coba lagi dalam {$seconds} detik.",
+            ]);
+        }
+
+
         $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required'
@@ -62,8 +79,22 @@ class AdminAuthController extends Controller
             }
         }
 
+       // ==========================================
+        // 4. JIKA LOGIN GAGAL (HITUNG PERCOBAAN)
+        // ==========================================
+       RateLimiter::hit($throttleKey, 60); // Blokir/hitung selama 60 detik
+        
+        $sisaUpaya = 3 - RateLimiter::attempts($throttleKey);
+        $pesanGagal = 'Email atau password yang Anda masukkan salah.';
+        
+        if ($sisaUpaya > 0) {
+            $pesanGagal .= " Sisa percobaan login: {$sisaUpaya} kali lagi.";
+        } else {
+            $pesanGagal = 'Anda sudah 3 kali salah memasukkan data. Silakan tunggu sebentar sebelum mencoba lagi.';
+        }
+
         return back()->withErrors([
-            'email' => 'Email atau password yang Anda masukkan salah.',
+            'email' => $pesanGagal,
         ])->withInput();
     }
     // Proses logout

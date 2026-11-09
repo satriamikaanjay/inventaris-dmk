@@ -241,6 +241,162 @@
             transform: translateX(-100%);
         }
     }
+
+    /* ================= OVERLAY LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) ================= */
+    .nav-loading-overlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        cursor: wait !important;
+        user-select: none;
+        transition: opacity 0.18s ease, visibility 0.18s ease;
+    }
+
+    .nav-loading-overlay.active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: all !important;
+    }
+
+    /* Bar Progres Jaringan di Bagian Paling Atas Layar */
+    .nav-top-progress-track {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        overflow: hidden;
+        z-index: 2147483647;
+    }
+
+    .nav-top-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #38bdf8, #1a4f91, #10b981);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Kartu Pop-up Animasi Loading */
+    .nav-loading-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-top: 4px solid var(--primary-color);
+        border-radius: 18px;
+        padding: 28px 34px;
+        max-width: 390px;
+        width: calc(100% - 32px);
+        text-align: center;
+        box-shadow: 0 22px 45px rgba(15, 23, 42, 0.28);
+        transform: scale(0.94) translateY(8px);
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        pointer-events: none;
+    }
+
+    .nav-loading-overlay.active .nav-loading-card {
+        transform: scale(1) translateY(0);
+    }
+
+    .nav-spinner-wrap {
+        position: relative;
+        width: 58px;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-spinner-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 4px solid #e0f2fe;
+        border-top-color: var(--primary-color);
+        border-right-color: #38bdf8;
+        animation: navSpinRing 0.75s linear infinite;
+    }
+
+    .nav-spinner-ring-inner {
+        position: absolute;
+        inset: 9px;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        border-bottom-color: var(--secondary-color);
+        animation: navSpinRingReverse 1.1s linear infinite;
+    }
+
+    .nav-spinner-icon {
+        color: var(--primary-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    @keyframes navSpinRing {
+        to { transform: rotate(360deg); }
+    }
+
+    @keyframes navSpinRingReverse {
+        to { transform: rotate(-360deg); }
+    }
+
+    .nav-loading-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.2px;
+    }
+
+    .nav-loading-subtitle {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: #64748b;
+        line-height: 1.5;
+    }
+
+    .nav-network-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        font-size: 11px;
+        font-weight: 700;
+        color: #334155;
+        margin-top: 2px;
+    }
+
+    .nav-network-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: navPulseDot 1.2s ease-in-out infinite;
+    }
+
+    @keyframes navPulseDot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
 </style>
 
 @php
@@ -280,7 +436,7 @@
             }
         }
         if (empty($daftarIdRiwayat)) {
-            foreach (['\App\Models\RiwayatAktivitas', '\App\Models\Riwayat', '\App\Models\ActivityLog', '\App\Models\LogAktivitas'] as $modelClass) {
+            foreach ([\App\Models\RiwayatAktivitas::class, \App\Models\Riwayat::class, \App\Models\ActivityLog::class, \App\Models\LogAktivitas::class] as $modelClass) {
                 if (class_exists($modelClass)) {
                     $inst = new $modelClass;
                     $pk = $inst->getKeyName();
@@ -355,16 +511,8 @@
         			<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
         			Cabang
       		</a>
-      			<a href="{{ route('divisi.index') }}" class="menu-item {{ Request::is('divisi') ? 'active' : '' }}">
-        				<!-- Ikon Divisi -->
-        				<svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
-        				Divisi
-      			</a>
-      			<a href="{{ route('jabatan.index') }}" class="menu-item {{ Request::is('jabatan') ? 'active' : '' }}">
-        				<!-- Ikon Jabatan -->
-        				<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-        				Jabatan
-      			</a>
+      			
+      			
 
       			<div class="menu-section-title">AKSES & KEAMANAN</div>
       			<a href="{{ route('kelola_akun.index') }}" class="menu-item {{ Request::is('kelola-akun') ? 'active' : '' }}">
@@ -417,6 +565,35 @@
     </div>
 </div>
 </sidebar>
+
+<!-- POP-UP ANIMASI LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & MENGIKUTI KECEPATAN JARINGAN) -->
+<div id="global-page-nav-loader" class="nav-loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="nav-top-progress-track">
+        <div id="nav-top-progress-bar" class="nav-top-progress-bar"></div>
+    </div>
+    <div class="nav-loading-card">
+        <div class="nav-spinner-wrap">
+            <div class="nav-spinner-ring"></div>
+            <div class="nav-spinner-ring-inner"></div>
+            <div class="nav-spinner-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+                </svg>
+            </div>
+        </div>
+        <div>
+            <div id="nav-loading-title" class="nav-loading-title">Memuat Halaman...</div>
+            <div id="nav-loading-subtitle" class="nav-loading-subtitle" style="margin-top: 4px;">
+                Menghubungkan ke server, mohon tunggu dan jangan klik berulang.
+            </div>
+        </div>
+        <div class="nav-network-pill">
+            <span id="nav-network-dot" class="nav-network-dot"></span>
+            <span id="nav-network-status">Menyesuaikan kecepatan jaringan...</span>
+        </div>
+    </div>
+</div>
+
 
 <script>
     (function () {
@@ -514,7 +691,173 @@
             window.hitungRiwayatBelumDibaca();
         };
 
+        // ================= LOGIKA POP-UP LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) =================
+        let sedangPindahHalaman = false;
+        let timerProgresJaringan = null;
+        let waktuMulaiNavigasi = 0;
+
+        function deteksiInfoKoneksiJaringan() {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                const tipe = (conn.effectiveType || '').toUpperCase();
+                const rtt = typeof conn.rtt === 'number' && conn.rtt > 0 ? `${conn.rtt} ms` : '';
+                if (tipe || rtt) {
+                    return `Jaringan ${tipe || 'Aktif'}${rtt ? ' • Ping ' + rtt : ''}`;
+                }
+            }
+            return 'Menunggu respons jaringan server...';
+        }
+
+        window.tampilkanLoadingPindahHalaman = function (judulKustom, subjudulKustom) {
+            const overlay = document.getElementById('global-page-nav-loader');
+            if (!overlay) return;
+
+            sedangPindahHalaman = true;
+            waktuMulaiNavigasi = Date.now();
+
+            const titleEl = document.getElementById('nav-loading-title');
+            const subEl = document.getElementById('nav-loading-subtitle');
+            const netStatusEl = document.getElementById('nav-network-status');
+            const netDotEl = document.getElementById('nav-network-dot');
+            const barEl = document.getElementById('nav-top-progress-bar');
+
+            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Halaman...';
+            if (subEl) subEl.textContent = subjudulKustom || 'Menghubungkan ke server, mohon tunggu dan jangan klik berulang.';
+            if (netStatusEl) netStatusEl.textContent = deteksiInfoKoneksiJaringan();
+            if (netDotEl) netDotEl.style.background = '#10b981';
+
+            overlay.classList.add('active');
+            document.body.style.cursor = 'wait';
+
+            let progresSaatIni = 12;
+            if (barEl) barEl.style.width = progresSaatIni + '%';
+
+            if (timerProgresJaringan) clearInterval(timerProgresJaringan);
+            timerProgresJaringan = setInterval(function () {
+                const durasiMs = Date.now() - waktuMulaiNavigasi;
+                const sisa = 92 - progresSaatIni;
+                if (sisa > 0.5) {
+                    progresSaatIni += Math.max(0.4, sisa * 0.08);
+                    if (barEl) barEl.style.width = progresSaatIni.toFixed(1) + '%';
+                }
+
+                if (durasiMs > 4500) {
+                    if (titleEl) titleEl.textContent = 'Koneksi Jaringan Sedang Lambat...';
+                    if (subEl) subEl.textContent = 'Permintaan Anda sedang diproses oleh server. Halaman akan terbuka otomatis begitu data selesai dimuat.';
+                    if (netStatusEl) netStatusEl.textContent = `Waktu tunggu: ${(durasiMs / 1000).toFixed(1)} dtk • Mohon tetap tunggu`;
+                    if (netDotEl) netDotEl.style.background = '#f59e0b';
+                } else if (durasiMs > 1600) {
+                    if (subEl) subEl.textContent = 'Sedang memuat data halaman dari server sesuai kecepatan jaringan Anda...';
+                    if (netStatusEl) netStatusEl.textContent = `Memuat data (${(durasiMs / 1000).toFixed(1)} dtk)...`;
+                }
+            }, 150);
+        };
+
+        window.sembunyikanLoadingPindahHalaman = function () {
+            sedangPindahHalaman = false;
+            if (timerProgresJaringan) {
+                clearInterval(timerProgresJaringan);
+                timerProgresJaringan = null;
+            }
+            const barEl = document.getElementById('nav-top-progress-bar');
+            if (barEl) barEl.style.width = '100%';
+
+            const overlay = document.getElementById('global-page-nav-loader');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            document.body.style.cursor = '';
+        };
+
+        // Cegah segala bentuk spam klik atau tekan tombol Enter/Space saat proses pindah halaman sedang berlangsung
+        ['click', 'dblclick', 'submit'].forEach(function (evtName) {
+            window.addEventListener(evtName, function (e) {
+                if (sedangPindahHalaman) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof e.stopImmediatePropagation === 'function') {
+                        e.stopImmediatePropagation();
+                    }
+                    return false;
+                }
+            }, true);
+        });
+
+        window.addEventListener('keydown', function (e) {
+            if (sedangPindahHalaman && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+
+        // Deteksi klik pada seluruh link navigasi (<a>) untuk langsung mengunci layar & menampilkan animasi loading
+        document.addEventListener('click', function (e) {
+            if (sedangPindahHalaman || e.defaultPrevented) return;
+            if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+
+            const linkEl = e.target.closest('a[href]');
+            if (!linkEl) return;
+
+            const rawHref = (linkEl.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) return;
+            if (linkEl.hasAttribute('download') || linkEl.getAttribute('target') === '_blank') return;
+            if (rawHref.includes('download-lampiran') || rawHref.includes('view-lampiran')) return;
+
+            let targetUrl;
+            try {
+                targetUrl = new URL(linkEl.href, window.location.origin);
+            } catch (err) {
+                return;
+            }
+
+            if (targetUrl.origin !== window.location.origin) return;
+
+            if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search && targetUrl.hash !== '') {
+                return;
+            }
+
+            const teksMenu = (linkEl.textContent || '').replace(/\s+/g, ' ').trim();
+            const judulLoad = teksMenu && teksMenu.length < 35
+                ? `Membuka ${teksMenu}...`
+                : 'Memuat Halaman...';
+
+            window.tampilkanLoadingPindahHalaman(judulLoad);
+        }, false);
+
+        // Deteksi submit form yang melakukan pindah/reload halaman
+        document.addEventListener('submit', function (e) {
+            if (sedangPindahHalaman || e.defaultPrevented) return;
+            const formEl = e.target;
+            if (!formEl || formEl.tagName !== 'FORM') return;
+            if (formEl.getAttribute('target') === '_blank') return;
+
+            const idForm = formEl.id || '';
+            if (idForm === 'form-tambah-role' || idForm === 'form-clear-riwayat') return;
+
+            setTimeout(function () {
+                if (!e.defaultPrevented && !sedangPindahHalaman) {
+                    window.tampilkanLoadingPindahHalaman('Memproses Data...', 'Mohon tunggu, permintaan sedang dikirim ke server.');
+                }
+            }, 0);
+        }, false);
+
+        window.addEventListener('beforeunload', function () {
+            if (!sedangPindahHalaman) {
+                window.tampilkanLoadingPindahHalaman('Memuat Halaman...');
+            }
+        });
+
+        window.addEventListener('pageshow', function () {
+            window.sembunyikanLoadingPindahHalaman();
+        });
+
+        window.addEventListener('load', function () {
+            window.sembunyikanLoadingPindahHalaman();
+        });
+
         document.addEventListener('DOMContentLoaded', function () {
+            window.sembunyikanLoadingPindahHalaman();
             window.hitungRiwayatBelumDibaca();
         });
     })();

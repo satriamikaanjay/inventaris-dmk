@@ -1,4 +1,99 @@
 @php
+    // Endpoint Hapus Banyak Aset Sekaligus (Checklist Bulk Delete)
+    if (request()->has('_bulk_delete_aset')) {
+        $__rawIds = (string) request('ids', '');
+        $__idsHapus = array_values(array_filter(array_map('trim', explode(',', $__rawIds)), fn($v) => $v !== ''));
+
+        if (empty($__idsHapus)) {
+            if (request()->ajax() || request()->wantsJson()) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Pilih aset yang mau dihapus',
+                ]);
+                exit;
+            }
+            session()->flash('error', 'Pilih aset yang mau dihapus');
+        } else {
+            try {
+                $__instDel = new \App\Models\DetailAset();
+                $__tblDel = $__instDel->getTable();
+                $__pkDel = $__instDel->getKeyName();
+                if (!\Illuminate\Support\Facades\Schema::hasColumn($__tblDel, $__pkDel) && \Illuminate\Support\Facades\Schema::hasColumn($__tblDel, 'id')) {
+                    $__pkDel = 'id';
+                }
+
+                $__rowsTarget = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn($__pkDel, $__idsHapus)->get();
+                if ($__rowsTarget->isEmpty() && $__pkDel !== 'id' && \Illuminate\Support\Facades\Schema::hasColumn($__tblDel, 'id')) {
+                    $__pkDel = 'id';
+                    $__rowsTarget = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn('id', $__idsHapus)->get();
+                }
+
+                $__kodeList = [];
+                foreach ($__rowsTarget as $__rt) {
+                    if (!empty($__rt->kode_aset)) {
+                        $__kodeList[] = (string) $__rt->kode_aset;
+                    }
+                }
+
+                $__jmlTerhapus = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn($__pkDel, $__idsHapus)->delete();
+
+                if ($__jmlTerhapus > 0 && class_exists(\App\Models\RiwayatAktivitas::class)) {
+                    try {
+                        $__ringkasanKode = !empty($__kodeList) ? (' [' . implode(', ', array_slice($__kodeList, 0, 5)) . (count($__kodeList) > 5 ? ', ...' : '') . ']') : '';
+                        $__logDel = new \App\Models\RiwayatAktivitas();
+                        $__tblLogDel = $__logDel->getTable();
+                        $__payloadDel = [];
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'user_id')) {
+                            $__payloadDel['user_id'] = \Illuminate\Support\Facades\Auth::id();
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'aktivitas')) {
+                            $__payloadDel['aktivitas'] = 'Menghapus ' . $__jmlTerhapus . ' data aset melalui checklist' . $__ringkasanKode;
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'modul')) {
+                            $__payloadDel['modul'] = 'Data Aset';
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'status')) {
+                            $__payloadDel['status'] = 'Peringatan';
+                        }
+                        $__logDel->forceFill($__payloadDel)->save();
+                    } catch (\Throwable $e) {
+                    }
+                }
+
+                session()->flash('success', $__jmlTerhapus . ' data aset yang dipilih berhasil dihapus permanen.');
+
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => true,
+                        'deleted' => $__jmlTerhapus,
+                        'message' => $__jmlTerhapus . ' data aset berhasil dihapus.',
+                    ]);
+                    exit;
+                }
+            } catch (\Throwable $e) {
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Gagal menghapus data aset yang dipilih.',
+                    ]);
+                    exit;
+                }
+            }
+        }
+    }
+
     /* LAMPIRAN_SYNC_V2 */
     $__lampiranMetaPath = storage_path('app/lampiran_aset_meta.json');
     $__lampiranMetaData = [
@@ -460,8 +555,48 @@
         .btn { padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
         .btn-primary { background: var(--primary-color); color: #fff; border: none; padding: 10px 20px; }
         .btn-secondary { background: #64748b; color: #fff; border: none; padding: 10px 20px; }
-        .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
-        .btn-danger:hover { background: var(--danger-color); color: #fff; }
+        .btn-danger,
+        .btn-hapus-checklist {
+            background: #dc2626 !important;
+            color: #ffffff !important;
+            border: 1px solid #b91c1c !important;
+            padding: 10px 18px;
+            font-weight: 700 !important;
+            box-shadow: 0 3px 8px rgba(220, 38, 38, 0.22);
+        }
+        .btn-danger:hover,
+        .btn-hapus-checklist:hover {
+            background: #b91c1c !important;
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+        .btn-danger span,
+        .btn-danger svg,
+        .btn-hapus-checklist span,
+        .btn-hapus-checklist svg {
+            color: #ffffff !important;
+        }
+
+        /* Styling Checkbox Hapus Aset & Highlight Baris Terpilih */
+        .aset-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: #dc2626;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .data-table tr.row-checked td {
+            background-color: #fee2e2 !important;
+            color: #0f172a !important;
+        }
+        @keyframes pulseCheckboxCol {
+            0%, 100% { transform: scale(1); box-shadow: none; }
+            50% { transform: scale(1.22); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.3); }
+        }
+        .aset-checkbox.highlight-warning {
+            animation: pulseCheckboxCol 0.45s ease-in-out 2;
+            outline: 2px solid #dc2626;
+        }
         .btn:hover { opacity: 0.9; }
 
         .card-box { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); margin-bottom: 20px; }
@@ -522,10 +657,12 @@
         .data-table th.aksi-col { position: sticky; top: 0; right: 0; z-index: 20; background: #f8fafc; }
         .data-table td { font-size: 13px; padding: 12px 15px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); white-space: nowrap; }
         .badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-        .toast-popup { position: fixed; top: 30px; right: -100%; padding: 15px 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); font-size: 14px; font-weight: 600; z-index: 99999; display: flex; align-items: center; gap: 12px; transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        .toast-popup { position: fixed; top: 30px; right: -100%; padding: 14px 20px; border-radius: 10px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28); font-size: 14px; font-weight: 700; z-index: 99999; display: flex; align-items: center; gap: 10px; transition: right 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
         .toast-popup.show { right: 30px; }
-        .toast-success { background-color: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
-        .toast-error { background-color: #fee2e2; color: #b91c1c; border-left: 4px solid #ef4444; }
+        .toast-success { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #047857 !important; border-left: 5px solid #064e3b !important; }
+        .toast-success span, .toast-success svg { color: #ffffff !important; }
+        .toast-error { background-color: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c !important; border-left: 5px solid #7f1d1d !important; }
+        .toast-error span, .toast-error svg { color: #ffffff !important; }
 
         .click-tooltip-container { position: relative; display: inline-flex; cursor: pointer; outline: none; }
         .click-tooltip-text { visibility: hidden; opacity: 0; width: max-content; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 6px 12px; position: absolute; z-index: 999; bottom: 135%; left: 50%; transform: translateX(-50%); transition: all 0.2s ease-in-out; font-size: 11px; font-weight: 600; box-shadow: 0 4px 10px rgba(0,0,0,0.15); pointer-events: none; }
@@ -650,6 +787,40 @@
             height: 16px !important;
         }   
         
+
+        /* ===== HEADER / NAVBAR HALAMAN FIXED (TIDAK TENGGELAM SAAT SCROLL KE BAWAH / ATAS) ===== */
+        .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 18px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        main {
+            padding-top: 108px !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 18px !important;
+            }
+        }
     </style>
 </head>
 
@@ -746,6 +917,62 @@
         }
     }
 
+    // Pastikan kolom status_berjalan mendukung nilai "Aset Tidak Dipakai" (jika di migrasi awal masih ENUM lama)
+    try {
+        $__instTipe = new \App\Models\DetailAset();
+        $__tblTipe = $__instTipe->getTable();
+        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblTipe, 'status_berjalan')) {
+            $__colTipe = \Illuminate\Support\Facades\DB::select("SHOW COLUMNS FROM `{$__tblTipe}` LIKE 'status_berjalan'");
+            if (!empty($__colTipe) && isset($__colTipe[0]->Type)) {
+                $__typeStr = strtolower((string) $__colTipe[0]->Type);
+                if (str_contains($__typeStr, 'enum') && !str_contains($__typeStr, 'tidak dipakai')) {
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE `{$__tblTipe}` MODIFY COLUMN `status_berjalan` VARCHAR(100) NULL DEFAULT 'Tidak Ada'");
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    // Pastikan Filter Tipe Aset "Aset Tidak Dipakai" tetap bekerja meskipun Controller belum menambahkan whitelist baru
+    if (request()->filled('filter_tipe') && strtolower(trim((string) request('filter_tipe'))) === 'aset tidak dipakai') {
+        try {
+            $__perluFilterUlang = false;
+            if (isset($detailAsets) && count($detailAsets) > 0) {
+                foreach ($detailAsets as $__cekRow) {
+                    if (strtolower(trim((string) ($__cekRow->status_berjalan ?? ''))) !== 'aset tidak dipakai') {
+                        $__perluFilterUlang = true;
+                        break;
+                    }
+                }
+            } else {
+                $__perluFilterUlang = true;
+            }
+
+            if ($__perluFilterUlang) {
+                $__qFilterTipe = \App\Models\DetailAset::with(['kategori', 'item', 'cabang'])
+                    ->whereRaw('LOWER(TRIM(status_berjalan)) = ?', ['aset tidak dipakai']);
+
+                if (request()->filled('search')) {
+                    $__kw = trim((string) request('search'));
+                    $__qFilterTipe->where(function ($subQ) use ($__kw) {
+                        $subQ->where('kode_aset', 'like', "%{$__kw}%")
+                            ->orWhere('merk', 'like', "%{$__kw}%")
+                            ->orWhere('nomor_seri', 'like', "%{$__kw}%")
+                            ->orWhere('lokasi_saat_ini', 'like', "%{$__kw}%")
+                            ->orWhere('Ruangan', 'like', "%{$__kw}%")
+                            ->orWhere('penanggung_jawab', 'like', "%{$__kw}%")
+                            ->orWhereHas('item', fn($qI) => $qI->where('nama_aset', 'like', "%{$__kw}%"))
+                            ->orWhereHas('cabang', fn($qC) => $qC->where('nama_cabang', 'like', "%{$__kw}%"))
+                            ->orWhereHas('kategori', fn($qK) => $qK->where('nama_kategori', 'like', "%{$__kw}%"));
+                    });
+                }
+
+                $detailAsets = $__qFilterTipe->latest()->paginate(100)->withQueryString();
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
     // Urutan kode dihitung PER CABANG: angka paling kanan pada kode_aset (mis. .../25062023/17 -> 17)
     $urutanPerCabang = [];
     foreach (\App\Models\DetailAset::select('cabang_id', 'kode_aset')->get() as $barisAset) {
@@ -779,13 +1006,17 @@
                 <h1>Data Aset Inventaris</h1>
                 <p>Pusat pencatatan perangkat dan fasilitas kantor.</p>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" class="btn btn-secondary" onclick="openModalImport()" style="background: var(--primary-color);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Import dari Excel
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" id="btn-hapus-checklist" class="btn btn-danger btn-hapus-checklist btn-delete-sm" onclick="prosesHapusAsetChecklist()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <span id="teks-btn-hapus-checklist">Hapus Aset</span>
                 </button>
-                <button type="button" class="btn btn-primary" onclick="openSidebarTambah()" style="background: var(--secondary-color);">
-                    + Tambah Data Fisik Aset Baru
+                <button type="button" class="btn btn-secondary" onclick="openModalImport()" style="background: var(--primary-color); color: #ffffff;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>Import dari Excel</span>
+                </button>
+                <button type="button" class="btn btn-primary" onclick="openSidebarTambah()" style="background: var(--secondary-color); color: #ffffff;">
+                    <span>+ Tambah Data Fisik Aset Baru</span>
                 </button>
             </div>
         </header>
@@ -924,6 +1155,7 @@
                                         <option value="Tidak Ada" selected>Tidak Ada</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
+                                        <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
                             </div>
@@ -958,7 +1190,7 @@
                                     <input type="file" id="input_lampiran_tambah" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_tambah')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
                                     <small id="info_ukuran_lampiran_tambah" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran (Device): <span class="label-tanggal-device">{{ date('d F Y') }}</span>
+                                        <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>Penanda Waktu Lampiran (Device):</span></span> <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -998,7 +1230,7 @@
                     <div class="modal-body">
                         <!-- PERINGATAN UPDATE BARCODE -->
                         <div id="edit-barcode-warning" style="display: none; background: #fef3c7; border: 1px solid #f59e0b; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #b45309; font-weight: 600; line-height: 1.5; margin-bottom: 5px;">
-                            ⚠️ <strong>Peringatan:</strong> Jika Anda mengubah <strong>Kode Aset</strong>, Anda wajib melakukan pembaruan (Update QR) pada menu <strong>Barcode Aset</strong> setelah menyimpan perubahan ini agar QR Code tetap sinkron.
+                            <span style="display:inline-flex; align-items:center; gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Peringatan:</strong></span> Jika Anda mengubah <strong>Kode Aset</strong>, Anda wajib melakukan pembaruan (Update QR) pada menu <strong>Barcode Aset</strong> setelah menyimpan perubahan ini agar QR Code tetap sinkron.
                         </div>
 
                         <!-- PREVIEW -->
@@ -1070,6 +1302,7 @@
                                         <option value="Tidak Ada">Tidak Ada</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
+                                        <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
                             </div>
@@ -1114,7 +1347,7 @@
                                     <input type="file" id="input_lampiran_edit" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_edit')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
                                     <small id="info_ukuran_lampiran_edit" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran (Device): <span class="label-tanggal-device">{{ date('d F Y') }}</span>
+                                        <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>Penanda Waktu Lampiran (Device):</span></span> <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1199,6 +1432,7 @@
                         <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
                         <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan</option>
                         <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan</option>
+                        <option value="Aset Tidak Dipakai" {{ strtolower((string) request('filter_tipe')) === 'aset tidak dipakai' ? 'selected' : '' }}>Aset Tidak Dipakai</option>
                         <option value="Tidak Ada" {{ request('filter_tipe') == 'Tidak Ada' ? 'selected' : '' }}>Tidak Ada</option>
                     </select>
                 </div>
@@ -1209,6 +1443,9 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th class="col-checkbox-hapus" style="width: 44px; text-align: center; position: sticky; left: 0; z-index: 21; background: #f8fafc;">
+                                <input type="checkbox" id="checkAllAset" class="aset-checkbox" title="Pilih semua aset di halaman ini" onchange="togglePilihSemuaAset(this)">
+                            </th>
                             <!-- URUTAN KOLOM YANG DIPERBARUI -->
                             <th>KODE ASET</th>
                             <th>NAMA ASET</th>
@@ -1259,7 +1496,10 @@
                                 $rowBg = "rgba($r, $g, $b, 0.08)";
                             }
                         @endphp
-                        <tr style="background-color: {{ $rowBg }};">
+                        <tr id="baris-aset-{{ $detail->aset_id ?? $detail->id }}" style="background-color: {{ $rowBg }};">
+                            <td class="col-checkbox-hapus" style="text-align: center; position: sticky; left: 0; background: inherit; z-index: 2;" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="aset-checkbox check-item-aset" name="aset_ids[]" value="{{ $detail->aset_id ?? $detail->id }}" data-kode="{{ $detail->kode_aset ?? '-' }}" onchange="perbaruiStatusChecklistAset()">
+                            </td>
                             <td style="font-weight: 700; color: var(--primary-color);">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->kode_aset ?? '-' }}</span>
@@ -1362,7 +1602,7 @@
                             </td>
                         </tr>
                         @empty
-                        <tr id="row-empty-table"><td colspan="28" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
+                        <tr id="row-empty-table"><td colspan="29" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -1425,7 +1665,9 @@
             setSelectDenganCadangan('edit_cabang', data.cabang_id, data.cabang && data.cabang.nama_cabang);
             document.getElementById('edit_ruangan').value = data.Ruangan || '';
             document.getElementById('edit_status_aset').value = data.status_aset || 'Tersedia';
-            document.getElementById('edit_status_berjalan').value = data.status_berjalan || 'Tidak Ada';
+            const rawTipeVal = String(data.status_berjalan || 'Tidak Ada').trim();
+            const normTipeVal = rawTipeVal.toLowerCase() === 'aset tidak dipakai' ? 'Aset Tidak Dipakai' : rawTipeVal;
+            setSelectDenganCadangan('edit_status_berjalan', normTipeVal, normTipeVal);
             document.getElementById('edit_merk').value = data.merk || '';
             document.getElementById('edit_unit').value = data.unit || 1;
             document.getElementById('edit_tgl_pengadaan').value = data.tanggal_pengadaan || '';
@@ -1625,6 +1867,97 @@
             document.getElementById('modalDetailAset').classList.remove('show');
         }
 
+
+        // ================= LOGIKA CHECKLIST HAPUS ASET & NOTIFIKASI "PILIH ASET YANG MAU DIHAPUS" =================
+        function togglePilihSemuaAset(masterChk) {
+            const isChecked = !!masterChk.checked;
+            document.querySelectorAll('.check-item-aset').forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr && tr.style.display === 'none') return;
+                chk.checked = isChecked;
+                if (tr) tr.classList.toggle('row-checked', isChecked);
+            });
+            perbaruiStatusChecklistAset();
+        }
+
+        function perbaruiStatusChecklistAset() {
+            const semuaChk = Array.from(document.querySelectorAll('.check-item-aset'));
+            const terpilih = semuaChk.filter(chk => chk.checked);
+
+            semuaChk.forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr) tr.classList.toggle('row-checked', chk.checked);
+            });
+
+            const masterChk = document.getElementById('checkAllAset');
+            if (masterChk) {
+                masterChk.checked = semuaChk.length > 0 && terpilih.length === semuaChk.length;
+                masterChk.indeterminate = terpilih.length > 0 && terpilih.length < semuaChk.length;
+            }
+
+            const labelBtn = document.getElementById('teks-btn-hapus-checklist');
+            if (labelBtn) {
+                labelBtn.textContent = terpilih.length > 0
+                    ? `Hapus Aset (${terpilih.length} Terpilih)`
+                    : 'Hapus Aset';
+            }
+        }
+
+        async function prosesHapusAsetChecklist() {
+            const terpilih = Array.from(document.querySelectorAll('.check-item-aset:checked'));
+
+            // Jika belum ada satupun aset yang di-checklist, munculkan notifikasi "Pilih aset yang mau dihapus"
+            if (terpilih.length === 0) {
+                tampilkanToastPeringatan('Pilih aset yang mau dihapus');
+                document.querySelectorAll('.aset-checkbox').forEach(chk => {
+                    chk.classList.remove('highlight-warning');
+                    void chk.offsetWidth;
+                    chk.classList.add('highlight-warning');
+                    setTimeout(() => chk.classList.remove('highlight-warning'), 1000);
+                });
+                return false;
+            }
+
+            const ids = terpilih.map(chk => chk.value);
+            const kodes = terpilih.map(chk => chk.getAttribute('data-kode') || chk.value).slice(0, 5);
+            const infoKode = kodes.join(', ') + (terpilih.length > 5 ? ', ...' : '');
+
+            if (!confirm(`Apakah Anda yakin ingin menghapus ${terpilih.length} data aset yang dipilih (${infoKode}) secara permanen?`)) {
+                return false;
+            }
+
+            if (typeof window.tampilkanLoadingPindahHalaman === 'function') {
+                window.tampilkanLoadingPindahHalaman(`Menghapus ${terpilih.length} Data Aset...`, 'Mohon tunggu, sedang menghapus data aset terpilih dari server.');
+            }
+
+            try {
+                const delUrl = new URL(window.location.href);
+                delUrl.searchParams.set('_bulk_delete_aset', String(Date.now()));
+                delUrl.searchParams.set('ids', ids.join(','));
+
+                const res = await fetch(delUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                    return;
+                }
+            } catch (err) {
+            }
+
+            // Fallback navigasi langsung jika fetch terputus
+            const fallbackUrl = new URL(window.location.href);
+            fallbackUrl.searchParams.set('_bulk_delete_aset', '1');
+            fallbackUrl.searchParams.set('ids', ids.join(','));
+            window.location.href = fallbackUrl.toString();
+        }
+
         function submitHapusAset() {
             if(confirm('Peringatan: Yakin ingin menghapus data aset ini secara permanen? Aksi ini tidak dapat dibatalkan.')) {
                 document.getElementById('form-delete-fisik').submit();
@@ -1780,7 +2113,7 @@
             let toast = document.createElement('div');
             toast.id = 'toast-lampiran-error';
             toast.className = 'toast-popup toast-error show';
-            toast.innerHTML = `<span>⚠️ ${pesan}</span>`;
+            toast.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>${pesan}</span>`;
             document.body.appendChild(toast);
 
             setTimeout(() => {
@@ -1919,7 +2252,7 @@
                 if (infoEl) {
                     infoEl.style.color = 'var(--danger-color)';
                     infoEl.style.fontWeight = '600';
-                    infoEl.innerText = `❌ Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
+                    infoEl.innerText = `Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
                 }
                 inputEl.style.borderColor = 'var(--danger-color)';
                 return false;
@@ -1930,7 +2263,7 @@
                 const rincianFile = fileValid.map(f => `${f.name} (${formatUkuranFileJS(f.size)})`).join(', ');
                 infoEl.style.color = 'var(--secondary-color)';
                 infoEl.style.fontWeight = '600';
-                infoEl.innerText = `✓ ${fileValid.length} file siap diunggah: ${rincianFile} — Tanggal Upload: ${tglDevice}`;
+                infoEl.innerText = `${fileValid.length} file siap diunggah: ${rincianFile} — Tanggal Upload: ${tglDevice}`;
             }
             inputEl.style.borderColor = 'var(--secondary-color)';
             return true;
@@ -2024,5 +2357,29 @@
         });
     </script>
 
+
+    <script>
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 82;
+                    mainEl.style.setProperty('padding-top', (tinggi + 24) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+        })();
+    </script>
 </body>
 </html>

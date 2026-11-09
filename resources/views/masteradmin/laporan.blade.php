@@ -1048,6 +1048,34 @@
                 grid-template-columns: 65px 1fr 65px;
             }
         }
+
+        @media screen {
+            .main-header {
+                position: fixed !important;
+                top: 0 !important;
+                left: var(--sidebar-width, 270px) !important;
+                right: 0 !important;
+                width: calc(100% - var(--sidebar-width, 270px)) !important;
+                background: rgba(255, 255, 255, 0.98) !important;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                padding: 18px 25px !important;
+                margin: 0 !important;
+                border-bottom: 2px solid var(--border-color) !important;
+                box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+                z-index: 95 !important;
+            }
+            main {
+                padding-top: 108px !important;
+            }
+        }
+        @media screen and (max-width: 768px) {
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 18px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1253,8 +1281,8 @@
                         Data diambil langsung dari database sesuai jenis laporan dan rentang waktu yang dipilih.
                     </p>
                 </div>
-                <div id="indikator-status-cetak" style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; background: #fee2e2; color: #b91c1c;">
-                    0 Data Tersedia (Tidak Dapat Dicetak)
+                <div id="indikator-status-cetak" style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">
+                    0 Data Tersedia (Siap Cetak PDF / Excel Laporan Nihil)
                 </div>
             </div>
 
@@ -1776,25 +1804,26 @@
             document.getElementById('stat-total-sekunder').textContent = formatRupiah(totalSekunder);
             document.getElementById('judul-tabel-halaman').textContent = konfig.judulTabel;
 
-            // Atur status aktif/nonaktif tombol Cetak PDF & Excel berdasarkan ketersediaan data
+            // Tombol Cetak PDF & Excel selalu aktif meskipun data 0 (menghasilkan PDF/Excel Laporan Nihil)
             const btnPdf = document.getElementById('btn-utama-pdf');
             const btnExcel = document.getElementById('btn-utama-excel');
             const indikatorCetak = document.getElementById('indikator-status-cetak');
 
+            if (btnPdf) btnPdf.classList.remove('is-disabled');
+            if (btnExcel) btnExcel.classList.remove('is-disabled');
+
             if (totalAset === 0) {
-                if (btnPdf) btnPdf.classList.add('is-disabled');
-                if (btnExcel) btnExcel.classList.add('is-disabled');
                 if (indikatorCetak) {
-                    indikatorCetak.style.background = '#fee2e2';
-                    indikatorCetak.style.color = '#b91c1c';
-                    indikatorCetak.textContent = '0 Data Tersedia (Tidak Dapat Dicetak)';
+                    indikatorCetak.style.background = '#eff6ff';
+                    indikatorCetak.style.color = '#1d4ed8';
+                    indikatorCetak.style.border = '1px solid #bfdbfe';
+                    indikatorCetak.textContent = '0 Data Tersedia (Siap Cetak PDF / Excel Laporan Nihil)';
                 }
             } else {
-                if (btnPdf) btnPdf.classList.remove('is-disabled');
-                if (btnExcel) btnExcel.classList.remove('is-disabled');
                 if (indikatorCetak) {
                     indikatorCetak.style.background = '#d1fae5';
                     indikatorCetak.style.color = '#065f46';
+                    indikatorCetak.style.border = '1px solid #a7f3d0';
                     indikatorCetak.textContent = `${totalAset} Data Siap Dicetak (PDF / Excel)`;
                 }
             }
@@ -1818,8 +1847,8 @@
                                 <div style="font-size: 14px; font-weight: 700; color: #334155;">
                                     Belum Ada Data ${escapeHtml(konfig.nama)} (0 Data)
                                 </div>
-                                <div style="font-size: 12.5px; color: #64748b; text-align: center; max-width: 520px;">
-                                    Saat ini belum ada transaksi pada database untuk kategori <strong>${escapeHtml(konfig.nama)}</strong> di periode <strong>${escapeHtml(periodeText)}</strong>. Laporan baru dapat dicetak setelah data tersedia.
+                                <div style="font-size: 12.5px; color: #64748b; text-align: center; max-width: 540px;">
+                                    Saat ini belum ada transaksi pada database untuk kategori <strong>${escapeHtml(konfig.nama)}</strong> di periode <strong>${escapeHtml(periodeText)}</strong>. Anda tetap dapat mengklik tombol <strong>Cetak PDF</strong> di atas untuk mencetak dokumen laporan resmi (status nihil / 0 data).
                                 </div>
                             </div>
                         </td>
@@ -1901,29 +1930,39 @@
             const tfootPdf = document.getElementById('tfoot-pdf-resmi');
 
             let akumulasiNilaiTabel = 0;
-            tbodyPdf.innerHTML = rows.map((r, i) => {
-                const tglTampil = formatTanggalIndo(r.tanggal);
-                const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
-                akumulasiNilaiTabel += nilaiBaris;
-
-                return `
+            if (rows.length === 0) {
+                tbodyPdf.innerHTML = `
                     <tr>
-                        <td style="text-align: center; font-weight: 700;">${i + 1}</td>
-                        <td style="font-weight: 700;">${escapeHtml(r.kode_aset)}</td>
-                        <td>
-                            <div style="font-weight: 700;">${escapeHtml(r.nama_aset)}</div>
-                            <div style="font-size: 9.5px; color: #475569;">Merk: ${escapeHtml(r.merk)} | SN: ${escapeHtml(r.nomor_seri)}</div>
+                        <td colspan="10" style="text-align: center; padding: 28px 16px; color: #334155; font-style: italic; font-weight: 600; background: #f8fafc;">
+                            NIHIL — Belum ada data transaksi ${escapeHtml(konfig.nama)} pada periode ${escapeHtml(periodeText)} (0 Data Tercatat).
                         </td>
-                        <td>${escapeHtml(r.nama_kategori)}</td>
-                        <td>${escapeHtml(r.nama_cabang)} (${escapeHtml(r.ruangan)})</td>
-                        <td>${escapeHtml(r.penanggung_jawab)}</td>
-                        <td>${escapeHtml(tglTampil)}</td>
-                        <td style="text-align: center; font-weight: 700;">${r.unit}</td>
-                        <td>${escapeHtml(r.status_aset)}</td>
-                        <td style="text-align: right; font-weight: 700;">${formatRupiah(nilaiBaris)}</td>
                     </tr>
                 `;
-            }).join('');
+            } else {
+                tbodyPdf.innerHTML = rows.map((r, i) => {
+                    const tglTampil = formatTanggalIndo(r.tanggal);
+                    const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
+                    akumulasiNilaiTabel += nilaiBaris;
+
+                    return `
+                        <tr>
+                            <td style="text-align: center; font-weight: 700;">${i + 1}</td>
+                            <td style="font-weight: 700;">${escapeHtml(r.kode_aset)}</td>
+                            <td>
+                                <div style="font-weight: 700;">${escapeHtml(r.nama_aset)}</div>
+                                <div style="font-size: 9.5px; color: #475569;">Merk: ${escapeHtml(r.merk)} | SN: ${escapeHtml(r.nomor_seri)}</div>
+                            </td>
+                            <td>${escapeHtml(r.nama_kategori)}</td>
+                            <td>${escapeHtml(r.nama_cabang)} (${escapeHtml(r.ruangan)})</td>
+                            <td>${escapeHtml(r.penanggung_jawab)}</td>
+                            <td>${escapeHtml(tglTampil)}</td>
+                            <td style="text-align: center; font-weight: 700;">${r.unit}</td>
+                            <td>${escapeHtml(r.status_aset)}</td>
+                            <td style="text-align: right; font-weight: 700;">${formatRupiah(nilaiBaris)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
 
             tfootPdf.innerHTML = `
                 <tr>
@@ -1935,23 +1974,17 @@
             `;
         }
 
-        // Buka Pop-Up Preview Laporan Resmi HANYA jika data > 0
+        // Buka Pop-Up Preview Laporan Resmi (Tetap dapat dibuka & dicetak meskipun data 0 / Nihil)
         function bukaModalPreviewLaporan(modeFokus = 'pdf') {
             const rows = stateLaporan.filteredRows || [];
-            const konfig = KONFIG_JENIS_LAPORAN[stateLaporan.jenis] || KONFIG_JENIS_LAPORAN.peminjaman;
-
-            if (rows.length === 0) {
-                tampilkanToastPeringatan(`Tidak dapat mencetak ${konfig.nama} karena datanya masih 0 di database.`);
-                return;
-            }
-
             renderDokumenPreviewResmi();
             const modal = document.getElementById('modalPreviewLaporan');
             const headerTxt = document.getElementById('modal-preview-header-text');
             if (headerTxt) {
+                const infoNihil = rows.length === 0 ? ' (Laporan Nihil / 0 Data)' : '';
                 headerTxt.textContent = modeFokus === 'excel'
-                    ? 'Preview Dokumen Laporan Resmi — Siap Diunduh ke Excel (.xls) atau Dicetak ke PDF'
-                    : 'Preview Dokumen Laporan Resmi (Ukuran A4) — Siap Dicetak ke PDF';
+                    ? `Preview Dokumen Laporan Resmi${infoNihil} — Siap Diunduh ke Excel (.xls) atau Dicetak ke PDF`
+                    : `Preview Dokumen Laporan Resmi (Ukuran A4)${infoNihil} — Siap Dicetak ke PDF`;
             }
             if (modal) modal.classList.add('show');
         }
@@ -2039,22 +2072,12 @@
         }
 
         function eksekusiCetakPdfResmi() {
-            const rows = stateLaporan.filteredRows || [];
-            if (rows.length === 0) {
-                tampilkanToastPeringatan('Tidak dapat mencetak PDF karena tidak ada data (0 data).');
-                return;
-            }
             catatLogCetakKeServer('PDF');
             window.print();
         }
 
         function eksekusiUnduhExcelResmi() {
             const rows = stateLaporan.filteredRows || [];
-            if (rows.length === 0) {
-                tampilkanToastPeringatan('Tidak dapat mengekspor Excel karena tidak ada data (0 data).');
-                return;
-            }
-
             catatLogCetakKeServer('EXCEL');
             const jenis = stateLaporan.jenis;
             const konfig = KONFIG_JENIS_LAPORAN[jenis] || KONFIG_JENIS_LAPORAN.peminjaman;
@@ -2072,25 +2095,33 @@
             const totalUnit = rows.reduce((s, r) => s + (Number(r.unit) || 1), 0);
             let totalNilai = 0;
 
-            const barisHtml = rows.map((r, idx) => {
-                const tglTampil = formatTanggalIndo(r.tanggal);
-                const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
-                totalNilai += nilaiBaris;
-                return `
+            const barisHtml = rows.length === 0
+                ? `
                     <tr>
-                        <td style="border:1px solid #000; text-align:center;">${idx + 1}</td>
-                        <td style="border:1px solid #000; font-weight:bold;">${escapeHtml(r.kode_aset)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_aset)} (Merk: ${escapeHtml(r.merk)})</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_kategori)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_cabang)} - ${escapeHtml(r.ruangan)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.penanggung_jawab)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(tglTampil)}</td>
-                        <td style="border:1px solid #000; text-align:center;">${r.unit}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.status_aset)}</td>
-                        <td style="border:1px solid #000; text-align:right;">${formatRupiah(nilaiBaris)}</td>
+                        <td colspan="10" style="border:1px solid #000; text-align:center; padding:18px; font-style:italic; color:#334155;">
+                            NIHIL — Belum ada data transaksi ${escapeHtml(konfig.nama)} pada periode ${escapeHtml(periode)} (0 Data Tercatat).
+                        </td>
                     </tr>
-                `;
-            }).join('');
+                `
+                : rows.map((r, idx) => {
+                    const tglTampil = formatTanggalIndo(r.tanggal);
+                    const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
+                    totalNilai += nilaiBaris;
+                    return `
+                        <tr>
+                            <td style="border:1px solid #000; text-align:center;">${idx + 1}</td>
+                            <td style="border:1px solid #000; font-weight:bold;">${escapeHtml(r.kode_aset)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_aset)} (Merk: ${escapeHtml(r.merk)})</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_kategori)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_cabang)} - ${escapeHtml(r.ruangan)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.penanggung_jawab)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(tglTampil)}</td>
+                            <td style="border:1px solid #000; text-align:center;">${r.unit}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.status_aset)}</td>
+                            <td style="border:1px solid #000; text-align:right;">${formatRupiah(nilaiBaris)}</td>
+                        </tr>
+                    `;
+                }).join('');
 
             const excelHtml = `
                 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -2157,8 +2188,8 @@
                             <td colspan="5" style="text-align:center; font-size:9pt;">${escapeHtml(JABATAN_USER_CETAK)}</td>
                         </tr>
                     </table>
-                </body>
-                </html>
+                <\/body>
+                <\/html>
             `;
 
             const blob = new Blob(['\ufeff', excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
@@ -2184,6 +2215,28 @@
             terapkanTemplateWaktu('1_bulan');
             pilihJenisLaporan('peminjaman');
         });
+
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 82;
+                    mainEl.style.setProperty('padding-top', (tinggi + 24) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+        })();
     </script>
 </body>
 </html>

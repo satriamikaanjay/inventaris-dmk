@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter; 
+use Illuminate\Support\Str; 
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -34,6 +37,17 @@ class AuthController extends Controller
         'password' => 'required',
     ]);
 
+    // Kunci unik berdasarkan email & IP
+        $throttleKey = Str::lower($request->input('email')) . '|' . $request->ip();
+
+        // Cek jika sudah melebihi batas 3 kali percobaan
+        if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            throw ValidationException::withMessages([
+                'email' => "Terlalu banyak percobaan login. Akun dikunci sementara, silakan coba lagi dalam {$seconds} detik.",
+            ]);
+        }
+
     $loginAs = $request->input('login_as'); // Mengambil data role dari tombol yang diklik
 
     $remember = $request->has('remember');
@@ -49,6 +63,9 @@ class AuthController extends Controller
                 'email' => 'Data tidak ditemukan atau Anda tidak memiliki akses sebagai ' . str_replace('_', ' ', $loginAs) . '.',
             ])->onlyInput('email');
         }
+
+        // Hapus riwayat kegagalan login karena berhasil masuk
+            RateLimiter::clear($throttleKey);
 
         $request->session()->regenerate();
 
@@ -68,11 +85,21 @@ class AuthController extends Controller
     }
 
     // Jika email/password salah
+    RateLimiter::hit($throttleKey, 60); // Blokir 60 detik jika habis
+
+    $sisaUpaya = 3 - RateLimiter::attempts($throttleKey);
+    $pesanGagal = 'Email atau password salah.';
+
+    if ($sisaUpaya > 0) {
+        $pesanGagal .= " Sisa percobaan login: {$sisaUpaya} kali lagi.";
+    } else {
+        $pesanGagal = 'Anda sudah 3 kali salah memasukkan data. Silakan tunggu sebentar sebelum mencoba lagi.';
+    }
+
     return back()->withErrors([
-        'email' => 'Email atau password salah. Silakan coba lagi.',
+        'email' => $pesanGagal,
     ])->onlyInput('email');
 }
-
     // Fungsi untuk Logout
     public function logout(Request $request)
     {
@@ -83,4 +110,5 @@ class AuthController extends Controller
 
         return redirect('/'); // Kembali ke halaman utama (login)
     }
+
 }

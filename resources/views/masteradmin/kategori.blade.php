@@ -515,12 +515,60 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
         }
 
         
+    
+        /* ===== HEADER / NAVBAR HALAMAN FIXED (TIDAK TENGGELAM SAAT SCROLL KE BAWAH / ATAS) ===== */
+        .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 18px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        main {
+            padding-top: 108px !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 18px !important;
+            }
+        }
+
     </style>
 </head>
 
 <body>
 
+    @php
+    if (request('panel') === 'admin') {
+        session(['active_sidebar_panel' => 'admin']);
+    } elseif (request('panel') === 'master') {
+        session(['active_sidebar_panel' => 'masteradmin']);
+    }
+    $__gunakanAdminSidebar = (\Illuminate\Support\Facades\Auth::check() && strtolower((string) (\Illuminate\Support\Facades\Auth::user()->role ?? '')) === 'admin')
+        || session('active_sidebar_panel') === 'admin';
+@endphp
+@if($__gunakanAdminSidebar)
+    @include('layouts.adminsidebar')
+@else
     @include('layouts.mastersidebar')
+@endif
 
     <main>
         <header class="main-header">
@@ -1472,6 +1520,31 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             });
         });
     </script>
+
+    <script>
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 82;
+                    mainEl.style.setProperty('padding-top', (tinggi + 24) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+        })();
+    </script>
+
 </body>
 
 </html>

@@ -1,9 +1,230 @@
+@php
+    /* RIWAYAT_REALTIME_SCOPED_V2 */
+    $__userLoginRiwayat = \Illuminate\Support\Facades\Auth::user();
+    $__userIdRiwayat = \Illuminate\Support\Facades\Auth::id();
+    $__roleUserRiwayat = $__userLoginRiwayat
+        ? strtolower(str_replace(' ', '_', trim((string) ($__userLoginRiwayat->role ?? ''))))
+        : '';
+
+    $__isMasterAdminRiwayat = ($__roleUserRiwayat === 'master_admin' || $__roleUserRiwayat === 'masteradmin');
+
+    if ($__isMasterAdminRiwayat) {
+        session(['active_sidebar_panel' => 'masteradmin']);
+    } else {
+        session(['active_sidebar_panel' => 'admin']);
+    }
+
+    // Fungsi pembantu untuk membangun query RiwayatAktivitas sesuai hak akses role & filter aktif
+    $__buildRiwayatQuery = function () use ($__isMasterAdminRiwayat, $__userIdRiwayat) {
+        $q = \App\Models\RiwayatAktivitas::with('user');
+
+        // ATURAN PRIVASI ROLE:
+        // - Jika Admin (bukan Master Admin): HANYA tampilkan riwayat milik akun Admin itu sendiri!
+        // - Jika Master Admin: Tampilkan seluruh riwayat (Master Admin + seluruh Admin lainnya + Sistem).
+        if (!$__isMasterAdminRiwayat) {
+            $q->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
+        }
+
+        $searchVal = trim((string) request('search', ''));
+        if ($searchVal !== '') {
+            $q->where(function ($sub) use ($searchVal, $__isMasterAdminRiwayat) {
+                $sub->where('aktivitas', 'like', '%' . $searchVal . '%')
+                    ->orWhere('modul', 'like', '%' . $searchVal . '%')
+                    ->orWhere('status', 'like', '%' . $searchVal . '%');
+                if ($__isMasterAdminRiwayat) {
+                    $sub->orWhereHas('user', function ($uSub) use ($searchVal) {
+                        $uSub->where('nama_lengkap', 'like', '%' . $searchVal . '%')
+                             ->orWhere('email', 'like', '%' . $searchVal . '%')
+                             ->orWhere('role', 'like', '%' . $searchVal . '%');
+                    });
+                }
+            });
+        }
+
+        $jenisVal = trim((string) request('jenis', ''));
+        if ($jenisVal === 'Tambah') {
+            $q->where(function ($sub) {
+                $sub->where('aktivitas', 'like', '%tambah%')
+                    ->orWhere('aktivitas', 'like', '%buat%')
+                    ->orWhere('aktivitas', 'like', '%generate%')
+                    ->orWhere('aktivitas', 'like', '%import%');
+            });
+        } elseif ($jenisVal === 'Ubah') {
+            $q->where(function ($sub) {
+                $sub->where('aktivitas', 'like', '%ubah%')
+                    ->orWhere('aktivitas', 'like', '%perbarui%')
+                    ->orWhere('aktivitas', 'like', '%update%')
+                    ->orWhere('aktivitas', 'like', '%edit%')
+                    ->orWhere('aktivitas', 'like', '%reset%');
+            });
+        } elseif ($jenisVal === 'Hapus') {
+            $q->where(function ($sub) {
+                $sub->where('aktivitas', 'like', '%hapus%')
+                    ->orWhere('aktivitas', 'like', '%bersih%')
+                    ->orWhere('aktivitas', 'like', '%clear%');
+            });
+        } elseif ($jenisVal === 'Sistem') {
+            $q->where(function ($sub) {
+                $sub->where('modul', 'like', '%Autentikasi%')
+                    ->orWhere('modul', 'like', '%Login%')
+                    ->orWhere('modul', 'like', '%Roles%')
+                    ->orWhere('aktivitas', 'like', '%login%')
+                    ->orWhere('aktivitas', 'like', '%logout%')
+                    ->orWhere('aktivitas', 'like', '%akses%');
+            });
+        }
+
+        $bulanVal = (int) request('bulan', 0);
+        if ($bulanVal >= 1 && $bulanVal <= 12) {
+            $q->whereMonth('created_at', $bulanVal);
+        }
+
+        $tahunVal = (int) request('tahun', 0);
+        if ($tahunVal >= 2000 && $tahunVal <= 2100) {
+            $q->whereYear('created_at', $tahunVal);
+        }
+
+        return $q->orderByDesc('created_at')->orderByDesc('id');
+    };
+
+    // 1. Endpoint AJAX: Bersihkan Log sesuai scope Role (tanpa reload halaman)
+    if (request()->has('_clear_riwayat_scoped')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        try {
+            if ($__isMasterAdminRiwayat) {
+                \App\Models\RiwayatAktivitas::query()->delete();
+                $pesanClear = 'Seluruh catatan riwayat aktivitas berhasil dibersihkan oleh Master Admin.';
+            } else {
+                \App\Models\RiwayatAktivitas::where('user_id', $__userIdRiwayat)->delete();
+                $pesanClear = 'Catatan riwayat aktivitas akun Anda berhasil dibersihkan.';
+            }
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => true,
+                'message' => $pesanClear,
+            ]);
+        } catch (\Throwable $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'message' => 'Gagal membersihkan riwayat aktivitas.',
+            ]);
+        }
+        exit;
+    }
+
+    // 2. Endpoint AJAX Polling Real-Time (Sisi Admin & Master Admin tanpa refresh web)
+    if (request()->has('_poll_riwayat_realtime')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        try {
+            $qPoll = $__buildRiwayatQuery();
+            $totalCount = (clone $qPoll)->count();
+            $perPage = 15;
+            $currentPage = max(1, (int) request('page', 1));
+            $rows = $qPoll->forPage($currentPage, $perPage)->get();
+
+            $items = [];
+            foreach ($rows as $idx => $r) {
+                $idUnik = (is_object($r) && method_exists($r, 'getKey') && $r->getKey() !== null)
+                    ? (string) $r->getKey()
+                    : (string) ($r->id ?? md5(($r->created_at ?? '') . ($r->aktivitas ?? '') . $idx));
+
+                $namaUser = $r->user ? (string) $r->user->nama_lengkap : 'Sistem / Tamu';
+                $roleUserRaw = $r->user ? (string) $r->user->role : 'System';
+                $roleLabel = str_replace('_', ' ', \Illuminate\Support\Str::title($roleUserRaw));
+                $waktuStr = $r->created_at ? $r->created_at->format('d M Y, H:i') : '-';
+
+                $items[] = [
+                    'id'        => $idUnik,
+                    'waktu'     => $waktuStr,
+                    'nama_user' => $namaUser,
+                    'role_user' => $roleLabel,
+                    'is_self'   => (int) ($r->user_id ?? 0) === (int) $__userIdRiwayat,
+                    'aktivitas' => (string) ($r->aktivitas ?? '-'),
+                    'modul'     => (string) ($r->modul ?? '-'),
+                    'status'    => (string) ($r->status ?? 'Informasi'),
+                ];
+            }
+
+            // Ambil juga daftar seluruh ID riwayat sesuai scope role untuk sinkronisasi badge sidebar
+            $allIdsQuery = \App\Models\RiwayatAktivitas::query();
+            if (!$__isMasterAdminRiwayat) {
+                $allIdsQuery->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
+            }
+            $allScopedIds = $allIdsQuery->orderByDesc('id')->pluck('id')->map(fn($v) => (string) $v)->toArray();
+
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            echo json_encode([
+                'success'     => true,
+                'is_master'   => $__isMasterAdminRiwayat,
+                'total_count' => $totalCount,
+                'items'       => $items,
+                'scoped_ids'  => $allScopedIds,
+            ]);
+        } catch (\Throwable $e) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false]);
+        }
+        exit;
+    }
+
+    // 3. Timpa variabel $riwayats dan $tahunList agar halaman awal wajib mengikuti aturan Role Scope
+    try {
+        $riwayats = $__buildRiwayatQuery()->paginate(15)->withQueryString();
+
+        $qTahun = \App\Models\RiwayatAktivitas::query();
+        if (!$__isMasterAdminRiwayat) {
+            $qTahun->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
+        }
+        $tahunList = $qTahun->selectRaw('YEAR(created_at) as thn')
+            ->whereNotNull('created_at')
+            ->distinct()
+            ->orderByDesc('thn')
+            ->pluck('thn')
+            ->filter()
+            ->values()
+            ->toArray();
+        if (empty($tahunList)) {
+            $tahunList = [(int) date('Y')];
+        }
+    } catch (\Throwable $e) {
+    }
+
+    // Sinkronkan otomatis ke file riwayat.blade.php lain jika project memisahkan folder views/admin & views/masteradmin
+    try {
+        $__currentRiwayatFile = __FILE__;
+        $__kandidatRiwayatFiles = [
+            resource_path('views/riwayat.blade.php'),
+            resource_path('views/admin/riwayat.blade.php'),
+            resource_path('views/masteradmin/riwayat.blade.php'),
+        ];
+        if (is_file($__currentRiwayatFile)) {
+            $__isiRiwayatIni = (string) file_get_contents($__currentRiwayatFile);
+            if (str_contains($__isiRiwayatIni, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
+                foreach ($__kandidatRiwayatFiles as $__targetRFile) {
+                    if (is_file($__targetRFile) && is_writable($__targetRFile) && realpath($__targetRFile) !== realpath($__currentRiwayatFile)) {
+                        $__isiTargetR = (string) file_get_contents($__targetRFile);
+                        if (!str_contains($__isiTargetR, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
+                            file_put_contents($__targetRFile, $__isiRiwayatIni);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Riwayat Aktivitas - Sistem Master Admin</title>
+    <title>Riwayat Aktivitas - Sistem {{ $__isMasterAdminRiwayat ? 'Master Admin' : 'Admin' }}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
     
@@ -40,20 +261,46 @@
             margin-left: var(--sidebar-width);
             flex-grow: 1;
             padding: 25px;
+            padding-top: 158px !important;
             display: flex;
             flex-direction: column;
-            gap: 25px;
+            gap: 20px;
             width: calc(100% - var(--sidebar-width));
         }
 
+        /* ===== NAVBAR / HEADER FIXED BESERTA FITUR SEARCH DI DALAMNYA ===== */
         .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 16px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 12px !important;
+        }
+
+        .navbar-top-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 15px;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 15px;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .navbar-search-row {
+            width: 100%;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(0, 0, 0, 0.12);
         }
 
         .header-title h1 {
@@ -71,6 +318,7 @@
 
         .header-actions {
             display: flex;
+            align-items: center;
             gap: 10px;
         }
 
@@ -104,6 +352,60 @@
 
         .btn:hover {
             opacity: 0.9;
+        }
+
+        /* Banner Informasi Scope & Indikator Real-Time */
+        .scope-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .scope-banner.master-mode {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e3a8a;
+        }
+
+        .scope-banner.admin-mode {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #065f46;
+        }
+
+        .rt-live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: #ffffff;
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .rt-live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            animation: pulseLiveDot 1.8s infinite;
+        }
+
+        @keyframes pulseLiveDot {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+            70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
         /* Table Section Styles */
@@ -253,10 +555,47 @@
             color: #92400e;
         }
 
+        .user-self-tag {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
         .empty-state {
             text-align: center;
             padding: 40px;
             color: var(--text-muted);
+        }
+
+        .rt-toast-notif {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 13px 18px;
+            border-radius: 12px;
+            border-left: 4px solid #10b981;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transform: translateY(130%);
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .rt-toast-notif.show {
+            transform: translateY(0);
+            opacity: 1;
         }
 
         @media (max-width: 768px) {
@@ -264,6 +603,11 @@
                 margin-left: 0;
                 width: 100%;
                 padding: 15px;
+            }
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 16px !important;
             }
         }
 
@@ -280,189 +624,64 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
-            /* ===== REAL-TIME NOTIFIKASI KHUSUS MASTER ADMIN ===== */
-        .live-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #ecfdf5;
-            color: #047857;
-            border: 1px solid #a7f3d0;
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
-        .live-dot {
-            width: 8px;
-            height: 8px;
-            background: #10b981;
-            border-radius: 50%;
-            animation: pulse-live 1.5s infinite;
-        }
-        @keyframes pulse-live {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
-            70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        .realtime-toast-container {
-            position: fixed;
-            top: 24px;
-            right: 24px;
-            z-index: 99999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-width: 380px;
-            width: calc(100% - 48px);
-            pointer-events: none;
-        }
-        .realtime-toast {
-            pointer-events: auto;
-            background: #ffffff;
-            border-left: 5px solid var(--primary-color);
-            border-radius: 12px;
-            padding: 14px 16px;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
-            border-top: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            transform: translateX(120%);
-            opacity: 0;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
-        }
-        .realtime-toast.show {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        .realtime-toast-icon {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            background: #eff6ff;
-            color: var(--primary-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .realtime-toast-body {
-            flex: 1;
-            min-width: 0;
-        }
-        .realtime-toast-title {
-            font-size: 12px;
-            font-weight: 800;
-            color: var(--primary-color);
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin-bottom: 3px;
-        }
-        .realtime-toast-user {
-            font-size: 13px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 2px;
-        }
-        .realtime-toast-text {
-            font-size: 12px;
-            color: #475569;
-            line-height: 1.4;
-            word-break: break-word;
-        }
-        .realtime-toast-meta {
-            font-size: 11px;
-            color: #94a3b8;
-            margin-top: 5px;
-            font-weight: 600;
-        }
-        .realtime-toast-close {
-            background: transparent;
-            border: none;
-            color: #94a3b8;
-            font-size: 18px;
-            line-height: 1;
-            cursor: pointer;
-            padding: 0 2px;
-        }
-        .realtime-toast-close:hover {
-            color: var(--danger-color);
-        }
     </style>
 </head>
 <body>
 
-    @php
-        if (request('panel') === 'admin') {
-            session(['active_sidebar_panel' => 'admin']);
-        } elseif (request('panel') === 'master') {
-            session(['active_sidebar_panel' => 'masteradmin']);
-        }
-        $__roleUserSekarang = \Illuminate\Support\Facades\Auth::check()
-            ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
-            : '';
-        $__gunakanAdminSidebar = ($__roleUserSekarang === 'admin') || session('active_sidebar_panel') === 'admin';
-        // Fitur real-time notifikasi riwayat khusus untuk Master Admin
-        $__isMasterAdminRiwayat = ($__roleUserSekarang === 'master_admin' || $__roleUserSekarang === 'masteradmin') && !$__gunakanAdminSidebar;
-    @endphp
-
-    <!-- Sidebar Navigation -->
-    @if($__gunakanAdminSidebar)
-        @include('layouts.adminsidebar')
-    @else
-        @include('layouts.mastersidebar')
-    @endif
-
+    <!-- Sidebar Navigation (Otomatis menyesuaikan Master Admin atau Admin) -->
     @if($__isMasterAdminRiwayat)
-        <div id="realtime-toast-container" class="realtime-toast-container"></div>
+        @include('layouts.mastersidebar')
+    @else
+        @include('layouts.adminsidebar')
     @endif
 
     <!-- Main Content Layout -->
     <main>
-        <header class="main-header">
-            <div class="header-title">
-                <h1>
-                    Riwayat Aktivitas 🕒
-                    @if($__isMasterAdminRiwayat)
-                        <span class="live-indicator" title="Pemantauan real-time aktif khusus Master Admin">
-                            <span class="live-dot"></span> Live Real-Time
-                        </span>
-                    @endif
-                </h1>
-                <p>Pantau catatan log aktivitas, penambahan aset, dan perubahan data pada sistem secara real-time</p>
+        <!-- NAVBAR FIXED (BERISI JUDUL HALAMAN, TOMBOL AKSI, SERTA FITUR SEARCH & FILTER) -->
+        <header class="main-header" id="navbar-riwayat-fixed">
+            <div class="navbar-top-row">
+                <div class="header-title">
+                    <h1 style="display: flex; align-items: center; gap: 10px;">
+                        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Riwayat Aktivitas</span>
+                    </h1>
+                    <p>
+                        @if($__isMasterAdminRiwayat)
+                            Pantau seluruh catatan log aktivitas dari Master Admin dan seluruh Admin secara real-time
+                        @else
+                            Pantau catatan log aktivitas pribadi Anda secara real-time
+                        @endif
+                    </p>
+                </div>
+                <div class="header-actions" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div class="rt-live-pill" title="Tabel ini otomatis memperbarui data tanpa perlu refresh halaman">
+                        <span class="rt-live-dot"></span>
+                        <span>Live Real-Time (<span id="label-jumlah-riwayat">{{ method_exists($riwayats, 'total') ? $riwayats->total() : $riwayats->count() }}</span> log)</span>
+                    </div>
+                    <form id="form-clear-riwayat" action="{{ route('riwayat_aktivitas.clear') }}" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-danger-soft" id="btn-bersihkan-log" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; font-weight: 700;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            <span>{{ $__isMasterAdminRiwayat ? 'Bersihkan Semua Log' : 'Bersihkan Log Saya' }}</span>
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="header-actions">
-                <form action="{{ route('riwayat_aktivitas.clear') }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin membersihkan seluruh riwayat aktivitas?');">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger-soft">Bersihkan Log</button>
-                </form>
-            </div>
-        </header>
 
-        @if(session('success'))
-            <div style="background: #d1fae5; color: #065f46; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 14px; border-left: 4px solid #10b981;">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        <!-- Table Container -->
-        <div class="card-box">
-            <div class="table-toolbar">
-                <form method="GET" action="{{ route('riwayat_aktivitas.index') }}" class="filter-form">
+            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
+            <div class="navbar-search-row">
+                <form method="GET" action="{{ url()->current() }}" class="filter-form" id="form-filter-riwayat">
                     <div class="search-box">
-                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted);"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari aktivitas atau nama pengguna...">
+                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); flex-shrink: 0;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                        <input type="text" id="input-search-riwayat" name="search" value="{{ request('search') }}" placeholder="{{ $__isMasterAdminRiwayat ? 'Cari aktivitas, modul, atau nama pengguna...' : 'Cari aktivitas atau modul Anda...' }}" autocomplete="off">
                     </div>
 
-                    <!-- TAMBAHAN: Filter Jenis Aktivitas -->
-                    <select name="jenis" class="filter-select">
+                    <!-- Filter Jenis Aktivitas -->
+                    <select name="jenis" id="select-jenis-riwayat" class="filter-select">
                         <option value="">-- Semua Jenis Aktivitas --</option>
                         <option value="Tambah" {{ request('jenis') == 'Tambah' ? 'selected' : '' }}>Penambahan Data</option>
                         <option value="Ubah" {{ request('jenis') == 'Ubah' ? 'selected' : '' }}>Perubahan Data</option>
@@ -471,7 +690,7 @@
                     </select>
 
                     <!-- Filter Bulan -->
-                    <select name="bulan" class="filter-select">
+                    <select name="bulan" id="select-bulan-riwayat" class="filter-select">
                         <option value="">-- Semua Bulan --</option>
                         @for($m = 1; $m <= 12; $m++)
                             <option value="{{ $m }}" {{ request('bulan') == $m ? 'selected' : '' }}>
@@ -481,7 +700,7 @@
                     </select>
 
                     <!-- Filter Tahun -->
-                    <select name="tahun" class="filter-select">
+                    <select name="tahun" id="select-tahun-riwayat" class="filter-select">
                         <option value="">-- Semua Tahun --</option>
                         @foreach($tahunList ?? [] as $thn)
                             <option value="{{ $thn }}" {{ request('tahun') == $thn ? 'selected' : '' }}>
@@ -492,10 +711,33 @@
 
                     <button type="submit" class="btn btn-primary">Filter</button>
                     @if(request('search') || request('bulan') || request('tahun') || request('jenis'))
-                        <a href="{{ route('riwayat_aktivitas.index') }}" class="btn" style="background: #e2e8f0; color: #334155;">Reset</a>
+                        <a href="{{ url()->current() }}" class="btn" style="background: #e2e8f0; color: #334155;">Reset</a>
                     @endif
                 </form>
             </div>
+        </header>
+
+        <!-- Banner Informasi Hak Akses Log -->
+        <div class="scope-banner {{ $__isMasterAdminRiwayat ? 'master-mode' : 'admin-mode' }}">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                @if($__isMasterAdminRiwayat)
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <span><strong>Akses Penuh Master Admin:</strong> Menampilkan seluruh riwayat aktivitas dari <strong>Master Admin</strong> maupun <strong>semua Admin</strong>.</span>
+                @else
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span><strong>Privasi Riwayat Admin:</strong> Anda hanya melihat riwayat aktivitas milik akun Anda sendiri (<strong>{{ $__userLoginRiwayat->nama_lengkap ?? 'Admin' }}</strong>).</span>
+                @endif
+            </div>
+        </div>
+
+        @if(session('success'))
+            <div id="alert-session-riwayat" style="background: #d1fae5; color: #065f46; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 14px; border-left: 4px solid #10b981;">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        <!-- Table Container -->
+        <div class="card-box">
 
             <div style="overflow-x: auto;">
                 <table class="data-table">
@@ -508,20 +750,26 @@
                             <th>STATUS</th>
                         </tr>
                     </thead>
-                    <tbody id="riwayat-tbody">
+                    <tbody id="tbody-riwayat-aktivitas">
                         @forelse($riwayats as $riwayat)
                             @php
                                 $idUnikRiwayat = (is_object($riwayat) && method_exists($riwayat, 'getKey') && $riwayat->getKey() !== null)
                                     ? $riwayat->getKey()
                                     : ($riwayat->id ?? md5(($riwayat->created_at ?? '') . ($riwayat->aktivitas ?? '') . $loop->index));
+                                $isMilikSendiri = (int) ($riwayat->user_id ?? 0) === (int) $__userIdRiwayat;
                             @endphp
                             <tr class="riwayat-row" data-riwayat-id="{{ $idUnikRiwayat }}">
                                 <td style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">
-                                    {{ $riwayat->created_at->format('d M Y, H:i') }}
+                                    <span class="waktu-text">{{ $riwayat->created_at ? $riwayat->created_at->format('d M Y, H:i') : '-' }}</span>
                                     <span class="badge-baru">BARU</span>
                                 </td>
                                 <td>
-                                    <div style="font-weight: 600;">{{ $riwayat->user ? $riwayat->user->nama_lengkap : 'Sistem / Tamu' }}</div>
+                                    <div style="font-weight: 600;">
+                                        {{ $riwayat->user ? $riwayat->user->nama_lengkap : 'Sistem / Tamu' }}
+                                        @if($isMilikSendiri)
+                                            <span class="user-self-tag">Anda</span>
+                                        @endif
+                                    </div>
                                     <div style="font-size: 11px; color: var(--text-muted);">
                                         {{ $riwayat->user ? str_replace('_', ' ', Str::title($riwayat->user->role)) : 'System' }}
                                     </div>
@@ -539,7 +787,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr>
+                            <tr id="row-empty-riwayat">
                                 <td colspan="5" class="empty-state">
                                     Belum ada catatan riwayat aktivitas yang terekam.
                                 </td>
@@ -555,21 +803,38 @@
         </div>
     </main>
 
+    <!-- Toast Notifikasi Real-Time -->
+    <div id="rt-toast-riwayat" class="rt-toast-notif">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        <span id="rt-toast-riwayat-text">Aktivitas baru tercatat secara real-time!</span>
+    </div>
+
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const barisList = document.querySelectorAll('tr.riwayat-row[data-riwayat-id]');
+        (function () {
+            const IS_MASTER_ADMIN = @json($__isMasterAdminRiwayat);
+            let observerBaris = null;
+            let toastTimer = null;
 
-            // 1. Tampilkan warna baris berbeda untuk riwayat terbaru yang belum dibaca
-            barisList.forEach(function (tr) {
-                const id = tr.getAttribute('data-riwayat-id');
-                const sudahDibaca = typeof window.apakahRiwayatSudahDibaca === 'function'
-                    ? window.apakahRiwayatSudahDibaca(id)
-                    : true;
+            function escapeHtml(str) {
+                return String(str ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
 
-                if (!sudahDibaca) {
-                    tr.classList.add('belum-dibaca');
-                }
-            });
+            function tampilkanToastRealtime(pesan) {
+                const toast = document.getElementById('rt-toast-riwayat');
+                const textEl = document.getElementById('rt-toast-riwayat-text');
+                if (!toast || !textEl) return;
+                textEl.textContent = pesan;
+                toast.classList.add('show');
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3200);
+            }
 
             // Fungsi otomatis membaca baris tanpa perlu diklik saat halaman dibuka / baris terlihat
             function prosesOtomatisTerbaca(tr) {
@@ -583,7 +848,7 @@
                     if (typeof window.tandaiSatuRiwayatDibaca === 'function') {
                         window.tandaiSatuRiwayatDibaca(id);
                     }
-                }, 500);
+                }, 400);
 
                 // Setelah user melihat warna baris berbeda (2,5 detik), warna baris menghilang otomatis
                 setTimeout(function () {
@@ -591,150 +856,263 @@
                 }, 2500);
             }
 
-            // 2. Gunakan sensor keterlihatan layar (IntersectionObserver) agar otomatis terbaca tanpa diklik
-            let observerRiwayat = null;
-            if ('IntersectionObserver' in window) {
-                observerRiwayat = new IntersectionObserver(function (entries, obs) {
-                    entries.forEach(function (entry) {
-                        if (entry.isIntersecting) {
-                            prosesOtomatisTerbaca(entry.target);
-                            obs.unobserve(entry.target);
+            function daftarkanObserverKeBaris(tr) {
+                if (!tr) return;
+                if (observerBaris) {
+                    observerBaris.observe(tr);
+                } else {
+                    prosesOtomatisTerbaca(tr);
+                }
+            }
+
+            function buatHtmlBarisRiwayat(item, paksaHighlightBaru = false) {
+                const id = String(item.id || '');
+                const sudahDibaca = !paksaHighlightBaru && (typeof window.apakahRiwayatSudahDibaca === 'function'
+                    ? window.apakahRiwayatSudahDibaca(id)
+                    : true);
+
+                let badgeStatusHtml = `<span class="badge badge-info">${escapeHtml(item.status || 'Informasi')}</span>`;
+                if (item.status === 'Berhasil') {
+                    badgeStatusHtml = `<span class="badge badge-success">Berhasil</span>`;
+                } else if (item.status === 'Peringatan') {
+                    badgeStatusHtml = `<span class="badge badge-warning">Peringatan</span>`;
+                }
+
+                const tagAndaHtml = item.is_self ? `<span class="user-self-tag">Anda</span>` : '';
+
+                const tr = document.createElement('tr');
+                tr.className = 'riwayat-row' + (!sudahDibaca ? ' belum-dibaca' : '');
+                tr.setAttribute('data-riwayat-id', id);
+                tr.innerHTML = `
+                    <td style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">
+                        <span class="waktu-text">${escapeHtml(item.waktu)}</span>
+                        <span class="badge-baru">BARU</span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600;">
+                            ${escapeHtml(item.nama_user)}
+                            ${tagAndaHtml}
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted);">
+                            ${escapeHtml(item.role_user)}
+                        </div>
+                    </td>
+                    <td>${escapeHtml(item.aktivitas)}</td>
+                    <td><span style="font-weight: 500;">${escapeHtml(item.modul)}</span></td>
+                    <td>${badgeStatusHtml}</td>
+                `;
+                return tr;
+            }
+
+            // Polling Real-Time setiap 2 detik tanpa perlu me-refresh halaman (berlaku untuk Admin & Master Admin)
+            let sedangPollingRiwayat = false;
+            async function sinkronkanRiwayatRealtime() {
+                if (sedangPollingRiwayat || document.hidden) return;
+                sedangPollingRiwayat = true;
+
+                try {
+                    const pollUrl = new URL(window.location.href);
+                    pollUrl.searchParams.set('_poll_riwayat_realtime', Date.now());
+
+                    const res = await fetch(pollUrl.toString(), {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache'
                         }
                     });
-                }, { threshold: 0.1 });
-            }
 
-            function pantauBarisBelumDibaca(trElement) {
-                if (!trElement) return;
-                if (observerRiwayat) {
-                    observerRiwayat.observe(trElement);
-                } else {
-                    prosesOtomatisTerbaca(trElement);
-                }
-            }
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (!data || !data.success || !Array.isArray(data.items)) return;
 
-            document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
-                pantauBarisBelumDibaca(tr);
-            });
-
-            // 3. FITUR REAL-TIME POLLING KHUSUS MASTER ADMIN (TANPA PERLU REFRESH)
-            const IS_MASTER_ADMIN_RIWAYAT = @json($__isMasterAdminRiwayat);
-
-            function tampilkanNotifRealtimeMasterAdmin(pengguna, role, aktivitas, modul, waktu) {
-                const container = document.getElementById('realtime-toast-container');
-                if (!container) return;
-
-                const toast = document.createElement('div');
-                toast.className = 'realtime-toast';
-                toast.innerHTML = `
-                    <div class="realtime-toast-icon">🔔</div>
-                    <div class="realtime-toast-body">
-                        <div class="realtime-toast-title">Aktivitas Baru Masuk</div>
-                        <div class="realtime-toast-user">${pengguna} <span style="font-weight:500; color:#64748b; font-size:11px;">(${role})</span></div>
-                        <div class="realtime-toast-text">${aktivitas}</div>
-                        <div class="realtime-toast-meta">${modul} • ${waktu || 'Baru saja'}</div>
-                    </div>
-                    <button type="button" class="realtime-toast-close" title="Tutup">&times;</button>
-                `;
-
-                toast.querySelector('.realtime-toast-close').addEventListener('click', function () {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 300);
-                });
-
-                container.prepend(toast);
-                requestAnimationFrame(() => {
-                    toast.classList.add('show');
-                });
-
-                setTimeout(() => {
-                    if (toast.parentNode) {
-                        toast.classList.remove('show');
-                        setTimeout(() => toast.remove(), 350);
+                    // Perbarui counter jumlah log di bagian atas
+                    const labelJumlah = document.getElementById('label-jumlah-riwayat');
+                    if (labelJumlah && typeof data.total_count === 'number') {
+                        labelJumlah.textContent = String(data.total_count);
                     }
-                }, 6000);
-            }
 
-            if (IS_MASTER_ADMIN_RIWAYAT) {
-                const knownRiwayatIds = new Set();
-                document.querySelectorAll('tr.riwayat-row[data-riwayat-id]').forEach(function (tr) {
-                    knownRiwayatIds.add(String(tr.getAttribute('data-riwayat-id')));
-                });
+                    const tbody = document.getElementById('tbody-riwayat-aktivitas');
+                    if (!tbody) return;
 
-                let sedangPolling = false;
+                    // Jika riwayat kosong (misal baru saja dibersihkan)
+                    if (data.items.length === 0) {
+                        if (!document.getElementById('row-empty-riwayat')) {
+                            tbody.innerHTML = `
+                                <tr id="row-empty-riwayat">
+                                    <td colspan="5" class="empty-state">
+                                        Belum ada catatan riwayat aktivitas yang terekam.
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                        return;
+                    }
 
-                async function cekRiwayatTerbaruRealtime() {
-                    if (sedangPolling || document.hidden) return;
-                    sedangPolling = true;
+                    // Bandingkan daftar ID yang saat ini tampil di tabel dengan hasil polling terbaru
+                    const existingRows = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
+                    const existingIds = existingRows.map(r => r.getAttribute('data-riwayat-id'));
+                    const incomingIds = data.items.map(it => String(it.id));
 
-                    try {
-                        const urlPoll = new URL(window.location.href);
-                        urlPoll.searchParams.set('_rt_poll', Date.now());
+                    // Cek apakah ada ID baru yang belum ada di tabel saat ini
+                    const itemBaruList = data.items.filter(it => !existingIds.includes(String(it.id)));
 
-                        const res = await fetch(urlPoll.toString(), {
-                            method: 'GET',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Cache-Control': 'no-cache'
+                    if (itemBaruList.length > 0) {
+                        const rowEmpty = document.getElementById('row-empty-riwayat');
+                        if (rowEmpty) rowEmpty.remove();
+
+                        // Masukkan baris-baris baru ke urutan paling atas tabel
+                        for (let i = itemBaruList.length - 1; i >= 0; i--) {
+                            const itemBaru = itemBaruList[i];
+                            const trBaru = buatHtmlBarisRiwayat(itemBaru, true);
+                            tbody.prepend(trBaru);
+                            daftarkanObserverKeBaris(trBaru);
+                        }
+
+                        // Jaga agar jumlah baris per halaman tetap rapi (maksimal 15 baris)
+                        const semuaBarisSekarang = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
+                        if (semuaBarisSekarang.length > 15) {
+                            semuaBarisSekarang.slice(15).forEach(trLama => trLama.remove());
+                        }
+
+                        const infoTerbaru = itemBaruList[0];
+                        const pesanNotif = IS_MASTER_ADMIN
+                            ? `Aktivitas baru (${infoTerbaru.nama_user}): ${infoTerbaru.aktivitas}`
+                            : `Aktivitas baru tercatat: ${infoTerbaru.aktivitas}`;
+                        tampilkanToastRealtime(pesanNotif);
+                    } else if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
+                        // Jika ada baris yang dihapus sebagian, sinkronkan tabel secara mulus
+                        tbody.innerHTML = '';
+                        data.items.forEach(item => {
+                            const tr = buatHtmlBarisRiwayat(item, false);
+                            tbody.appendChild(tr);
+                            if (tr.classList.contains('belum-dibaca')) {
+                                daftarkanObserverKeBaris(tr);
                             }
                         });
+                    }
+                } catch (err) {
+                } finally {
+                    sedangPollingRiwayat = false;
+                }
+            }
 
-                        if (!res.ok) {
-                            sedangPolling = false;
-                            return;
+            // Fungsi Bersihkan Log tanpa reload halaman (tetap mengikuti scope Role)
+            window.prosesBersihkanLogRealtime = async function (e) {
+                if (e) e.preventDefault();
+                const pesanKonfirmasi = IS_MASTER_ADMIN
+                    ? 'Apakah Anda yakin ingin membersihkan SELURUH riwayat aktivitas (Master Admin & semua Admin)?'
+                    : 'Apakah Anda yakin ingin membersihkan riwayat aktivitas milik akun Anda sendiri?';
+
+                if (!confirm(pesanKonfirmasi)) {
+                    return false;
+                }
+
+                const btn = document.getElementById('btn-bersihkan-log');
+                const teksAsli = btn ? btn.textContent : '';
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Membersihkan...';
+                }
+
+                try {
+                    const clearUrl = new URL(window.location.href);
+                    clearUrl.searchParams.set('_clear_riwayat_scoped', Date.now());
+                    const res = await fetch(clearUrl.toString(), {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache'
                         }
+                    });
 
-                        const htmlText = await res.text();
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(htmlText, 'text/html');
-                        const rowsBaruServer = Array.from(doc.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
-                        const tbodySekarang = document.getElementById('riwayat-tbody');
-
-                        if (rowsBaruServer.length > 0 && tbodySekarang) {
-                            // Cari baris yang belum ada di layar saat ini (diurutkan dari yang paling lama di antara yang baru agar urutan prepend tepat)
-                            const itemBaru = rowsBaruServer.filter(tr => !knownRiwayatIds.has(String(tr.getAttribute('data-riwayat-id'))));
-
-                            if (itemBaru.length > 0) {
-                                const emptyRow = tbodySekarang.querySelector('.empty-state')?.closest('tr');
-                                if (emptyRow) emptyRow.remove();
-
-                                itemBaru.reverse().forEach(function (trServer) {
-                                    const idBaru = String(trServer.getAttribute('data-riwayat-id'));
-                                    knownRiwayatIds.add(idBaru);
-
-                                    const trClone = trServer.cloneNode(true);
-                                    trClone.classList.add('belum-dibaca');
-                                    tbodySekarang.insertBefore(trClone, tbodySekarang.firstChild);
-
-                                    // Ambil detail untuk popup toast real-time
-                                    const tds = trClone.querySelectorAll('td');
-                                    const waktuTeks = tds[0] ? tds[0].childNodes[0]?.textContent?.trim() : 'Baru saja';
-                                    const namaUser = tds[1]?.querySelector('div:first-child')?.textContent?.trim() || 'Pengguna';
-                                    const roleUser = tds[1]?.querySelector('div:last-child')?.textContent?.trim() || 'Admin';
-                                    const teksAktivitas = tds[2]?.textContent?.trim() || 'Melakukan aktivitas baru';
-                                    const teksModul = tds[3]?.textContent?.trim() || 'Sistem';
-
-                                    tampilkanNotifRealtimeMasterAdmin(namaUser, roleUser, teksAktivitas, teksModul, waktuTeks);
-
-                                    if (typeof window.hitungRiwayatBelumDibaca === 'function') {
-                                        window.hitungRiwayatBelumDibaca();
-                                    }
-
-                                    pantauBarisBelumDibaca(trClone);
-                                });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.success) {
+                            const tbody = document.getElementById('tbody-riwayat-aktivitas');
+                            if (tbody) {
+                                tbody.innerHTML = `
+                                    <tr id="row-empty-riwayat">
+                                        <td colspan="5" class="empty-state">
+                                            Belum ada catatan riwayat aktivitas yang terekam.
+                                        </td>
+                                    </tr>
+                                `;
                             }
+                            const labelJumlah = document.getElementById('label-jumlah-riwayat');
+                            if (labelJumlah) labelJumlah.textContent = '0';
+                            tampilkanToastRealtime(data.message || 'Riwayat aktivitas berhasil dibersihkan.');
                         }
-                    } catch (err) {
-                        // Abaikan gangguan jaringan sementara
-                    } finally {
-                        sedangPolling = false;
+                    }
+                } catch (err) {
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = teksAsli;
+                    }
+                }
+                return false;
+            };
+
+            function sesuaikanPaddingMainDenganNavbarFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = document.getElementById('navbar-riwayat-fixed') || document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 135;
+                    mainEl.style.setProperty('padding-top', (tinggi + 22) + 'px', 'important');
+                }
+            }
+
+            window.addEventListener('load', sesuaikanPaddingMainDenganNavbarFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganNavbarFixed);
+
+            document.addEventListener('DOMContentLoaded', function () {
+                sesuaikanPaddingMainDenganNavbarFixed();
+                if ('ResizeObserver' in window) {
+                    const headerEl = document.getElementById('navbar-riwayat-fixed') || document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganNavbarFixed).observe(headerEl);
                     }
                 }
 
-                // Cek otomatis setiap 3 detik khusus untuk Master Admin
-                setInterval(cekRiwayatTerbaruRealtime, 3000);
-            }
-        });
+                const barisList = document.querySelectorAll('tr.riwayat-row[data-riwayat-id]');
+
+                // 1. Tampilkan warna baris berbeda untuk riwayat terbaru yang belum dibaca
+                barisList.forEach(function (tr) {
+                    const id = tr.getAttribute('data-riwayat-id');
+                    const sudahDibaca = typeof window.apakahRiwayatSudahDibaca === 'function'
+                        ? window.apakahRiwayatSudahDibaca(id)
+                        : true;
+
+                    if (!sudahDibaca) {
+                        tr.classList.add('belum-dibaca');
+                    }
+                });
+
+                // 2. Gunakan sensor keterlihatan layar (IntersectionObserver) agar otomatis terbaca tanpa diklik
+                if ('IntersectionObserver' in window) {
+                    observerBaris = new IntersectionObserver(function (entries, obs) {
+                        entries.forEach(function (entry) {
+                            if (entry.isIntersecting) {
+                                prosesOtomatisTerbaca(entry.target);
+                                obs.unobserve(entry.target);
+                            }
+                        });
+                    }, { threshold: 0.1 });
+
+                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
+                        observerBaris.observe(tr);
+                    });
+                } else {
+                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
+                        prosesOtomatisTerbaca(tr);
+                    });
+                }
+
+                // 3. Jalankan polling real-time setiap 2 detik tanpa refresh
+                setInterval(sinkronkanRiwayatRealtime, 2000);
+            });
+        })();
     </script>
 
 </body>

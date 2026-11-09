@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Aset - Master Admin</title>
+    <title>Barcode Aset - Admin</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
     <style>
@@ -159,6 +159,118 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
+    
+        /* ===== HEADER / NAVBAR HALAMAN FIXED DENGAN FITUR SEARCH & FILTER DI DALAMNYA ===== */
+        .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 16px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+        }
+
+        .navbar-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .navbar-search-row {
+            width: 100%;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(0, 0, 0, 0.12);
+        }
+
+        .navbar-search-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            margin: 0;
+        }
+
+        .navbar-search-box {
+            position: relative;
+            flex: 1 1 280px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f1f5f9;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 9px 14px;
+            transition: all 0.2s ease;
+        }
+
+        .navbar-search-box:focus-within {
+            background: #ffffff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.12);
+        }
+
+        .navbar-search-box input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-color);
+            outline: none;
+        }
+
+        .navbar-filter-select {
+            padding: 9px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            background: #f8fafc;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+        }
+
+        .navbar-filter-select:focus {
+            background: #ffffff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.12);
+        }
+
+        main {
+            padding-top: 165px !important;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                margin-left: 0;
+                width: 100%;
+                padding: 15px;
+            }
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 16px !important;
+            }
+        }
+
     </style>
 </head>
 
@@ -167,77 +279,93 @@
     @include('layouts.mastersidebar')
 
     <main>
-        <header class="main-header">
-            <div class="header-title">
-                <h1>Barcode & QR Aset</h1>
-                <p>Pusat pembuatan dan cetak label QR Code aset fisik.</p>
-            </div>
-            
-            <!-- TOMBOL CETAK SEMUA QR -->
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
-                
-                <button type="button" class="btn-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
-                    Generate Semua
-                </button>
-                
-                <!-- TOMBOL UPDATE SEMUA (BARU) -->
-                <button type="button" class="btn-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    Update Semua
-                </button>
+        <!-- NAVBAR FIXED (BERISI JUDUL, TOMBOL AKSI QR, SERTA FITUR SEARCH & FILTER) -->
+        <header class="main-header" id="navbar-barcode-fixed">
+            <div class="navbar-top-row">
+                <div class="header-title">
+                    <h1 style="display: flex; align-items: center; gap: 10px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                        <span>Barcode & QR Aset</span>
+                    </h1>
+                    <p>Pusat pembuatan dan cetak label QR Code aset fisik.</p>
+                </div>
 
-                <button type="button" class="btn-qr" style="background: var(--primary-color); padding: 10px 18px;" onclick="downloadSemuaQRAsJPG()" id="btn-download-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download Semua QR
-                </button>
-                
+                <!-- TOMBOL CETAK SEMUA QR -->
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                    <button type="button" class="btn-qr btn-generate-semua-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
+                        Generate Semua
+                    </button>
+
+                    <button type="button" class="btn-qr btn-update-semua-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Update Semua
+                    </button>
+
+                    <button type="button" class="btn-qr" style="background: var(--primary-color); padding: 10px 18px;" onclick="downloadSemuaQRAsJPG()" id="btn-download-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Download Semua QR
+                    </button>
+                </div>
             </div>
 
-            
+            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
+            <div class="navbar-search-row">
+                <form action="{{ url()->current() }}" method="GET" class="navbar-search-form" id="form-filter-barcode">
+                    @if(request('panel'))
+                        <input type="hidden" name="panel" value="{{ request('panel') }}">
+                    @endif
+
+                    <!-- Kiri: Kotak Pencarian -->
+                    <div style="display: flex; gap: 10px; flex: 1; min-width: 260px; align-items: center;">
+                        <div class="navbar-search-box">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: #64748b; flex-shrink: 0;">
+                                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="input-search-barcode" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode QR, nomor seri, merk, cabang, atau status..." autocomplete="off">
+                        </div>
+
+                        <button type="submit" class="btn-qr" style="padding: 10px 18px; font-size: 13px; background: var(--primary-color); border-radius: 10px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span>Cari QR</span>
+                        </button>
+
+                        @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
+                            <a href="{{ url()->current() }}{{ request('panel') ? '?panel=' . request('panel') : '' }}" class="btn-qr" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; text-decoration: none; padding: 9px 15px; font-size: 13px; border-radius: 10px; box-shadow: none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                <span>Reset</span>
+                            </a>
+                        @endif
+                    </div>
+
+                    <!-- Kanan: Dropdown Filter Tipe -->
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap;">Filter Tipe:</label>
+                        <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" class="navbar-filter-select">
+                            <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
+                            <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan Saja</option>
+                            <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan Saja</option>
+                            <option value="Aset Tidak Dipakai" {{ strtolower((string) request('filter_tipe')) === 'aset tidak dipakai' ? 'selected' : '' }}>Aset Tidak Dipakai Saja</option>
+                            <option value="Tidak Ada" {{ request('filter_tipe') == 'Tidak Ada' ? 'selected' : '' }}>Tidak Ada</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
         </header>
 
         <div class="card-box">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between;">
-                
-                <!-- Kiri: Kotak Pencarian -->
-                <div style="display: flex; gap: 10px; flex: 1; min-width: 300px;">
-                    <div style="position: relative; flex: 1;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #94a3b8;">
-                            <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode qr, seri, merk, status..." autocomplete="off" style="width: 100%; padding: 12px 15px 12px 45px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 14px; outline: none; background: #f8fafc; font-weight: 500;">
-                    </div>
-                    <button type="submit" class="btn-qr" style="padding: 12px 20px; font-size: 14px; background: var(--primary-color);">Cari QR</button>
-                    
-                    @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
-                        <a href="{{ url()->current() }}" class="btn-qr" style="background: #fee2e2; color: #ef4444; border: none; text-decoration: none; padding: 12px 20px; font-size: 14px; box-shadow: none;">Reset</a>
-                    @endif
-                </div>
-
-                <!-- Kanan: Dropdown Filter -->
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe:</label>
-                    <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; background: #f8fafc;">
-                        <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
-                        <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan Saja</option>
-                        <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan Saja</option>
-                    </select>
-                </div>
-            </form>
 
             <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">Galeri Label QR Aset Fisik</h3>
-
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe:</label>
-                    <select id="filterStatusBerjalan" onchange="filterGaleriQR()" style="padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; background: #f8fafc;">
-                        <option value="Semua">Tampilkan Semua</option>
-                        <option value="Aset Berjalan">Aset Berjalan Saja</option>
-                        <option value="Aset Tidak Berjalan">Aset Tidak Berjalan Saja</option>
-                    </select>
-                </div>
-            </div>
 
             <div class="asset-grid">
                 @forelse($detailAsets ?? [] as $detail)
@@ -401,7 +529,7 @@
             btnElement.innerText = 'Memproses...';
             btnElement.disabled = true;
 
-            fetch(`/masteradmin/generate-qr/${idAset}`, {
+            fetch(`/admin/generate-qr/${idAset}`, {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
                 })
@@ -636,6 +764,66 @@
             });
         }
     </script>
+
+    <script>
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = document.getElementById('navbar-barcode-fixed') || (mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header'));
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 135;
+                    mainEl.style.setProperty('padding-top', (tinggi + 22) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.getElementById('navbar-barcode-fixed') || document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+
+            // Live instant filter pada kartu QR di halaman saat mengetik di kolom pencarian navbar
+            document.addEventListener('DOMContentLoaded', function () {
+                const inputSearch = document.getElementById('input-search-barcode');
+                const gridEl = document.querySelector('.asset-grid');
+                if (!inputSearch || !gridEl) return;
+
+                inputSearch.addEventListener('input', function () {
+                    const keyword = (inputSearch.value || '').trim().toLowerCase();
+                    const cards = gridEl.querySelectorAll('.asset-card');
+                    if (cards.length === 0) return;
+
+                    let visibleCount = 0;
+                    cards.forEach(function (card) {
+                        const text = (card.textContent || '').toLowerCase();
+                        const match = keyword === '' || text.indexOf(keyword) !== -1;
+                        card.style.display = match ? '' : 'none';
+                        if (match) visibleCount++;
+                    });
+
+                    let emptyLiveEl = document.getElementById('barcode-kosong-live-search');
+                    if (visibleCount === 0 && keyword !== '') {
+                        if (!emptyLiveEl) {
+                            emptyLiveEl = document.createElement('div');
+                            emptyLiveEl.id = 'barcode-kosong-live-search';
+                            emptyLiveEl.style.cssText = 'grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px 20px; background: #f8fafc; border-radius: 14px; border: 1px dashed #cbd5e1;';
+                            emptyLiveEl.innerHTML = '<p style="font-size: 14.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">Tidak ada kartu QR di halaman ini yang cocok</p><p style="font-size: 12.5px;">Tekan Enter atau klik tombol <b>Cari QR</b> di navbar untuk mencari di seluruh database.</p>';
+                            gridEl.appendChild(emptyLiveEl);
+                        }
+                        emptyLiveEl.style.display = '';
+                    } else if (emptyLiveEl) {
+                        emptyLiveEl.style.display = 'none';
+                    }
+                });
+            });
+        })();
+    </script>
+
 </body>
 
 </html>

@@ -396,6 +396,162 @@
             left: 0;
         }
     }
+
+    /* ================= OVERLAY LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) ================= */
+    .nav-loading-overlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        cursor: wait !important;
+        user-select: none;
+        transition: opacity 0.18s ease, visibility 0.18s ease;
+    }
+
+    .nav-loading-overlay.active {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: all !important;
+    }
+
+    /* Bar Progres Jaringan di Bagian Paling Atas Layar */
+    .nav-top-progress-track {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.15);
+        overflow: hidden;
+        z-index: 2147483647;
+    }
+
+    .nav-top-progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #38bdf8, #1a4f91, #10b981);
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+        transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Kartu Pop-up Animasi Loading */
+    .nav-loading-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-top: 4px solid var(--primary-color);
+        border-radius: 18px;
+        padding: 28px 34px;
+        max-width: 390px;
+        width: calc(100% - 32px);
+        text-align: center;
+        box-shadow: 0 22px 45px rgba(15, 23, 42, 0.28);
+        transform: scale(0.94) translateY(8px);
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        pointer-events: none;
+    }
+
+    .nav-loading-overlay.active .nav-loading-card {
+        transform: scale(1) translateY(0);
+    }
+
+    .nav-spinner-wrap {
+        position: relative;
+        width: 58px;
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-spinner-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 4px solid #e0f2fe;
+        border-top-color: var(--primary-color);
+        border-right-color: #38bdf8;
+        animation: navSpinRing 0.75s linear infinite;
+    }
+
+    .nav-spinner-ring-inner {
+        position: absolute;
+        inset: 9px;
+        border-radius: 50%;
+        border: 3px solid transparent;
+        border-bottom-color: var(--secondary-color);
+        animation: navSpinRingReverse 1.1s linear infinite;
+    }
+
+    .nav-spinner-icon {
+        color: var(--primary-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    @keyframes navSpinRing {
+        to { transform: rotate(360deg); }
+    }
+
+    @keyframes navSpinRingReverse {
+        to { transform: rotate(-360deg); }
+    }
+
+    .nav-loading-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.2px;
+    }
+
+    .nav-loading-subtitle {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: #64748b;
+        line-height: 1.5;
+    }
+
+    .nav-network-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        font-size: 11px;
+        font-weight: 700;
+        color: #334155;
+        margin-top: 2px;
+    }
+
+    .nav-network-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        animation: navPulseDot 1.2s ease-in-out infinite;
+    }
+
+    @keyframes navPulseDot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
 </style>
 
 @php
@@ -477,7 +633,7 @@
     $rolesStoragePath = storage_path('app/roles_permissions.json');
     $semuaModulDefault = [
         'dashboard', 'pengajuan', 'pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis', 'notifikasi', 'data_aset', 'barcode_aset',
-        'kategori_aset', 'cabang', 'divisi', 'jabatan',
+        'kategori_aset', 'cabang',
         'laporan', 'riwayat_aktivitas',
     ];
 
@@ -556,10 +712,6 @@
         $modulHalamanAktif = 'data_aset';
     } elseif (str_contains($currentUriPath, 'cabang') || request()->routeIs('cabang.*', 'admin.cabang.*')) {
         $modulHalamanAktif = 'cabang';
-    } elseif (str_contains($currentUriPath, 'divisi') || request()->routeIs('divisi.*', 'admin.divisi.*')) {
-        $modulHalamanAktif = 'divisi';
-    } elseif (str_contains($currentUriPath, 'jabatan') || request()->routeIs('jabatan.*', 'admin.jabatan.*')) {
-        $modulHalamanAktif = 'jabatan';
     } elseif (str_contains($currentUriPath, 'laporan') || request()->routeIs('laporan.*', 'admin.laporan.*')) {
         $modulHalamanAktif = 'laporan';
     } elseif (str_contains($currentUriPath, 'riwayat') || request()->routeIs('riwayat_aktivitas.*', 'admin.riwayat_aktivitas.*')) {
@@ -814,22 +966,11 @@
             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             Cabang
         </a>
-        <a href="{{ $resolveAdminMenuUrl(['admin.divisi.index'], 'divisi.index') }}"
-           data-menu-key="divisi"
-           data-menu-group="master"
-           style="{{ empty($permissionsUserSaatIni['divisi']['view']) ? 'display:none;' : '' }}"
-           class="menu-item {{ $modulHalamanAktif === 'divisi' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
-            Divisi
-        </a>
-        <a href="{{ $resolveAdminMenuUrl(['admin.jabatan.index'], 'jabatan.index') }}"
-           data-menu-key="jabatan"
-           data-menu-group="master"
-           style="{{ empty($permissionsUserSaatIni['jabatan']['view']) ? 'display:none;' : '' }}"
-           class="menu-item {{ $modulHalamanAktif === 'jabatan' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            Jabatan
-        </a>
+        
+       
+
+
+
 
         <div class="menu-section-title" data-section-group="laporan">LAPORAN & PEMANTAUAN</div>
         <a href="{{ $resolveAdminMenuUrl(['admin.laporan.index'], 'laporan.index') }}"
@@ -869,6 +1010,35 @@
         </div>
     </div>
 </sidebar>
+
+<!-- POP-UP ANIMASI LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & MENGIKUTI KECEPATAN JARINGAN) -->
+<div id="global-page-nav-loader" class="nav-loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="nav-top-progress-track">
+        <div id="nav-top-progress-bar" class="nav-top-progress-bar"></div>
+    </div>
+    <div class="nav-loading-card">
+        <div class="nav-spinner-wrap">
+            <div class="nav-spinner-ring"></div>
+            <div class="nav-spinner-ring-inner"></div>
+            <div class="nav-spinner-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+                </svg>
+            </div>
+        </div>
+        <div>
+            <div id="nav-loading-title" class="nav-loading-title">Memuat Halaman...</div>
+            <div id="nav-loading-subtitle" class="nav-loading-subtitle" style="margin-top: 4px;">
+                Menghubungkan ke server, mohon tunggu dan jangan klik berulang.
+            </div>
+        </div>
+        <div class="nav-network-pill">
+            <span id="nav-network-dot" class="nav-network-dot"></span>
+            <span id="nav-network-status">Menyesuaikan kecepatan jaringan...</span>
+        </div>
+    </div>
+</div>
+
 
 <script>
     (function () {
@@ -977,7 +1147,7 @@
             const toast = document.createElement('div');
             toast.id = 'perm-rt-toast-el';
             toast.className = 'perm-rt-toast';
-            toast.innerHTML = `<span>🔒 ${pesan}</span>`;
+            toast.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg><span>${pesan}</span>`;
             document.body.appendChild(toast);
 
             requestAnimationFrame(() => toast.classList.add('show'));
@@ -1053,7 +1223,7 @@
                 if (!isCurrentOpen && kartuIsi) {
                     kartuIsi.innerHTML = `
                         <div style="padding: 38px 20px; text-align: center;">
-                            <div style="font-size: 42px; margin-bottom: 10px;">🚫</div>
+                            <div style="margin-bottom: 10px; color: #ef4444; display: flex; justify-content: center;"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></div>
                             <h3 style="color: #0f172a; font-size: 19px; font-weight: 800; margin-bottom: 8px;">Hak Akses ${mainPengajuanAllowed ? labelAktif : 'Menu Pengajuan'} Dicabut</h3>
                             <p style="color: #64748b; font-size: 13px; max-width: 480px; margin: 0 auto 18px auto; line-height: 1.6;">
                                 Master Admin telah menutup / menonaktifkan akses pada <strong>${mainPengajuanAllowed ? labelAktif : 'Menu Pengajuan Aset'}</strong> untuk role Anda secara real-time.
@@ -1094,7 +1264,7 @@
                     overlay.className = 'perm-revoked-overlay';
                     overlay.innerHTML = `
                         <div class="perm-revoked-card">
-                            <div style="font-size: 42px; margin-bottom: 12px;">🚫</div>
+                            <div style="margin-bottom: 12px; color: #ef4444; display: flex; justify-content: center;"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></div>
                             <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-bottom: 8px;">Hak Akses Halaman Dicabut</h2>
                             <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin-bottom: 22px;">
                                 Master Admin telah menonaktifkan akses melihat pada modul ini untuk role Anda secara real-time.
@@ -1132,7 +1302,7 @@
                             badgeReadonlyQr = document.createElement('div');
                             badgeReadonlyQr.className = 'qr-readonly-placeholder';
                             badgeReadonlyQr.style.cssText = 'width:100%; padding:8px 12px; border-radius:8px; background:#f1f5f9; color:#64748b; font-size:12px; font-weight:600; text-align:center; border:1px dashed #cbd5e1;';
-                            badgeReadonlyQr.textContent = '🔒 Belum Ada QR (Akses Tambah Dibatasi)';
+                            badgeReadonlyQr.textContent = 'Belum Ada QR (Akses Tambah Dibatasi)';
                             btn.parentElement.appendChild(badgeReadonlyQr);
                         }
                     } else if (badgeReadonlyQr) {
@@ -1310,8 +1480,6 @@
                 barcode_aset: ['view', 'create', 'edit'],
                 kategori_aset: ['view', 'create', 'edit', 'delete'],
                 cabang: ['view', 'create', 'edit', 'delete'],
-                divisi: ['view', 'create', 'edit', 'delete'],
-                jabatan: ['view', 'create', 'edit', 'delete'],
                 laporan: ['view', 'create'],
                 riwayat_aktivitas: ['view', 'delete']
             };
@@ -1342,7 +1510,7 @@
                 if (bannerEl) {
                     if (semuaAksiMati) {
                         bannerEl.innerHTML = `
-                            <span>👁️ <strong>Mode Hanya Lihat (Read-Only):</strong> Anda hanya memiliki akses melihat pada halaman ini. Fitur perubahan/aksi data dinonaktifkan oleh Master Admin.</span>
+                            <span style="display:inline-flex; align-items:center; gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg><span><strong>Mode Hanya Lihat (Read-Only):</strong></span> Anda hanya memiliki akses melihat pada halaman ini. Fitur perubahan/aksi data dinonaktifkan oleh Master Admin.</span>
                             <span style="font-size: 11px; background: #fef3c7; border: 1px solid #f59e0b; padding: 3px 8px; border-radius: 999px; white-space: nowrap;">Read-Only</span>
                         `;
                     } else {
@@ -1351,7 +1519,7 @@
                         if (capsModulIni.includes('edit') && bolehEdit) izinAktif.push(MODUL_HALAMAN_AKTIF === 'barcode_aset' ? 'Update QR' : 'Ubah');
                         if (capsModulIni.includes('delete') && bolehDelete) izinAktif.push(MODUL_HALAMAN_AKTIF === 'riwayat_aktivitas' ? 'Bersihkan Log' : 'Hapus');
                         bannerEl.innerHTML = `
-                            <span>🔒 <strong>Hak Akses Dibatasi oleh Master Admin:</strong> Izin aktif Anda pada halaman ini adalah <strong>${izinAktif.join(' + ')}</strong>.</span>
+                            <span style="display:inline-flex; align-items:center; gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg><span><strong>Hak Akses Dibatasi oleh Master Admin:</strong></span> Izin aktif Anda pada halaman ini adalah <strong>${izinAktif.join(' + ')}</strong>.</span>
                             <span style="font-size: 11px; background: #fef3c7; border: 1px solid #f59e0b; padding: 3px 8px; border-radius: 999px; white-space: nowrap;">Akses Terbatas</span>
                         `;
                     }
@@ -1406,22 +1574,22 @@
         const INFO_KATEGORI_PENGAJUAN = {
             peminjaman: {
                 judul: 'Pengajuan Peminjaman',
-                ikon: '📦',
+                ikon: '',
                 deskripsi: 'Kelola dan ajukan permohonan peminjaman aset inventaris antar cabang atau divisi.'
             },
             pengembalian: {
                 judul: 'Pengajuan Pengembalian',
-                ikon: '🔄',
+                ikon: '',
                 deskripsi: 'Kelola proses pengembalian aset yang telah selesai dipinjam beserta pengecekan kondisinya.'
             },
             peleburan: {
                 judul: 'Pengajuan Peleburan',
-                ikon: '🔥',
+                ikon: '',
                 deskripsi: 'Ajukan penghapusan atau peleburan aset fisik yang sudah rusak berat / tidak layak pakai.'
             },
             servis: {
                 judul: 'Pengajuan Servis',
-                ikon: '🛠️',
+                ikon: '',
                 deskripsi: 'Ajukan perbaikan dan perawatan berkala (maintenance) untuk aset yang bermasalah.'
             }
         };
@@ -1448,27 +1616,23 @@
                     <!-- 4 BUTTON UTAMA PENGAJUAN -->
                     <div class="pengajuan-top-buttons">
                         <button type="button" class="btn-tab-pengajuan active" data-tab-jenis="peminjaman" onclick="pilihKategoriPengajuan('peminjaman')">
-                            <span>📦</span>
-                            <span>Pengajuan Peminjaman</span>
+                                                        <span>Pengajuan Peminjaman</span>
                         </button>
                         <button type="button" class="btn-tab-pengajuan" data-tab-jenis="pengembalian" onclick="pilihKategoriPengajuan('pengembalian')">
-                            <span>🔄</span>
-                            <span>Pengajuan Pengembalian</span>
+                                                        <span>Pengajuan Pengembalian</span>
                         </button>
                         <button type="button" class="btn-tab-pengajuan" data-tab-jenis="peleburan" onclick="pilihKategoriPengajuan('peleburan')">
-                            <span>🔥</span>
-                            <span>Pengajuan Peleburan</span>
+                                                        <span>Pengajuan Peleburan</span>
                         </button>
                         <button type="button" class="btn-tab-pengajuan" data-tab-jenis="servis" onclick="pilihKategoriPengajuan('servis')">
-                            <span>🛠️</span>
-                            <span>Pengajuan Servis</span>
+                                                        <span>Pengajuan Servis</span>
                         </button>
                     </div>
 
                     <!-- KONTEN JENIS PENGAJUAN YANG DIPILIH -->
                     <div class="pengajuan-content-card" id="kartu-isi-pengajuan">
                         <h2 id="judul-isi-pengajuan" style="font-size: 18px; font-weight: 800; color: var(--primary-color); margin-bottom: 6px;">
-                            📦 Pengajuan Peminjaman
+                            Pengajuan Peminjaman
                         </h2>
                         <p id="deskripsi-isi-pengajuan" style="font-size: 13px; color: #64748b; margin-bottom: 16px;">
                             Kelola dan ajukan permohonan peminjaman aset inventaris antar cabang atau divisi.
@@ -1533,7 +1697,7 @@
             if (!subDiizinkan && kartuIsi) {
                 kartuIsi.innerHTML = `
                     <div style="padding: 38px 20px; text-align: center;">
-                        <div style="font-size: 42px; margin-bottom: 10px;">🚫</div>
+                        <div style="margin-bottom: 10px; color: #ef4444; display: flex; justify-content: center;"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg></div>
                         <h3 style="color: #0f172a; font-size: 19px; font-weight: 800; margin-bottom: 8px;">Hak Akses ${info.judul} Dicabut</h3>
                         <p style="color: #64748b; font-size: 13px; max-width: 480px; margin: 0 auto 18px auto; line-height: 1.6;">
                             Master Admin telah menutup / menonaktifkan akses pada <strong>${info.judul}</strong> untuk role Anda secara real-time.
@@ -1557,17 +1721,198 @@
             const judulEl = document.getElementById('judul-isi-pengajuan');
             const deskEl = document.getElementById('deskripsi-isi-pengajuan');
             const labelAktifEl = document.getElementById('label-kategori-aktif');
-            if (judulEl) judulEl.textContent = `${info.ikon} ${info.judul}`;
+            if (judulEl) judulEl.textContent = info.judul;
             if (deskEl) deskEl.textContent = info.deskripsi;
             if (labelAktifEl) labelAktifEl.textContent = info.judul;
         };
 
         const URL_HALAMAN_PENGAJUAN = @json(url('/pengajuan'));
 
+        // ================= LOGIKA POP-UP LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) =================
+        let sedangPindahHalaman = false;
+        let timerProgresJaringan = null;
+        let timerTahapKoneksi = null;
+        let waktuMulaiNavigasi = 0;
+
+        function deteksiInfoKoneksiJaringan() {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                const tipe = (conn.effectiveType || '').toUpperCase();
+                const rtt = typeof conn.rtt === 'number' && conn.rtt > 0 ? `${conn.rtt} ms` : '';
+                if (tipe || rtt) {
+                    return `Jaringan ${tipe || 'Aktif'}${rtt ? ' • Ping ' + rtt : ''}`;
+                }
+            }
+            return 'Menunggu respons jaringan server...';
+        }
+
+        window.tampilkanLoadingPindahHalaman = function (judulKustom, subjudulKustom) {
+            const overlay = document.getElementById('global-page-nav-loader');
+            if (!overlay) return;
+
+            sedangPindahHalaman = true;
+            waktuMulaiNavigasi = Date.now();
+
+            const titleEl = document.getElementById('nav-loading-title');
+            const subEl = document.getElementById('nav-loading-subtitle');
+            const netStatusEl = document.getElementById('nav-network-status');
+            const netDotEl = document.getElementById('nav-network-dot');
+            const barEl = document.getElementById('nav-top-progress-bar');
+
+            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Halaman...';
+            if (subEl) subEl.textContent = subjudulKustom || 'Menghubungkan ke server, mohon tunggu dan jangan klik berulang.';
+            if (netStatusEl) netStatusEl.textContent = deteksiInfoKoneksiJaringan();
+            if (netDotEl) netDotEl.style.background = '#10b981';
+
+            overlay.classList.add('active');
+            document.body.style.cursor = 'wait';
+
+            // Animasi progres bar asimtotik yang menyesuaikan waktu tunggu respons server nyata:
+            // Jika jaringan cepat (misal 150ms), halaman baru langsung terbuka.
+            // Jika jaringan lambat, progres berjalan perlahan mendekati 92% sampai server selesai merespons.
+            let progresSaatIni = 12;
+            if (barEl) barEl.style.width = progresSaatIni + '%';
+
+            if (timerProgresJaringan) clearInterval(timerProgresJaringan);
+            timerProgresJaringan = setInterval(function () {
+                const durasiMs = Date.now() - waktuMulaiNavigasi;
+                const sisa = 92 - progresSaatIni;
+                if (sisa > 0.5) {
+                    progresSaatIni += Math.max(0.4, sisa * 0.08);
+                    if (barEl) barEl.style.width = progresSaatIni.toFixed(1) + '%';
+                }
+
+                // Update keterangan secara dinamis berdasarkan kondisi kecepatan internet saat itu
+                if (durasiMs > 4500) {
+                    if (titleEl) titleEl.textContent = 'Koneksi Jaringan Sedang Lambat...';
+                    if (subEl) subEl.textContent = 'Permintaan Anda sedang diproses oleh server. Halaman akan terbuka otomatis begitu data selesai dimuat.';
+                    if (netStatusEl) netStatusEl.textContent = `Waktu tunggu: ${(durasiMs / 1000).toFixed(1)} dtk • Mohon tetap tunggu`;
+                    if (netDotEl) netDotEl.style.background = '#f59e0b';
+                } else if (durasiMs > 1600) {
+                    if (subEl) subEl.textContent = 'Sedang memuat data halaman dari server sesuai kecepatan jaringan Anda...';
+                    if (netStatusEl) netStatusEl.textContent = `Memuat data (${(durasiMs / 1000).toFixed(1)} dtk)...`;
+                }
+            }, 150);
+        };
+
+        window.sembunyikanLoadingPindahHalaman = function () {
+            sedangPindahHalaman = false;
+            if (timerProgresJaringan) {
+                clearInterval(timerProgresJaringan);
+                timerProgresJaringan = null;
+            }
+            if (timerTahapKoneksi) {
+                clearTimeout(timerTahapKoneksi);
+                timerTahapKoneksi = null;
+            }
+            const barEl = document.getElementById('nav-top-progress-bar');
+            if (barEl) barEl.style.width = '100%';
+
+            const overlay = document.getElementById('global-page-nav-loader');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            document.body.style.cursor = '';
+        };
+
+        // Cegah segala bentuk spam klik atau tekan tombol Enter/Space saat proses pindah halaman sedang berlangsung
+        ['click', 'dblclick', 'submit'].forEach(function (evtName) {
+            window.addEventListener(evtName, function (e) {
+                if (sedangPindahHalaman) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof e.stopImmediatePropagation === 'function') {
+                        e.stopImmediatePropagation();
+                    }
+                    return false;
+                }
+            }, true);
+        });
+
+        window.addEventListener('keydown', function (e) {
+            if (sedangPindahHalaman && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }, true);
+
+        // Deteksi klik pada seluruh link navigasi (<a>) untuk langsung mengunci layar & menampilkan animasi loading
+        document.addEventListener('click', function (e) {
+            if (sedangPindahHalaman || e.defaultPrevented) return;
+            if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+
+            const linkEl = e.target.closest('a[href]');
+            if (!linkEl) return;
+
+            const rawHref = (linkEl.getAttribute('href') || '').trim();
+            if (!rawHref || rawHref === '#' || rawHref.toLowerCase().startsWith('javascript:')) return;
+            if (linkEl.hasAttribute('download') || linkEl.getAttribute('target') === '_blank') return;
+            if (rawHref.includes('download-lampiran') || rawHref.includes('view-lampiran')) return;
+
+            let targetUrl;
+            try {
+                targetUrl = new URL(linkEl.href, window.location.origin);
+            } catch (err) {
+                return;
+            }
+
+            if (targetUrl.origin !== window.location.origin) return;
+
+            // Abaikan jika hanya lompat anchor (#) di halaman yang sama
+            if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search && targetUrl.hash !== '') {
+                return;
+            }
+
+            const teksMenu = (linkEl.textContent || '').replace(/\s+/g, ' ').trim();
+            const judulLoad = teksMenu && teksMenu.length < 35
+                ? `Membuka ${teksMenu}...`
+                : 'Memuat Halaman...';
+
+            window.tampilkanLoadingPindahHalaman(judulLoad);
+        }, false);
+
+        // Deteksi submit form yang melakukan pindah/reload halaman
+        document.addEventListener('submit', function (e) {
+            if (sedangPindahHalaman || e.defaultPrevented) return;
+            const formEl = e.target;
+            if (!formEl || formEl.tagName !== 'FORM') return;
+            if (formEl.getAttribute('target') === '_blank') return;
+
+            // Abaikan form yang ditangani murni via AJAX tanpa reload
+            const idForm = formEl.id || '';
+            if (idForm === 'form-tambah-role' || idForm === 'form-clear-riwayat') return;
+
+            // Beri jeda microtask agar handler validasi (seperti ukuran file / confirm) selesai mengecek defaultPrevented
+            setTimeout(function () {
+                if (!e.defaultPrevented && !sedangPindahHalaman) {
+                    window.tampilkanLoadingPindahHalaman('Memproses Data...', 'Mohon tunggu, permintaan sedang dikirim ke server.');
+                }
+            }, 0);
+        }, false);
+
+        // Pastikan saat browser mulai unload halaman menuju URL baru, loading aktif
+        window.addEventListener('beforeunload', function () {
+            if (!sedangPindahHalaman) {
+                window.tampilkanLoadingPindahHalaman('Memuat Halaman...');
+            }
+        });
+
+        // Pastikan saat halaman selesai dimuat (atau saat tombol Back/Forward ditekan dari bfcache), loading langsung ditutup
+        window.addEventListener('pageshow', function () {
+            window.sembunyikanLoadingPindahHalaman();
+        });
+
+        window.addEventListener('load', function () {
+            window.sembunyikanLoadingPindahHalaman();
+        });
+
         window.toggleMenuPengajuanSidebar = function (e) {
             if (e) e.preventDefault();
+            if (sedangPindahHalaman) return;
             const sedangDiHalamanPengajuan = window.location.pathname.toLowerCase().includes('/pengajuan');
             if (!sedangDiHalamanPengajuan) {
+                window.tampilkanLoadingPindahHalaman('Membuka Menu Pengajuan...');
                 window.location.href = URL_HALAMAN_PENGAJUAN;
                 return;
             }
@@ -1577,16 +1922,19 @@
         };
 
         window.pilihKategoriPengajuan = function (jenis) {
+            if (sedangPindahHalaman) return;
             const targetJenis = jenis || 'peminjaman';
             const sedangDiHalamanPengajuan = window.location.pathname.toLowerCase().includes('/pengajuan');
             if (sedangDiHalamanPengajuan && typeof window.bukaTabPengajuan === 'function') {
                 window.bukaTabPengajuan(targetJenis, true);
                 return;
             }
+            window.tampilkanLoadingPindahHalaman('Membuka Halaman Pengajuan...');
             window.location.href = URL_HALAMAN_PENGAJUAN + '?jenis=' + encodeURIComponent(targetJenis);
         };
 
         document.addEventListener('DOMContentLoaded', function () {
+            window.sembunyikanLoadingPindahHalaman();
             window.hitungRiwayatBelumDibaca();
             terapkanHakAksesKeLayar(currentPerms, false);
             setInterval(cekPerubahanPermissionRealtime, 2000);

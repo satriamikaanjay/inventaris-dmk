@@ -539,4 +539,19 @@ public function generateSemuaQr()
             'message' => "Berhasil memproses dan membuat {$berhasil} label QR baru!"
         ]);
     }
+
+    public function bulkDelete(Request $request)
+{
+    $ids = $request->input('ids');
+
+    if (!empty($ids)) {
+        // Hapus semua data yang ID-nya ada di dalam array $ids
+        // Jika primary key Anda bernama 'aset_id', ganti 'id' menjadi 'aset_id'
+        DetailAset::whereIn('aset_id', $ids)->delete();
+
+        return redirect()->back()->with('success', count($ids) . ' data aset berhasil dihapus secara massal.');
+    }
+
+    return redirect()->back()->withErrors(['Pilih minimal satu aset untuk dihapus.']);
+}
 }
