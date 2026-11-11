@@ -12,7 +12,6 @@ class RiwayatController extends Controller
     {
         $query = \App\Models\RiwayatAktivitas::query();
 
-        // 1. Logika Filter Pencarian Teks
         if ($request->filled('search')) {
             $query->where(function($q) use ($request) {
                 $q->where('aktivitas', 'like', '%' . $request->search . '%')
@@ -22,7 +21,6 @@ class RiwayatController extends Controller
             });
         }
 
-        // 2. LOGIKA BARU: Filter Jenis Aktivitas
         if ($request->filled('jenis')) {
             $jenis = $request->jenis;
             $query->where(function($q) use ($jenis) {
@@ -43,7 +41,6 @@ class RiwayatController extends Controller
             });
         }
 
-        // 3. Logika Filter Bulan & Tahun
         if ($request->filled('bulan')) {
             $query->whereMonth('created_at', $request->bulan);
         }
@@ -51,10 +48,8 @@ class RiwayatController extends Controller
             $query->whereYear('created_at', $request->tahun);
         }
 
-        // Ambil data untuk pagination (Gunakan withQueryString agar filter tidak hilang saat pindah halaman)
         $riwayats = $query->latest()->paginate(15)->withQueryString();
 
-        // Ambil daftar tahun untuk Dropdown filter tahun
         $tahunList = \App\Models\RiwayatAktivitas::selectRaw('YEAR(created_at) as tahun')
             ->distinct()
             ->orderBy('tahun', 'desc')

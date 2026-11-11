@@ -10,7 +10,6 @@ class CabangController extends Controller
 {
     public function index()
     {
-        // asets_count = jumlah aset di tiap cabang
         $cabangs = Cabang::withCount('asets')->orderBy('nama_cabang')->get();
 
         return view('masteradmin.cabang', compact('cabangs'));
@@ -51,7 +50,6 @@ class CabangController extends Controller
     {
         $cabang = Cabang::withCount('asets')->findOrFail($id);
 
-        // Cabang yang masih punya aset tidak boleh dihapus (supaya aset tidak kehilangan cabang)
         if ($cabang->asets_count > 0) {
             return redirect()->route('cabang.index')->withErrors([
                 'Cabang "' . $cabang->nama_cabang . '" masih memiliki ' . $cabang->asets_count . ' aset, jadi tidak bisa dihapus.',

@@ -9,7 +9,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('detail_aset', function (Blueprint $table) {
-            // Menambahkan kolom lampiran
             $table->text('lampiran')->nullable()->after('nilai_jual');
         });
     }
@@ -17,7 +16,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('detail_aset', function (Blueprint $table) {
-            // Menghapus kolom jika di-rollback
             $table->dropColumn('lampiran');
         });
     }

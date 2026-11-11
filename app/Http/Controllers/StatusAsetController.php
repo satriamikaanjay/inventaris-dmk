@@ -45,8 +45,7 @@ namespace App\Http\Controllers;
         return redirect()->back()->with('success', 'Status aset berhasil diperbarui!');
     }
 
-    public function destroy(Request $request, $id) // Tambahkan parameter Request $request
-    {
+    public function destroy(Request $request, $id)    {
         $status = StatusAset::findOrFail($id);
         $status->delete();
 

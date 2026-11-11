@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Master Admin</title>
+    <title>Login - Admin</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" />
     <style>
         * {
@@ -17,8 +17,8 @@
             background-color: #0d2642;
             color: #fff;
             width: 100vw;
-            height: 100vh; /* Kunci tinggi layar tepat 100% */
-            overflow: hidden; /* Hilangkan scrollbar pada desktop */
+            height: 100vh;
+            overflow: hidden;
         }
 
         .login-master-admin {
@@ -27,7 +27,6 @@
             height: 100%;
         }
 
-        /* Panel Kiri (Informasi) */
         .info-panel {
             flex: 1;
             padding: 4% 6%;
@@ -107,7 +106,6 @@
             font-weight: 500;
         }
 
-        /* Panel Kanan (Form Login) */
         .login-panel {
             flex: 1;
             background-color: #fff;
@@ -241,6 +239,78 @@
             background-color: #007bb5;
         }
 
+        .toast-notification {
+    position: fixed;
+    top: 25px;
+    right: -100%;
+    background-color: #fee2e2;
+    color: #dc2626;
+    padding: 15px 25px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(220, 38, 38, 0.2);
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.toast-notification.show {
+    right: 25px;
+}
+
+.spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-wrapper .form-input {
+    padding-right: 40px;
+}
+
+.toggle-password-btn {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: color 0.3s;
+}
+
+.toggle-password-btn:hover {
+    color: #008ce2;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.submit-btn:disabled {
+    background-color: #006b9b;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
         .halaman-ini-diperuntukkan {
             font-size: 11px;
             text-align: center;
@@ -248,15 +318,14 @@
             line-height: 1.4;
         }
 
-        /* Mode Mobile (Menyembunyikan panel kiri, hanya tampilkan login) */
         @media screen and (max-width: 968px) {
             body {
                 background-color: #fff;
-                overflow-y: auto; /* Aktifkan scroll di mobile jika ukuran layar ponsel terlalu kecil untuk form */
+                overflow-y: auto;
             }
 
             .info-panel {
-                display: none; /* Sembunyikan informasi kargo sepenuhnya */
+                display: none;
             }
 
             .login-panel {
@@ -270,14 +339,14 @@
 
             .login-card {
                 padding: 1.5rem;
-                box-shadow: none; /* Tampilan bersih tanpa bayangan berlebih di layar kecil */
+                box-shadow: none;
             }
         }
     </style>
 </head>
 <body>
     <div class="login-master-admin">
-        <!-- Bagian Kiri: Informasi Kargo (Hidden on Mobile) -->
+
         <div class="info-panel">
             <div class="brand-header">
                 <div class="brand-text">
@@ -285,7 +354,7 @@
                     <span class="logistics-solutions">LOGISTICS SOLUTIONS</span>
                 </div>
             </div>
-            
+
             <div class="hero-section">
                 <div class="trust-badge">
                     <span class="platfrom-terpercaya">Platform Terpercaya</span>
@@ -310,7 +379,6 @@
             </div>
         </div>
 
-        <!-- Bagian Kanan: Form Login (Selalu Tampil) -->
         <div class="login-panel">
             <div class="login-card">
                 <div class="login-header">
@@ -319,33 +387,65 @@
                 </div>
 
                 <div class="role-toggle">
-                    <button class="role-btn">Admin</button>
-                    <button class="role-btn active">Master Admin</button>
+                    <button type="button" class="role-btn" id="btn-admin">Admin</button>
+                    <button type="button" class="role-btn active" id="btn-master">Master Admin</button>
                 </div>
 
-                <form class="login-form">
+                <form class="login-form" action="{{ route('login.proses') }}" method="POST" id="form-login">
+                    @csrf
+                    <input type="hidden" name="login_as" id="login_as" value="master_admin">
+
+                    @if ($errors->any())
+                        <div id="error-toast" class="toast-notification">
+
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            <span>{{ $errors->first() }}</span>
+                        </div>
+                    @endif
+
                     <div class="form-group">
                         <label class="form-label">Email Address</label>
-                        <input type="email" class="form-input" placeholder="nama@perusahaan.com" required>
+
+                        <input type="email" name="email" class="form-input" placeholder="nama@perusahaan.com" value="{{ old('email') }}" required>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" placeholder="••••••••" required>
+                        <div class="password-wrapper">
+
+                            <input type="password" name="password" id="password-input" class="form-input" placeholder="••••••••" required>
+
+                            <button type="button" class="toggle-password-btn" id="toggle-password" tabindex="-1">
+
+                                <svg id="eye-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+
+                                <svg id="eye-off-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-options">
-                        <label class="ingat-saya">
-                            <input type="checkbox"> Ingat saya
-                        </label>
+                       <label class="ingat-saya">
+    <input type="checkbox" name="remember" {{ old('remember') ? 'checked' : '' }}> Ingat saya
+</label>
                         <div class="right-options">
-                            <span class="koneksi-aman">Koneksi aman</span>
+
                             <a href="#" class="lupa-password">Lupa password?</a>
                         </div>
                     </div>
 
-                    <button type="submit" class="submit-btn">
-                        Masuk ke Akun
+                    <button type="submit" class="submit-btn" id="btn-submit">
+                        <span id="btn-text">Masuk ke Akun</span>
                     </button>
                 </form>
 
@@ -355,5 +455,66 @@
             </div>
         </div>
     </div>
+
+    <script>
+        const btnAdmin = document.getElementById('btn-admin');
+        const btnMaster = document.getElementById('btn-master');
+        const hiddenRole = document.getElementById('login_as');
+
+        btnAdmin.addEventListener('click', function() {
+            btnAdmin.classList.add('active');
+            btnMaster.classList.remove('active');
+            hiddenRole.value = 'admin';
+        });
+
+        btnMaster.addEventListener('click', function() {
+            btnMaster.classList.add('active');
+            btnAdmin.classList.remove('active');
+            hiddenRole.value = 'master_admin';
+        });
+
+        const errorToast = document.getElementById('error-toast');
+        if (errorToast) {
+
+            setTimeout(() => {
+                errorToast.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                errorToast.classList.remove('show');
+            }, 3000);
+        }
+
+        const formLogin = document.getElementById('form-login');
+        const btnSubmit = document.getElementById('btn-submit');
+        const btnText = document.getElementById('btn-text');
+
+        formLogin.addEventListener('submit', function() {
+
+            btnSubmit.disabled = true;
+
+            btnText.innerHTML = '<span class="spinner"></span> Memproses...';
+        });
+
+        const togglePasswordBtn = document.getElementById('toggle-password');
+        const passwordInput = document.getElementById('password-input');
+        const eyeIcon = document.getElementById('eye-icon');
+        const eyeOffIcon = document.getElementById('eye-off-icon');
+
+        togglePasswordBtn.addEventListener('click', function () {
+
+            const currentType = passwordInput.getAttribute('type');
+            const newType = currentType === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', newType);
+
+            if (newType === 'text') {
+                eyeIcon.style.display = 'none';
+                eyeOffIcon.style.display = 'block';
+            } else {
+                eyeIcon.style.display = 'block';
+                eyeOffIcon.style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>

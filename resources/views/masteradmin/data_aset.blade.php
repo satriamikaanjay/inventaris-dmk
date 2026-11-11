@@ -1,3 +1,489 @@
+@php
+
+    if (request()->has('_bulk_delete_aset')) {
+        $__rawIds = (string) request('ids', '');
+        $__idsHapus = array_values(array_filter(array_map('trim', explode(',', $__rawIds)), fn($v) => $v !== ''));
+
+        if (empty($__idsHapus)) {
+            if (request()->ajax() || request()->wantsJson()) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Pilih aset yang mau dihapus',
+                ]);
+                exit;
+            }
+            session()->flash('error', 'Pilih aset yang mau dihapus');
+        } else {
+            try {
+                $__instDel = new \App\Models\DetailAset();
+                $__tblDel = $__instDel->getTable();
+                $__pkDel = $__instDel->getKeyName();
+                if (!\Illuminate\Support\Facades\Schema::hasColumn($__tblDel, $__pkDel) && \Illuminate\Support\Facades\Schema::hasColumn($__tblDel, 'id')) {
+                    $__pkDel = 'id';
+                }
+
+                $__rowsTarget = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn($__pkDel, $__idsHapus)->get();
+                if ($__rowsTarget->isEmpty() && $__pkDel !== 'id' && \Illuminate\Support\Facades\Schema::hasColumn($__tblDel, 'id')) {
+                    $__pkDel = 'id';
+                    $__rowsTarget = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn('id', $__idsHapus)->get();
+                }
+
+                $__kodeList = [];
+                foreach ($__rowsTarget as $__rt) {
+                    if (!empty($__rt->kode_aset)) {
+                        $__kodeList[] = (string) $__rt->kode_aset;
+                    }
+                }
+
+                $__jmlTerhapus = \Illuminate\Support\Facades\DB::table($__tblDel)->whereIn($__pkDel, $__idsHapus)->delete();
+
+                if ($__jmlTerhapus > 0 && class_exists(\App\Models\RiwayatAktivitas::class)) {
+                    try {
+                        $__ringkasanKode = !empty($__kodeList) ? (' [' . implode(', ', array_slice($__kodeList, 0, 5)) . (count($__kodeList) > 5 ? ', ...' : '') . ']') : '';
+                        $__logDel = new \App\Models\RiwayatAktivitas();
+                        $__tblLogDel = $__logDel->getTable();
+                        $__payloadDel = [];
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'user_id')) {
+                            $__payloadDel['user_id'] = \Illuminate\Support\Facades\Auth::id();
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'aktivitas')) {
+                            $__payloadDel['aktivitas'] = 'Menghapus ' . $__jmlTerhapus . ' data aset melalui checklist' . $__ringkasanKode;
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'modul')) {
+                            $__payloadDel['modul'] = 'Data Aset';
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'status')) {
+                            $__payloadDel['status'] = 'Peringatan';
+                        }
+                        $__logDel->forceFill($__payloadDel)->save();
+                    } catch (\Throwable $e) {
+                    }
+                }
+
+                session()->flash('success', $__jmlTerhapus . ' data aset yang dipilih berhasil dihapus permanen.');
+
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => true,
+                        'deleted' => $__jmlTerhapus,
+                        'message' => $__jmlTerhapus . ' data aset berhasil dihapus.',
+                    ]);
+                    exit;
+                }
+            } catch (\Throwable $e) {
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Gagal menghapus data aset yang dipilih.',
+                    ]);
+                    exit;
+                }
+            }
+        }
+    }
+
+    $__lampiranMetaPath = storage_path('app/lampiran_aset_meta.json');
+    $__lampiranMetaData = [
+        'files'          => [],
+        'pending_edits'  => [],
+        'pending_tambah' => [],
+    ];
+    if (is_file($__lampiranMetaPath)) {
+        $__decodedMeta = json_decode((string) file_get_contents($__lampiranMetaPath), true);
+        if (is_array($__decodedMeta)) {
+            $__lampiranMetaData['files'] = is_array($__decodedMeta['files'] ?? null) ? $__decodedMeta['files'] : [];
+            $__lampiranMetaData['pending_edits'] = is_array($__decodedMeta['pending_edits'] ?? null) ? $__decodedMeta['pending_edits'] : [];
+            $__lampiranMetaData['pending_tambah'] = is_array($__decodedMeta['pending_tambah'] ?? null) ? $__decodedMeta['pending_tambah'] : [];
+        }
+    }
+
+    $__formatBytesPhp = function ($bytes) {
+        $b = (int) $bytes;
+        if ($b <= 0) {
+            return '';
+        }
+        if ($b >= 1048576) {
+            return number_format($b / 1048576, 2, ',', '.') . ' MB';
+        }
+        return number_format(max($b / 1024, 0.1), 1, ',', '.') . ' KB';
+    };
+
+    $__formatTglIndoPhp = function ($timestamp) {
+        $bulanIndo = [
+            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr',
+            5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Agu',
+            9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des',
+        ];
+        $ts = is_numeric($timestamp) ? (int) $timestamp : strtotime((string) $timestamp);
+        if (!$ts || $ts <= 0) {
+            $ts = time();
+        }
+        $d = date('d', $ts);
+        $m = $bulanIndo[(int) date('n', $ts)] ?? date('M', $ts);
+        $y = date('Y', $ts);
+        return $d . ' ' . $m . ' ' . $y;
+    };
+
+    $__fileDiskIndex = [];
+    try {
+        $__scanRoots = array_filter([
+            storage_path('app'),
+            public_path('storage'),
+            public_path('lampiran'),
+            public_path('lampiran_aset'),
+            public_path('uploads'),
+        ], fn($dir) => is_string($dir) && is_dir($dir));
+
+        foreach ($__scanRoots as $__rootDir) {
+            $__iter = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($__rootDir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+            foreach ($__iter as $__fInfo) {
+                if ($__fInfo->isFile()) {
+                    $__bName = $__fInfo->getFilename();
+                    if (!isset($__fileDiskIndex[$__bName])) {
+                        $__fileDiskIndex[$__bName] = [
+                            'path'  => $__fInfo->getPathname(),
+                            'size'  => (int) $__fInfo->getSize(),
+                            'mtime' => (int) $__fInfo->getMTime(),
+                        ];
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    if (request()->has('_cache_lampiran_info')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $__fnCache = trim((string) request('filename', ''));
+        $__szBytes = (int) request('size_bytes', 0);
+        $__szText  = trim((string) request('size_text', ''));
+        $__tglText = trim((string) request('tgl_upload', ''));
+
+        if ($__fnCache !== '') {
+            $__existing = $__lampiranMetaData['files'][$__fnCache] ?? [];
+            if ($__szBytes > 0) {
+                $__existing['size_bytes'] = $__szBytes;
+                $__existing['size'] = $__szText !== '' ? $__szText : $__formatBytesPhp($__szBytes);
+            }
+            if ($__tglText !== '' && empty($__existing['tgl'])) {
+                $__existing['tgl'] = $__tglText;
+            }
+            $__lampiranMetaData['files'][$__fnCache] = $__existing;
+            file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    if (request()->has('_sync_lampiran_meta')) {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $__rawPayload = (string) request('payload', '');
+        if ($__rawPayload === '') {
+            $__rawPayload = (string) request()->getContent();
+        }
+        $__payload = json_decode($__rawPayload, true);
+        if (!is_array($__payload)) {
+            $__payload = request()->all();
+        }
+
+        $__modeSync   = (string) ($__payload['mode'] ?? 'edit');
+        $__asetIdSync = trim((string) ($__payload['aset_id'] ?? ''));
+        $__kodeSync   = trim((string) ($__payload['kode_aset'] ?? ''));
+        $__hapusList  = is_array($__payload['hapus_list'] ?? null) ? $__payload['hapus_list'] : [];
+        $__newFiles   = is_array($__payload['new_files'] ?? null) ? $__payload['new_files'] : [];
+        $__devDate    = trim((string) ($__payload['device_date'] ?? $__formatTglIndoPhp(time())));
+
+        if ($__modeSync === 'edit' && $__asetIdSync !== '') {
+            $__beforeFiles = [];
+            try {
+                $__modelInst = new \App\Models\DetailAset();
+                $__tblAset = $__modelInst->getTable();
+                $__pkAset = $__modelInst->getKeyName();
+                $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where($__pkAset, $__asetIdSync)->first();
+                if (!$__rowDb && \Illuminate\Support\Facades\Schema::hasColumn($__tblAset, 'id')) {
+                    $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where('id', $__asetIdSync)->first();
+                    $__pkAset = 'id';
+                }
+                if ($__rowDb) {
+                    $__currLamp = [];
+                    if (!empty($__rowDb->lampiran) && $__rowDb->lampiran !== 'null') {
+                        $__parsed = json_decode((string) $__rowDb->lampiran, true);
+                        if (is_array($__parsed)) {
+                            $__currLamp = $__parsed;
+                        }
+                    }
+
+                    if (!empty($__hapusList)) {
+                        $__hapusNorm = array_map(fn($v) => strtolower(trim((string) $v)), $__hapusList);
+                        $__hapusBase = array_map(fn($v) => strtolower(basename(trim((string) $v))), $__hapusList);
+
+                        $__currLamp = array_values(array_filter($__currLamp, function ($itemPath) use ($__hapusNorm, $__hapusBase) {
+                            $pNorm = strtolower(trim((string) $itemPath));
+                            $bNorm = strtolower(basename($pNorm));
+                            return !in_array($pNorm, $__hapusNorm, true) && !in_array($bNorm, $__hapusBase, true);
+                        }));
+
+                        \Illuminate\Support\Facades\DB::table($__tblAset)
+                            ->where($__pkAset, $__asetIdSync)
+                            ->update([
+                                'lampiran' => count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null,
+                            ]);
+                    }
+
+                    $__beforeFiles = array_map(fn($p) => basename((string) $p), $__currLamp);
+                }
+            } catch (\Throwable $e) {
+            }
+
+            $__lampiranMetaData['pending_edits'][$__asetIdSync] = [
+                'hapus_list'   => $__hapusList,
+                'before_files' => $__beforeFiles,
+                'new_files'    => $__newFiles,
+                'device_date'  => $__devDate,
+                'timestamp'    => time(),
+            ];
+        } else {
+            $__lampiranMetaData['pending_tambah'][] = [
+                'kode_aset'   => $__kodeSync,
+                'new_files'   => $__newFiles,
+                'device_date' => $__devDate,
+                'timestamp'   => time(),
+            ];
+        }
+
+        foreach ($__newFiles as $__nf) {
+            $__origName = trim((string) ($__nf['name'] ?? ''));
+            if ($__origName !== '') {
+                $__lampiranMetaData['files'][$__origName] = [
+                    'tgl'        => (string) ($__nf['tgl_upload'] ?? $__devDate),
+                    'size'       => (string) ($__nf['size_text'] ?? $__formatBytesPhp($__nf['size_bytes'] ?? 0)),
+                    'size_bytes' => (int) ($__nf['size_bytes'] ?? 0),
+                ];
+            }
+        }
+
+        file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    $__metaDirty = false;
+    try {
+        $__modelInst = new \App\Models\DetailAset();
+        $__tblAset = $__modelInst->getTable();
+        $__pkAset = $__modelInst->getKeyName();
+
+        if (!empty($__lampiranMetaData['pending_edits'])) {
+            foreach ($__lampiranMetaData['pending_edits'] as $__editAsetId => $__editData) {
+                if ((time() - (int) ($__editData['timestamp'] ?? 0)) > 300) {
+                    unset($__lampiranMetaData['pending_edits'][$__editAsetId]);
+                    $__metaDirty = true;
+                    continue;
+                }
+
+                $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where($__pkAset, $__editAsetId)->first();
+                if (!$__rowDb && \Illuminate\Support\Facades\Schema::hasColumn($__tblAset, 'id')) {
+                    $__rowDb = \Illuminate\Support\Facades\DB::table($__tblAset)->where('id', $__editAsetId)->first();
+                    $__pkAset = 'id';
+                }
+
+                if ($__rowDb) {
+                    $__currLamp = [];
+                    if (!empty($__rowDb->lampiran) && $__rowDb->lampiran !== 'null') {
+                        $__parsed = json_decode((string) $__rowDb->lampiran, true);
+                        if (is_array($__parsed)) {
+                            $__currLamp = $__parsed;
+                        }
+                    }
+
+                    $__hapusList = is_array($__editData['hapus_list'] ?? null) ? $__editData['hapus_list'] : [];
+                    if (!empty($__hapusList)) {
+                        $__hapusNorm = array_map(fn($v) => strtolower(trim((string) $v)), $__hapusList);
+                        $__hapusBase = array_map(fn($v) => strtolower(basename(trim((string) $v))), $__hapusList);
+
+                        $__filteredLamp = array_values(array_filter($__currLamp, function ($itemPath) use ($__hapusNorm, $__hapusBase) {
+                            $pNorm = strtolower(trim((string) $itemPath));
+                            $bNorm = strtolower(basename($pNorm));
+                            return !in_array($pNorm, $__hapusNorm, true) && !in_array($bNorm, $__hapusBase, true);
+                        }));
+
+                        if (count($__filteredLamp) !== count($__currLamp)) {
+                            $__currLamp = $__filteredLamp;
+                            \Illuminate\Support\Facades\DB::table($__tblAset)
+                                ->where($__pkAset, $__editAsetId)
+                                ->update([
+                                    'lampiran' => count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null,
+                                ]);
+                        }
+
+                        foreach ($__hapusBase as $__hb) {
+                            unset($__lampiranMetaData['files'][$__hb]);
+                        }
+                    }
+
+                    $__beforeFiles = is_array($__editData['before_files'] ?? null) ? $__editData['before_files'] : [];
+                    $__newFilesMeta = array_values(is_array($__editData['new_files'] ?? null) ? $__editData['new_files'] : []);
+                    $__devDateEdit = (string) ($__editData['device_date'] ?? $__formatTglIndoPhp(time()));
+
+                    $__addedIdx = 0;
+                    foreach ($__currLamp as $__fPath) {
+                        $__bName = basename((string) $__fPath);
+                        $__matchedNf = null;
+                        foreach ($__newFilesMeta as $__nfCandidate) {
+                            $__orig = (string) ($__nfCandidate['name'] ?? '');
+                            if ($__orig !== '' && (str_ends_with(strtolower($__bName), strtolower($__orig)) || strtolower($__bName) === strtolower($__orig))) {
+                                $__matchedNf = $__nfCandidate;
+                                break;
+                            }
+                        }
+                        if (!in_array($__bName, $__beforeFiles, true) || $__matchedNf !== null) {
+                            if (!$__matchedNf && isset($__newFilesMeta[$__addedIdx])) {
+                                $__matchedNf = $__newFilesMeta[$__addedIdx];
+                            }
+                            $__addedIdx++;
+
+                            $__szBytes = (int) ($__matchedNf['size_bytes'] ?? ($__fileDiskIndex[$__bName]['size'] ?? 0));
+                            $__szText  = (string) ($__matchedNf['size_text'] ?? ($__szBytes > 0 ? $__formatBytesPhp($__szBytes) : ''));
+                            $__tglUp   = (string) ($__matchedNf['tgl_upload'] ?? $__devDateEdit);
+
+                            $__lampiranMetaData['files'][$__bName] = [
+                                'tgl'        => $__tglUp,
+                                'size'       => $__szText,
+                                'size_bytes' => $__szBytes,
+                            ];
+                        }
+                    }
+
+                    if (isset($detailAsets)) {
+                        foreach ($detailAsets as $__itemAset) {
+                            $__idItem = (string) ($__itemAset->aset_id ?? $__itemAset->id ?? '');
+                            if ($__idItem === (string) $__editAsetId) {
+                                $__itemAset->lampiran = count($__currLamp) > 0 ? json_encode(array_values($__currLamp)) : null;
+                            }
+                        }
+                    }
+                }
+
+                unset($__lampiranMetaData['pending_edits'][$__editAsetId]);
+                $__metaDirty = true;
+            }
+        }
+
+        if (!empty($__lampiranMetaData['pending_tambah'])) {
+            foreach ($__lampiranMetaData['pending_tambah'] as $__idxT => $__tambahData) {
+                if ((time() - (int) ($__tambahData['timestamp'] ?? 0)) > 300) {
+                    unset($__lampiranMetaData['pending_tambah'][$__idxT]);
+                    $__metaDirty = true;
+                    continue;
+                }
+                $__kodeT = trim((string) ($__tambahData['kode_aset'] ?? ''));
+                $__rowBaru = null;
+                if ($__kodeT !== '') {
+                    $__rowBaru = \Illuminate\Support\Facades\DB::table($__tblAset)->where('kode_aset', $__kodeT)->orderByDesc($__pkAset)->first();
+                }
+                if (!$__rowBaru) {
+                    $__rowBaru = \Illuminate\Support\Facades\DB::table($__tblAset)->orderByDesc($__pkAset)->first();
+                }
+                if ($__rowBaru && !empty($__rowBaru->lampiran) && $__rowBaru->lampiran !== 'null') {
+                    $__parsedBaru = json_decode((string) $__rowBaru->lampiran, true);
+                    if (is_array($__parsedBaru)) {
+                        $__newFilesMeta = array_values(is_array($__tambahData['new_files'] ?? null) ? $__tambahData['new_files'] : []);
+                        $__devDateT = (string) ($__tambahData['device_date'] ?? $__formatTglIndoPhp(time()));
+                        foreach ($__parsedBaru as $__iB => $__fPathB) {
+                            $__bNameB = basename((string) $__fPathB);
+                            $__matchedNf = $__newFilesMeta[$__iB] ?? null;
+                            foreach ($__newFilesMeta as $__nfC) {
+                                $__orig = (string) ($__nfC['name'] ?? '');
+                                if ($__orig !== '' && str_ends_with(strtolower($__bNameB), strtolower($__orig))) {
+                                    $__matchedNf = $__nfC;
+                                    break;
+                                }
+                            }
+                            $__szBytes = (int) ($__matchedNf['size_bytes'] ?? ($__fileDiskIndex[$__bNameB]['size'] ?? 0));
+                            $__szText  = (string) ($__matchedNf['size_text'] ?? ($__szBytes > 0 ? $__formatBytesPhp($__szBytes) : ''));
+                            $__tglUp   = (string) ($__matchedNf['tgl_upload'] ?? $__devDateT);
+
+                            $__lampiranMetaData['files'][$__bNameB] = [
+                                'tgl'        => $__tglUp,
+                                'size'       => $__szText,
+                                'size_bytes' => $__szBytes,
+                            ];
+                        }
+                    }
+                }
+                unset($__lampiranMetaData['pending_tambah'][$__idxT]);
+                $__metaDirty = true;
+            }
+            $__lampiranMetaData['pending_tambah'] = array_values($__lampiranMetaData['pending_tambah']);
+        }
+
+        if (isset($detailAsets)) {
+            foreach ($detailAsets as $__dItem) {
+                if (empty($__dItem->lampiran) || $__dItem->lampiran === 'null') {
+                    continue;
+                }
+                $__fList = is_string($__dItem->lampiran) ? json_decode($__dItem->lampiran, true) : $__dItem->lampiran;
+                if (!is_array($__fList)) {
+                    continue;
+                }
+                foreach ($__fList as $__fPath) {
+                    $__bName = basename((string) $__fPath);
+                    $__curMeta = $__lampiranMetaData['files'][$__bName] ?? [];
+
+                    if (empty($__curMeta['size']) && isset($__fileDiskIndex[$__bName]) && $__fileDiskIndex[$__bName]['size'] > 0) {
+                        $__curMeta['size_bytes'] = $__fileDiskIndex[$__bName]['size'];
+                        $__curMeta['size'] = $__formatBytesPhp($__fileDiskIndex[$__bName]['size']);
+                        $__metaDirty = true;
+                    }
+
+                    if (empty($__curMeta['tgl'])) {
+                        if (preg_match('/^(\d{10})[_\-]/', $__bName, $__mTs)) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp((int) $__mTs[1]);
+                            $__metaDirty = true;
+                        } elseif (isset($__fileDiskIndex[$__bName]) && $__fileDiskIndex[$__bName]['mtime'] > 0) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp($__fileDiskIndex[$__bName]['mtime']);
+                            $__metaDirty = true;
+                        } elseif (session()->has('success')) {
+                            $__curMeta['tgl'] = $__formatTglIndoPhp(time());
+                            $__metaDirty = true;
+                        }
+                    }
+
+                    if (!empty($__curMeta)) {
+                        $__lampiranMetaData['files'][$__bName] = $__curMeta;
+                    }
+                }
+            }
+        }
+
+        if ($__metaDirty) {
+            file_put_contents($__lampiranMetaPath, json_encode($__lampiranMetaData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+    } catch (\Throwable $e) {
+    }
+
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 
@@ -31,8 +517,47 @@
         .btn { padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
         .btn-primary { background: var(--primary-color); color: #fff; border: none; padding: 10px 20px; }
         .btn-secondary { background: #64748b; color: #fff; border: none; padding: 10px 20px; }
-        .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
-        .btn-danger:hover { background: var(--danger-color); color: #fff; }
+        .btn-danger,
+        .btn-hapus-checklist {
+            background: #dc2626 !important;
+            color: #ffffff !important;
+            border: 1px solid #b91c1c !important;
+            padding: 10px 18px;
+            font-weight: 700 !important;
+            box-shadow: 0 3px 8px rgba(220, 38, 38, 0.22);
+        }
+        .btn-danger:hover,
+        .btn-hapus-checklist:hover {
+            background: #b91c1c !important;
+            color: #ffffff !important;
+            opacity: 1 !important;
+        }
+        .btn-danger span,
+        .btn-danger svg,
+        .btn-hapus-checklist span,
+        .btn-hapus-checklist svg {
+            color: #ffffff !important;
+        }
+
+        .aset-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: #dc2626;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .data-table tr.row-checked td {
+            background-color: #fee2e2 !important;
+            color: #0f172a !important;
+        }
+        @keyframes pulseCheckboxCol {
+            0%, 100% { transform: scale(1); box-shadow: none; }
+            50% { transform: scale(1.22); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.3); }
+        }
+        .aset-checkbox.highlight-warning {
+            animation: pulseCheckboxCol 0.45s ease-in-out 2;
+            outline: 2px solid #dc2626;
+        }
         .btn:hover { opacity: 0.9; }
 
         .card-box { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); margin-bottom: 20px; }
@@ -41,10 +566,9 @@
         .form-group label { font-size: 12px; font-weight: 600; color: #1e293b; }
         .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; background: #fff; transition: 0.2s; color: var(--text-color); }
         .form-group input:focus, .form-group select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.1); }
-        
+
         .form-group input:disabled, .form-group select:disabled { background-color: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: #e2e8f0; opacity: 1; -webkit-text-fill-color: #334155; }
 
-        /* MODAL DETAIL & EDIT */
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 9999; opacity: 0; visibility: hidden; transition: all 0.3s ease-in-out; backdrop-filter: blur(2px); }
         .modal-backdrop.show { opacity: 1; visibility: visible; }
         .modal-container { background: #f8fafc; width: 95%; max-width: 950px; max-height: 92vh; border-radius: 16px; display: flex; flex-direction: column; transform: scale(0.95); transition: 0.3s; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); overflow: hidden; }
@@ -56,7 +580,6 @@
         .modal-body { padding: 25px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 20px; }
         .modal-footer { padding: 15px 25px; background: #fff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
 
-        /* SIDEBAR TAMBAH ASET */
         .sidebar-form-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000; opacity: 0; visibility: hidden; transition: all 0.3s ease; backdrop-filter: blur(2px); }
         .sidebar-form-backdrop.show { opacity: 1; visibility: visible; }
         .sidebar-form-panel { position: fixed; top: 0; right: -550px; width: 100%; max-width: 500px; height: 100vh; background: #f8fafc; display: flex; flex-direction: column; transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 10001; box-shadow: -5px 0 30px rgba(0,0,0,0.15); }
@@ -66,7 +589,6 @@
         .sidebar-body { padding: 20px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 20px; }
         .sidebar-footer { padding: 15px 25px; background: #fff; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
 
-        /* KOTAK LANGKAH (STEP SECTION) */
         .step-box { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
         .step-header { display: flex; align-items: center; gap: 10px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 15px; }
         .step-number { background: var(--primary-color); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
@@ -75,35 +597,34 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
-        /* BANNER PREVIEW KODE */
         .preview-banner { background: linear-gradient(135deg, #1e3a8a, #1a4f91); color: #fff; padding: 15px 20px; border-radius: 12px; display: grid; grid-template-columns: 1fr; gap: 15px; border: 2px solid #3b82f6; }
         .preview-banner label { color: #93c5fd !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
         .preview-banner input { background: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.4) !important; color: #fff !important; font-size: 16px !important; font-weight: 800 !important; }
 
-        /* TABEL */
         .table-container { width: 100%; overflow-x: auto; max-height: 65vh; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px; position: relative; }
         .data-table { width: 100%; border-collapse: collapse; min-width: 3300px; }
-        .data-table th { 
-            position: sticky; top: 0; z-index: 10; 
-            font-size: 12px; color: var(--text-muted); text-align: left; padding: 12px 15px; 
-            background: #f8fafc; /* Wajib ada background agar data tidak tembus */
-            white-space: nowrap; border-bottom: 1px solid var(--border-color); 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        .data-table th {
+            position: sticky; top: 0; z-index: 10;
+            font-size: 12px; color: var(--text-muted); text-align: left; padding: 12px 15px;
+            background: #f8fafc;
+            white-space: nowrap; border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         .data-table th.aksi-col { position: sticky; top: 0; right: 0; z-index: 20; background: #f8fafc; }
         .data-table td { font-size: 13px; padding: 12px 15px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); white-space: nowrap; }
         .badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-        .toast-popup { position: fixed; top: 30px; right: -100%; padding: 15px 20px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); font-size: 14px; font-weight: 600; z-index: 99999; display: flex; align-items: center; gap: 12px; transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        .toast-popup { position: fixed; top: 30px; right: -100%; padding: 14px 20px; border-radius: 10px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28); font-size: 14px; font-weight: 700; z-index: 99999; display: flex; align-items: center; gap: 10px; transition: right 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
         .toast-popup.show { right: 30px; }
-        .toast-success { background-color: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
-        .toast-error { background-color: #fee2e2; color: #b91c1c; border-left: 4px solid #ef4444; }
+        .toast-success { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #047857 !important; border-left: 5px solid #064e3b !important; }
+        .toast-success span, .toast-success svg { color: #ffffff !important; }
+        .toast-error { background-color: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c !important; border-left: 5px solid #7f1d1d !important; }
+        .toast-error span, .toast-error svg { color: #ffffff !important; }
 
         .click-tooltip-container { position: relative; display: inline-flex; cursor: pointer; outline: none; }
         .click-tooltip-text { visibility: hidden; opacity: 0; width: max-content; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 6px 12px; position: absolute; z-index: 999; bottom: 135%; left: 50%; transform: translateX(-50%); transition: all 0.2s ease-in-out; font-size: 11px; font-weight: 600; box-shadow: 0 4px 10px rgba(0,0,0,0.15); pointer-events: none; }
         .click-tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
         .click-tooltip-container:focus .click-tooltip-text { visibility: visible; opacity: 1; bottom: 150%; }
-    
-        /* ===== PENCARIAN ASET ===== */
+
         .aset-toolbar { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .aset-search-wrap { position: relative; flex: 1 1 320px; max-width: 480px; }
         .aset-search-wrap input { width: 100%; padding: 9px 14px 9px 36px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; font-family: inherit; }
@@ -138,7 +659,6 @@
             display: none !important;
         }
 
-        /* 2. Tampilkan baris desktop utama (Teks Info & Tombol Angka) */
         .custom-pagination-wrap nav > div:last-child {
             display: flex !important;
             justify-content: space-between;
@@ -148,7 +668,6 @@
             width: 100%;
         }
 
-        /* 3. Styling Teks "Showing 1 to 100 of X results" */
         .custom-pagination-wrap nav p {
             font-size: 13px !important;
             color: var(--text-muted) !important;
@@ -159,7 +678,6 @@
             color: var(--primary-color) !important;
         }
 
-        /* 4. Kotak pembungkus deretan angka */
         .custom-pagination-wrap nav > div:last-child > div:last-child > span {
             display: inline-flex !important;
             border-radius: 8px !important;
@@ -169,7 +687,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
         }
 
-        /* 5. Bentuk tiap kotak angka dan panah */
         .custom-pagination-wrap nav span > a,
         .custom-pagination-wrap nav span > span {
             display: inline-flex !important;
@@ -190,64 +707,240 @@
             border-bottom: none !important;
             border-left: none !important;
         }
-        
+
         .custom-pagination-wrap nav span > *:last-child {
             border-right: none !important;
         }
 
-        /* 6. Efek Hover */
         .custom-pagination-wrap nav span > a:hover {
             background: #f1f5f9 !important;
             color: var(--primary-color) !important;
         }
 
-        /* 7. Halaman Aktif saat ini (Berwarna Biru) */
         .custom-pagination-wrap nav span[aria-current="page"] > span {
             background: var(--primary-color) !important;
             color: #fff !important;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important;
         }
 
-        /* 8. Tombol mati (Disabled - contoh panah Prev di halaman 1) */
         .custom-pagination-wrap nav span[aria-disabled="true"] > span {
             color: #cbd5e1 !important;
             background: #f8fafc !important;
             cursor: not-allowed !important;
         }
 
-        /* 9. Ukuran icon panah SVG */
         .custom-pagination-wrap nav svg {
             width: 16px !important;
             height: 16px !important;
-        }   
-        
+        }
+
+        .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 18px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        main {
+            padding-top: 108px !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 18px !important;
+            }
+        }
     </style>
 </head>
 
 <body>
 
     @php
-    $totalAset = isset($detailAsets) ? $detailAsets->count() : 0;
-    $seriItemData = [];
-    if(isset($items) && isset($detailAsets)) {
-        foreach($items as $item) {
-            $seriItemData[$item->id] = $detailAsets->where('item_id', $item->id)->count();
+
+    $itemModelClass = null;
+    if (isset($items) && $items->isNotEmpty() && is_object($items->first())) {
+        $itemModelClass = get_class($items->first());
+    } else {
+        $candidateClasses = [
+            \App\Models\Item::class,
+            \App\Models\MasterAset::class,
+            \App\Models\Aset::class,
+            \App\Models\MasterItem::class,
+        ];
+        foreach ($candidateClasses as $candidateClass) {
+            if (class_exists($candidateClass)) {
+                $itemModelClass = $candidateClass;
+                break;
+            }
         }
     }
-    // Urutan kode dihitung PER CABANG: angka paling kanan pada kode_aset (mis. .../25062023/17 -> 17)
+
+    if ($itemModelClass) {
+        $items = $itemModelClass::orderBy('kategori_id', 'asc')
+            ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
+            ->orderBy('id', 'asc')
+            ->get();
+    }
+
+    $katKodeMap = [];
+    if (isset($kategoris)) {
+        foreach ($kategoris as $k) {
+            $katKodeMap[$k->id] = rtrim(trim((string) $k->kode_kategori), '.');
+        }
+    }
+
+    if (session()->has('success') && class_exists(\App\Models\RiwayatAktivitas::class)) {
+        try {
+            $pesanSuksesAset = trim((string) session('success'));
+            $uidAset = \Illuminate\Support\Facades\Auth::id();
+            $baruTercatat = \App\Models\RiwayatAktivitas::where('user_id', $uidAset)
+                ->where('created_at', '>=', now()->subSeconds(5))
+                ->exists();
+
+            if (!$baruTercatat && $pesanSuksesAset !== '') {
+                $teksLogAset = $pesanSuksesAset;
+                $statusLogAset = 'Berhasil';
+                if (stripos($pesanSuksesAset, 'hapus') !== false) {
+                    $teksLogAset = 'Menghapus data aset fisik (' . $pesanSuksesAset . ')';
+                    $statusLogAset = 'Peringatan';
+                } elseif (stripos($pesanSuksesAset, 'perbarui') !== false || stripos($pesanSuksesAset, 'ubah') !== false || stripos($pesanSuksesAset, 'update') !== false || stripos($pesanSuksesAset, 'edit') !== false) {
+                    $teksLogAset = 'Memperbarui data aset fisik (' . $pesanSuksesAset . ')';
+                    $statusLogAset = 'Informasi';
+                } elseif (stripos($pesanSuksesAset, 'tambah') === false && stripos($pesanSuksesAset, 'buat') === false) {
+                    $teksLogAset = 'Menambah / mengubah data aset fisik: ' . $pesanSuksesAset;
+                }
+
+                $logAset = new \App\Models\RiwayatAktivitas();
+                $tblRiwayatAset = $logAset->getTable();
+                $payloadAset = [];
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'user_id')) {
+                    $payloadAset['user_id'] = $uidAset;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'aktivitas')) {
+                    $payloadAset['aktivitas'] = $teksLogAset;
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'modul')) {
+                    $payloadAset['modul'] = 'Data Aset';
+                }
+                if (\Illuminate\Support\Facades\Schema::hasColumn($tblRiwayatAset, 'status')) {
+                    $payloadAset['status'] = $statusLogAset;
+                }
+                $logAset->forceFill($payloadAset)->save();
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
+    $totalAset = \App\Models\DetailAset::count();
+    $seriItemCounts = \App\Models\DetailAset::selectRaw('item_id, COUNT(*) as total')
+        ->whereNotNull('item_id')
+        ->groupBy('item_id')
+        ->pluck('total', 'item_id')
+        ->all();
+
+    $seriItemData = [];
+    if (isset($items)) {
+        foreach ($items as $item) {
+            $seriItemData[$item->id] = (int) ($seriItemCounts[$item->id] ?? 0);
+        }
+    }
+
+    try {
+        $__instTipe = new \App\Models\DetailAset();
+        $__tblTipe = $__instTipe->getTable();
+        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblTipe, 'status_berjalan')) {
+            $__colTipe = \Illuminate\Support\Facades\DB::select("SHOW COLUMNS FROM `{$__tblTipe}` LIKE 'status_berjalan'");
+            if (!empty($__colTipe) && isset($__colTipe[0]->Type)) {
+                $__typeStr = strtolower((string) $__colTipe[0]->Type);
+                if (str_contains($__typeStr, 'enum') && !str_contains($__typeStr, 'tidak dipakai')) {
+                    \Illuminate\Support\Facades\DB::statement("ALTER TABLE `{$__tblTipe}` MODIFY COLUMN `status_berjalan` VARCHAR(100) NULL DEFAULT 'Tidak Ada'");
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+    }
+
+    if (request()->filled('filter_tipe') && strtolower(trim((string) request('filter_tipe'))) === 'aset tidak dipakai') {
+        try {
+            $__perluFilterUlang = false;
+            if (isset($detailAsets) && count($detailAsets) > 0) {
+                foreach ($detailAsets as $__cekRow) {
+                    if (strtolower(trim((string) ($__cekRow->status_berjalan ?? ''))) !== 'aset tidak dipakai') {
+                        $__perluFilterUlang = true;
+                        break;
+                    }
+                }
+            } else {
+                $__perluFilterUlang = true;
+            }
+
+            if ($__perluFilterUlang) {
+                $__qFilterTipe = \App\Models\DetailAset::with(['kategori', 'item', 'cabang'])
+                    ->whereRaw('LOWER(TRIM(status_berjalan)) = ?', ['aset tidak dipakai']);
+
+                if (request()->filled('search')) {
+                    $__kw = trim((string) request('search'));
+                    $__qFilterTipe->where(function ($subQ) use ($__kw) {
+                        $subQ->where('kode_aset', 'like', "%{$__kw}%")
+                            ->orWhere('merk', 'like', "%{$__kw}%")
+                            ->orWhere('nomor_seri', 'like', "%{$__kw}%")
+                            ->orWhere('lokasi_saat_ini', 'like', "%{$__kw}%")
+                            ->orWhere('Ruangan', 'like', "%{$__kw}%")
+                            ->orWhere('penanggung_jawab', 'like', "%{$__kw}%")
+                            ->orWhereHas('item', fn($qI) => $qI->where('nama_aset', 'like', "%{$__kw}%"))
+                            ->orWhereHas('cabang', fn($qC) => $qC->where('nama_cabang', 'like', "%{$__kw}%"))
+                            ->orWhereHas('kategori', fn($qK) => $qK->where('nama_kategori', 'like', "%{$__kw}%"));
+                    });
+                }
+
+                $detailAsets = $__qFilterTipe->latest()->paginate(100)->withQueryString();
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+
     $urutanPerCabang = [];
     foreach (\App\Models\DetailAset::select('cabang_id', 'kode_aset')->get() as $barisAset) {
         $akhir = str_contains((string) $barisAset->kode_aset, '/') ? (int) substr(strrchr($barisAset->kode_aset, '/'), 1) : 0;
         $urutanPerCabang[$barisAset->cabang_id] = max($urutanPerCabang[$barisAset->cabang_id] ?? 0, $akhir);
     }
-    // Asumsi: Anda mempassing variabel $cabangs dari controller
     @endphp
 
     <input type="hidden" id="json-total-aset" value="{{ $totalAset }}">
     <input type="hidden" id="json-urutan-cabang" value="{{ json_encode($urutanPerCabang) }}">
     <input type="hidden" id="json-seri-item" value="{{ json_encode($seriItemData) }}">
+    <input type="hidden" id="json-meta-lampiran" value="{{ json_encode($__lampiranMetaData['files'] ?? []) }}">
 
+    @php
+    if (request('panel') === 'admin') {
+        session(['active_sidebar_panel' => 'admin']);
+    } elseif (request('panel') === 'master') {
+        session(['active_sidebar_panel' => 'masteradmin']);
+    }
+    $__gunakanAdminSidebar = (\Illuminate\Support\Facades\Auth::check() && strtolower((string) (\Illuminate\Support\Facades\Auth::user()->role ?? '')) === 'admin')
+        || session('active_sidebar_panel') === 'admin';
+@endphp
+@if($__gunakanAdminSidebar)
+    @include('layouts.adminsidebar')
+@else
     @include('layouts.mastersidebar')
+@endif
 
     <main>
         <header class="main-header">
@@ -255,13 +948,17 @@
                 <h1>Data Aset Inventaris</h1>
                 <p>Pusat pencatatan perangkat dan fasilitas kantor.</p>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" class="btn btn-secondary" onclick="openModalImport()" style="background: var(--primary-color);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Import dari Excel
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" id="btn-hapus-checklist" class="btn btn-danger btn-hapus-checklist btn-delete-sm" onclick="prosesHapusAsetChecklist()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <span id="teks-btn-hapus-checklist">Hapus Aset</span>
                 </button>
-                <button type="button" class="btn btn-primary" onclick="openSidebarTambah()" style="background: var(--secondary-color);">
-                    + Tambah Data Fisik Aset Baru
+                <button type="button" class="btn btn-secondary" onclick="openModalImport()" style="background: var(--primary-color); color: #ffffff;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>Import dari Excel</span>
+                </button>
+                <button type="button" class="btn btn-primary" onclick="openSidebarTambah()" style="background: var(--secondary-color); color: #ffffff;">
+                    <span>+ Tambah Data Fisik Aset Baru</span>
                 </button>
             </div>
         </header>
@@ -273,8 +970,6 @@
         <div id="toast-error" class="toast-popup toast-error show"><span>{{ $errors->first() }}</span></div>
         @endif
 
-
-        <!-- ================= SIDEBAR TAMBAH ASET ================= -->
         <div class="sidebar-form-backdrop" id="sidebarTambahAset">
             <div class="sidebar-form-panel" id="sidebarPanel">
                 <div class="sidebar-header">
@@ -316,7 +1011,12 @@
                                     <select id="pilih_aset" name="item_id" required onchange="kalkulasiUrutanOtomatis(); updateAutoGenerate()">
                                         <option value="">-- Pilih Nama Aset --</option>
                                         @foreach($items as $item)
-                                        <option value="{{ $item->id }}" data-kategori="{{ $item->kategori_id }}" data-serial="{{ $item->awal_serial }}" data-urutan="{{ $item->urutan ?? 1 }}">{{ $item->nama_aset }}</option>
+                                        @php
+                                            $kodePrefix = $katKodeMap[$item->kategori_id] ?? '';
+                                            $urutanPad = str_pad($item->urutan ?? 1, 2, '0', STR_PAD_LEFT);
+                                            $labelAset = ($kodePrefix !== '' ? $kodePrefix . '.' . $urutanPad . ' - ' : '') . $item->nama_aset;
+                                        @endphp
+                                        <option value="{{ $item->id }}" data-kategori="{{ $item->kategori_id }}" data-serial="{{ $item->awal_serial }}" data-urutan="{{ $item->urutan ?? 1 }}">{{ $labelAset }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -395,10 +1095,11 @@
                                         <option value="Tidak Ada" selected>Tidak Ada</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
+                                        <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
                             </div>
-                            <!-- Ruangan (Diisi - untuk default dari form jika di web opsional) -->
+
                             <div class="form-group" style="margin-top: 12px;">
                                 <label>Keterangan Ruangan <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
                                 <input type="text" name="Ruangan" value="-" placeholder="-">
@@ -417,7 +1118,7 @@
                                 <div class="form-group"><label>Servis Berikutnya <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="date" name="servis_berikutnya"></div>
                             </div>
                         </div>
-                        
+
                         <div class="step-box" style="margin-bottom: 20px;">
                             <div class="step-header">
                                 <div class="step-number">6</div>
@@ -425,10 +1126,11 @@
                             </div>
                             <div class="grid-1">
                                 <div class="form-group">
-                                    <label>Upload Foto / Dokumen (Bisa lebih dari 1)</label>
-                                    <input type="file" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <label>Upload Foto / Dokumen (Bisa lebih dari 1) <span style="color: var(--text-muted); font-size: 11px; font-weight: 500;">— Maks. 5 MB / file</span></label>
+                                    <input type="file" id="input_lampiran_tambah" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_tambah')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <small id="info_ukuran_lampiran_tambah" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran: <span>{{ date('d F Y') }}</span>
+                                        <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>Penanda Waktu Lampiran (Device):</span></span> <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -443,35 +1145,30 @@
             </div>
         </div>
 
-        <!-- ================= FORM HAPUS (HIDDEN) ================= -->
         <form id="form-delete-fisik" method="POST" style="display: none;">
             @csrf
             @method('DELETE')
         </form>
 
-       
-        <!-- ================= MODAL DETAIL & EDIT ================= -->
         <div class="modal-backdrop" id="modalDetailAset">
             <div class="modal-container">
                 <div class="modal-header">
                     <h3 id="modal-title-text">Detail Informasi Aset</h3>
                     <button type="button" class="btn-close-modal" onclick="closeModalDetail()">&times;</button>
                 </div>
-                
+
                 <form id="form-edit-fisik" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; overflow: hidden; max-height: calc(92vh - 65px);">
                     @csrf
                     @method('PUT')
-                    
-                    <!-- AREA PENAMPUNG FILE YANG DIHAPUS SAAT EDIT -->
+
                     <div id="hidden-hapus-lampiran"></div>
 
                     <div class="modal-body">
-                        <!-- PERINGATAN UPDATE BARCODE -->
+
                         <div id="edit-barcode-warning" style="display: none; background: #fef3c7; border: 1px solid #f59e0b; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #b45309; font-weight: 600; line-height: 1.5; margin-bottom: 5px;">
-                            ⚠️ <strong>Peringatan:</strong> Jika Anda mengubah <strong>Kode Aset</strong>, Anda wajib melakukan pembaruan (Update QR) pada menu <strong>Barcode Aset</strong> setelah menyimpan perubahan ini agar QR Code tetap sinkron.
+                            <span style="display:inline-flex; align-items:center; gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Peringatan:</strong></span> Jika Anda mengubah <strong>Kode Aset</strong>, Anda wajib melakukan pembaruan (Update QR) pada menu <strong>Barcode Aset</strong> setelah menyimpan perubahan ini agar QR Code tetap sinkron.
                         </div>
 
-                        <!-- PREVIEW -->
                         <div class="preview-banner" style="grid-template-columns: 1fr 1fr;">
                             <div class="form-group"><label>Kode Aset Final</label><input type="text" id="edit_kode_aset" name="kode_aset" readonly></div>
                             <div class="form-group"><label>Nomor Seri Final</label><input type="text" id="edit_nomor_seri" name="nomor_seri" readonly></div>
@@ -540,6 +1237,7 @@
                                         <option value="Tidak Ada">Tidak Ada</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
+                                        <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
                             </div>
@@ -575,22 +1273,22 @@
                             <div class="grid-1">
                                 <div class="form-group">
                                     <div id="daftar_lampiran_terpasang" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: #e2e8f0; border-radius: 8px; min-height: 40px;">
-                                        <!-- Card lampiran akan diisi otomatis oleh JS -->
+
                                     </div>
                                 </div>
-                                <!-- Kolom Tambah Baru (Hanya Muncul Saat Mode Edit) -->
+
                                 <div class="form-group" id="upload-baru-section" style="margin-top: 10px; display: none;">
-                                    <label>Tambahkan File Baru <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
-                                    <input type="file" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <label>Tambahkan File Baru <span style="color: var(--text-muted); font-size: 11px;">(Opsional — Maks. 5 MB / file)</span></label>
+                                    <input type="file" id="input_lampiran_edit" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_edit')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
+                                    <small id="info_ukuran_lampiran_edit" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).</small>
                                     <div style="margin-top: 6px; font-size: 12px; color: var(--primary-color); font-weight: 600;">
-                                        🗓️ Penanda Waktu Lampiran: <span>{{ date('d F Y') }}</span>
+                                        <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><span>Penanda Waktu Lampiran (Device):</span></span> <span class="label-tanggal-device">{{ date('d F Y') }}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- FOOTER KETIKA MODE VIEW (READ-ONLY) -->
                     <div class="modal-footer" id="footer-view-mode">
                         <button type="button" class="btn btn-secondary" onclick="closeModalDetail()">Tutup</button>
                         <button type="button" class="btn btn-primary" onclick="enableEditMode()">
@@ -599,7 +1297,6 @@
                         </button>
                     </div>
 
-                    <!-- FOOTER KETIKA MODE EDIT -->
                     <div class="modal-footer" id="footer-edit-mode" style="display: none;">
                         <div>
                             <button type="button" class="btn btn-danger" onclick="submitHapusAset()">
@@ -616,14 +1313,13 @@
             </div>
         </div>
 
-        <!-- ================= MODAL IMPORT EXCEL ================= -->
         <div class="modal-backdrop" id="modalImportExcel">
             <div class="modal-container" style="max-width: 450px;">
                 <div class="modal-header">
                     <h3>Import Data Aset</h3>
                     <button type="button" class="btn-close-modal" onclick="closeModalImport()">&times;</button>
                 </div>
-                
+
                 <form action="{{ route('aset.import') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-body">
@@ -641,33 +1337,31 @@
             </div>
         </div>
 
-        <!-- TABEL DATA -->
         <div class="card-box">
             <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px;">Daftar Aset Terdaftar</h3>
             <form action="{{ url()->current() }}" method="GET" class="aset-toolbar" style="margin-bottom: 15px;">
                 <div class="aset-search-wrap" style="display: flex; gap: 10px; align-items: center;">
                     <div style="position: relative; flex: 1; min-width: 300px;">
                         <svg class="aset-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        
-                        <!-- Input Search -->
+
                         <input type="text" name="search" value="{{ request('search') }}" id="searchAset" placeholder="Cari kode, nama, cabang, merk, lokasi..." autocomplete="off">
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary" style="padding: 9px 18px;">Cari Data</button>
-                    
-                    <!-- Tombol Reset Muncul jika sedang mencari sesuatu -->
+
                     @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
                         <a href="{{ url()->current() }}" class="btn btn-danger" style="text-decoration: none; padding: 9px 18px;">Reset</a>
                     @endif
                 </div>
-                
+
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe Aset:</label>
-                    <!-- Dropdown Filter -->
+
                     <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; cursor: pointer;">
                         <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
                         <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan</option>
                         <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan</option>
+                        <option value="Aset Tidak Dipakai" {{ strtolower((string) request('filter_tipe')) === 'aset tidak dipakai' ? 'selected' : '' }}>Aset Tidak Dipakai</option>
                         <option value="Tidak Ada" {{ request('filter_tipe') == 'Tidak Ada' ? 'selected' : '' }}>Tidak Ada</option>
                     </select>
                 </div>
@@ -678,12 +1372,15 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <!-- URUTAN KOLOM YANG DIPERBARUI -->
+                            <th class="col-checkbox-hapus" style="width: 44px; text-align: center; position: sticky; left: 0; z-index: 21; background: #f8fafc;">
+                                <input type="checkbox" id="checkAllAset" class="aset-checkbox" title="Pilih semua aset di halaman ini" onchange="togglePilihSemuaAset(this)">
+                            </th>
+
                             <th>KODE ASET</th>
                             <th>NAMA ASET</th>
                             <th>KATEGORI</th>
                             <th>CABANG</th>
-                            <th>RUANGAN</th> 
+                            <th>RUANGAN</th>
                             <th>MERK</th>
                             <th>NOMOR SERI</th>
                             <th>UNIT</th>
@@ -712,14 +1409,14 @@
                     <tbody>
                         @forelse($detailAsets ?? [] as $detail)
                         @php
-                            $warnaBg = '#f59e0b'; 
+                            $warnaBg = '#f59e0b';
                             if(isset($statuses)) {
                                 $match = $statuses->where('nama_status', $detail->status_aset)->first();
                                 if($match && !empty($match->warna_status)) $warnaBg = $match->warna_status;
                             }
-                            
+
                             $hex = ltrim($warnaBg, '#');
-                            $rowBg = 'rgba(245, 158, 11, 0.08)'; 
+                            $rowBg = 'rgba(245, 158, 11, 0.08)';
                             if (strlen($hex) == 6) {
                                 $r = hexdec(substr($hex, 0, 2)); $g = hexdec(substr($hex, 2, 2)); $b = hexdec(substr($hex, 4, 2));
                                 $rowBg = "rgba($r, $g, $b, 0.08)";
@@ -728,18 +1425,21 @@
                                 $rowBg = "rgba($r, $g, $b, 0.08)";
                             }
                         @endphp
-                        <tr style="background-color: {{ $rowBg }};">
+                        <tr id="baris-aset-{{ $detail->aset_id ?? $detail->id }}" data-bg="{{ $rowBg }}">
+                            <td class="col-checkbox-hapus" style="text-align: center; position: sticky; left: 0; background: inherit; z-index: 2;" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="aset-checkbox check-item-aset" name="aset_ids[]" value="{{ $detail->aset_id ?? $detail->id }}" data-kode="{{ $detail->kode_aset ?? '-' }}" onchange="perbaruiStatusChecklistAset()">
+                            </td>
                             <td style="font-weight: 700; color: var(--primary-color);">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->kode_aset ?? '-' }}</span>
-                                    
+
                                     @if(!empty($detail->servis_berikutnya) && $detail->servis_berikutnya !== '-')
                                         @php
                                             $tglServisKode = \Carbon\Carbon::parse($detail->servis_berikutnya)->startOfDay();
                                             $hariIniKode = \Carbon\Carbon::now()->startOfDay();
-                                            $selisihKode = $hariIniKode->diffInDays($tglServisKode, false); 
+                                            $selisihKode = $hariIniKode->diffInDays($tglServisKode, false);
                                         @endphp
-                                        
+
                                         @if($selisihKode <= 30 && $selisihKode > 7)
                                             <div class="click-tooltip-container" tabindex="0">
                                                 <div style="background: #f59e0b; color: #fff; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 11px; font-weight: 900; box-shadow: 0 0 6px rgba(245,158,11,0.6);">!</div>
@@ -762,22 +1462,20 @@
                             <td>{{ $detail->item->nama_aset ?? '-' }}</td>
                             <td>{{ $detail->kategori->nama_kategori ?? '-' }}</td>
                             <td style="font-weight: 600; color: #1e293b;">{{ $detail->cabang->nama_cabang ?? '-' }}</td>
-                            
-                            <!-- DATA RUANGAN LAMA TAMPIL DI SINI -->
+
                             <td style="color: #475569;">{{ $detail->Ruangan ?? '-' }}</td>
-                            
+
                             <td>{{ $detail->merk ?? '-' }}</td>
                             <td>{{ $detail->nomor_seri ?? '-' }}</td>
                             <td>{{ $detail->unit ?? '-' }}</td>
                             <td>{{ $detail->tanggal_pengadaan ?? '-' }}</td>
                             <td>{{ $detail->harga_beli ? 'Rp ' . number_format($detail->harga_beli, 0, ',', '.') : '-' }}</td>
-                            
-                            <!-- LOKASI SPESIFIK (KOSONG DEFAULT DARI IMPORT) -->
+
                             <td>{{ $detail->lokasi_saat_ini ?? '-' }}</td>
-                            
+
                             <td>{{ $detail->penanggung_jawab ?? '-' }}</td>
                             <td>
-                                <span class="badge" style="background-color: {{ $warnaBg }}; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{ $detail->status_aset ?? 'N/A' }}</span>
+                                <span class="badge" data-bg="{{ $warnaBg }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{ $detail->status_aset ?? 'N/A' }}</span>
                             </td>
                             <td>
                                 <span class="status-berjalan-label badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);">{{ $detail->status_berjalan ?? 'Tidak Ada' }}</span>
@@ -789,14 +1487,14 @@
                             <td>
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->servis_berikutnya ?? '-' }}</span>
-                                    
+
                                     @if(!empty($detail->servis_berikutnya) && $detail->servis_berikutnya !== '-')
                                         @php
                                             $tglServis = \Carbon\Carbon::parse($detail->servis_berikutnya)->startOfDay();
                                             $hariIni = \Carbon\Carbon::now()->startOfDay();
-                                            $selisih = $hariIni->diffInDays($tglServis, false); 
+                                            $selisih = $hariIni->diffInDays($tglServis, false);
                                         @endphp
-                                        
+
                                         @if($selisih <= 30 && $selisih > 7)
                                             <div class="click-tooltip-container" tabindex="0">
                                                 <div style="background: #f59e0b; color: #fff; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 11px; font-weight: 900; box-shadow: 0 0 6px rgba(245,158,11,0.6);">!</div>
@@ -825,13 +1523,13 @@
                             <td>{{ $detail->no_berita_acara ?? '-' }}</td>
                             <td>{{ $detail->vendor_pengadaan ?? '-' }}</td>
                             <td style="text-align: center; position: sticky; right: 0; background: inherit; z-index: 1;">
-                                <button type="button" class="btn" style="background: var(--primary-color); color: #fff; padding: 6px 12px; font-size: 12px; border-radius: 6px;" onclick="openModalDetail({{ json_encode($detail) }})">
+                                <button type="button" class="btn" style="background: var(--primary-color); color: #fff; padding: 6px 12px; font-size: 12px; border-radius: 6px;" data-detail="{{ json_encode($detail) }}" onclick="openModalDetail(JSON.parse(this.getAttribute('data-detail')))">
                                     Lihat Detail
                                 </button>
                             </td>
                         </tr>
                         @empty
-                        <tr id="row-empty-table"><td colspan="28" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
+                        <tr id="row-empty-table"><td colspan="29" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -842,16 +1540,19 @@
         </div>
     </main>
 
-    <!-- Script Utama -->
     <script>
         const TOTAL_ASET_GLOBAL = parseInt(document.getElementById('json-total-aset').value) || 0;
         const DATA_SERI_ITEM = JSON.parse(document.getElementById('json-seri-item').value || '{}');
         const URUTAN_CABANG = JSON.parse(document.getElementById('json-urutan-cabang').value || '{}');
-        
-        let currentAsetData = null; 
 
-        // SIDEBAR TAMBAH
+        let currentAsetData = null;
+
         function openSidebarTambah() {
+            const inputTambahLamp = document.getElementById('input_lampiran_tambah');
+            if (inputTambahLamp) {
+                inputTambahLamp.value = '';
+                validasiUkuranLampiran(inputTambahLamp, 'info_ukuran_lampiran_tambah', true);
+            }
             document.getElementById('sidebarTambahAset').classList.add('show');
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
@@ -861,13 +1562,10 @@
             document.getElementById('sidebarTambahAset').classList.remove('show');
         }
 
-        // ================= MODAL DETAIL & EDIT LOGIC =================
-        // Isi pilihan select dari data baris. Kalau daftar pilihan dari controller tidak memuat
-        // nilainya (mis. daftar dibatasi/pagination), buat pilihan sementara memakai nama dari relasi.
         function setSelectDenganCadangan(selectId, nilai, teks) {
             const sel = document.getElementById(selectId);
             if (!sel) return;
-            sel.querySelectorAll('option[data-sementara]').forEach(o => o.remove());   // bersihkan sisa baris sebelumnya
+            sel.querySelectorAll('option[data-sementara]').forEach(o => o.remove());
             if (nilai === null || nilai === undefined || nilai === '') { sel.value = ''; return; }
             const ada = Array.from(sel.options).some(o => String(o.value) === String(nilai));
             if (!ada) {
@@ -881,9 +1579,9 @@
         }
 
         function openModalDetail(data) {
-            currentAsetData = data; 
+            currentAsetData = data;
             let id = data.aset_id || data.id;
-            
+
             document.getElementById('form-edit-fisik').action = `/masteradmin/data-aset/${id}`;
             document.getElementById('form-delete-fisik').action = `/masteradmin/data-aset/${id}`;
 
@@ -894,7 +1592,9 @@
             setSelectDenganCadangan('edit_cabang', data.cabang_id, data.cabang && data.cabang.nama_cabang);
             document.getElementById('edit_ruangan').value = data.Ruangan || '';
             document.getElementById('edit_status_aset').value = data.status_aset || 'Tersedia';
-            document.getElementById('edit_status_berjalan').value = data.status_berjalan || 'Tidak Ada';
+            const rawTipeVal = String(data.status_berjalan || 'Tidak Ada').trim();
+            const normTipeVal = rawTipeVal.toLowerCase() === 'aset tidak dipakai' ? 'Aset Tidak Dipakai' : rawTipeVal;
+            setSelectDenganCadangan('edit_status_berjalan', normTipeVal, normTipeVal);
             document.getElementById('edit_merk').value = data.merk || '';
             document.getElementById('edit_unit').value = data.unit || 1;
             document.getElementById('edit_tgl_pengadaan').value = data.tanggal_pengadaan || '';
@@ -914,55 +1614,79 @@
             document.getElementById('edit_tgl_peleburan').value = data.tanggal_peleburan || '';
             document.getElementById('edit_nilai_jual').value = data.nilai_jual || '';
 
-            // Render Lampiran
             let kotakLampiran = document.getElementById('daftar_lampiran_terpasang');
-            kotakLampiran.innerHTML = ''; 
-            document.getElementById('hidden-hapus-lampiran').innerHTML = ''; // Reset file terhapus
-            
+            kotakLampiran.innerHTML = '';
+            document.getElementById('hidden-hapus-lampiran').innerHTML = '';
+            window.daftarHapusLampiranSementara = [];
+            const inputEditLamp = document.getElementById('input_lampiran_edit');
+            if (inputEditLamp) {
+                inputEditLamp.value = '';
+                validasiUkuranLampiran(inputEditLamp, 'info_ukuran_lampiran_edit', true);
+            }
+
             if (data.lampiran && data.lampiran !== "null" && data.lampiran !== "") {
                 let files = [];
                 try { files = typeof data.lampiran === 'string' ? JSON.parse(data.lampiran) : data.lampiran; } catch(e) { files = []; }
 
                 if(Array.isArray(files) && files.length > 0) {
-                    
-                    // ==========================================
-                    // FITUR BARU: Ambil Tanggal Upload Otomatis
-                    // ==========================================
-                    let rawDate = data.created_at;
-                    let tglUpload = "-";
-                    if (rawDate) {
-                        let d = new Date(rawDate);
-                        tglUpload = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                    let fallbackDateStr = ambilTanggalDeviceIndo();
+                    if (data.updated_at || data.created_at) {
+                        let dFallback = new Date(data.updated_at || data.created_at);
+                        if (!isNaN(dFallback.getTime())) {
+                            fallbackDateStr = dFallback.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                        }
                     }
 
                     files.forEach(function(filePath, index) {
-                        let filename = filePath.split('/').pop();
+                        let cleanPath = String(filePath || '');
+                        let filename = cleanPath.split('/').pop();
                         let ext = filename.split('.').pop().toLowerCase();
                         let isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
-                        
-                        let previewElement = isImage 
-                            ? `<img src="/masteradmin/view-lampiran/${filename}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
+
+                        let metaFile = (window.DATA_META_LAMPIRAN && window.DATA_META_LAMPIRAN[filename]) ? window.DATA_META_LAMPIRAN[filename] : null;
+                        let tglUpload = (metaFile && metaFile.tgl) ? metaFile.tgl : fallbackDateStr;
+                        let ukuranFile = (metaFile && metaFile.size) ? metaFile.size : 'Memuat...';
+
+                        let matchTs = filename.match(/^(\d{10})[_\-]/);
+                        if ((!metaFile || !metaFile.tgl) && matchTs) {
+                            let dTs = new Date(parseInt(matchTs[1], 10) * 1000);
+                            if (!isNaN(dTs.getTime())) {
+                                tglUpload = dTs.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                            }
+                        }
+
+                        let previewElement = isImage
+                            ? `<img src="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
                             : `<div style="width: 100%; height: 75px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; font-weight: 800; color: #64748b; font-size: 16px;">${ext.toUpperCase()}</div>`;
 
                         let elementId = `lampiran-card-${index}`;
+                        let safePath = cleanPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        let safeName = filename.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
                         kotakLampiran.innerHTML += `
-                            <div id="${elementId}" style="background: #fff; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; width: 140px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative;">
-                                <button type="button" class="btn-hapus-lampiran" onclick="tandaiHapusLampiran('${filename}', '${elementId}')" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 2px 4px rgba(239,68,68,0.4);">&times;</button>
-                                
+                            <div id="${elementId}" class="kartu-lampiran-item" style="background: #fff; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; width: 156px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative;">
+                                <button type="button" class="btn-hapus-lampiran" onclick="tandaiHapusLampiran('${safePath}', '${safeName}', '${elementId}')" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 2px 4px rgba(239,68,68,0.4);">&times;</button>
+
                                 ${previewElement}
-                                <span style="font-size: 10px; font-weight: 600; color: #1e293b; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; text-align: center;" title="${filename}">${filename}</span>
-                                
-                                <!-- ========================================== -->
-                                <!-- FITUR BARU: Menampilkan Teks Tanggal Upload -->
-                                <!-- ========================================== -->
-                                <span style="font-size: 9px; color: #64748b; font-weight: 600; margin-bottom: 8px; text-align: center; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">Diunggah: ${tglUpload}</span>
-                                
+                                <span style="font-size: 10px; font-weight: 600; color: #1e293b; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; text-align: center;" title="${filename}">${filename}</span>
+
+                                <div style="width: 100%; display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; background: #f1f5f9; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                    <span id="tgl-lampiran-${index}" style="font-size: 9px; color: #475569; font-weight: 600; text-align: center; display: block;">Diunggah: ${tglUpload}</span>
+                                    <span id="ukuran-lampiran-${index}" style="font-size: 9px; color: #0f766e; font-weight: 700; text-align: center; display: block;">Ukuran: ${ukuranFile}</span>
+                                </div>
+
                                 <div style="display: flex; gap: 4px; width: 100%;">
-                                    <a href="/masteradmin/view-lampiran/${filename}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
-                                    <a href="/masteradmin/download-lampiran/${filename}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
+                                    <a href="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
+                                    <a href="/masteradmin/download-lampiran/${encodeURIComponent(filename)}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
                                 </div>
                             </div>
                         `;
+
+                        if (!metaFile || !metaFile.size) {
+                            setTimeout(function() {
+                                muatUkuranLampiranOtomatis(filename, `ukuran-lampiran-${index}`, `tgl-lampiran-${index}`, !metaFile || !metaFile.tgl);
+                            }, 20 * index);
+                        }
                     });
                 } else {
                     kotakLampiran.innerHTML = '<span style="font-size: 12px; color: #64748b; font-style: italic; margin-top: 5px;">Tidak ada file terlampir.</span>';
@@ -981,23 +1705,23 @@
             document.getElementById('edit_kode_aset').readOnly = true;
             document.getElementById('edit_nomor_seri').readOnly = true;
             document.getElementById('edit-barcode-warning').style.display = 'none';
-            
+
             document.getElementById('upload-baru-section').style.display = 'none';
             document.getElementById('footer-view-mode').style.display = 'flex';
             document.getElementById('footer-edit-mode').style.display = 'none';
-            
+
             document.querySelectorAll('.btn-hapus-lampiran').forEach(el => el.style.display = 'none');
         }
 
         function enableEditMode() {
             document.getElementById('modal-title-text').innerText = "Edit Data Aset";
-            document.querySelectorAll('#form-edit-fisik input:not([type="hidden"]), #form-edit-fisik select').forEach(el => { 
-                el.disabled = false; 
+            document.querySelectorAll('#form-edit-fisik input:not([type="hidden"]), #form-edit-fisik select').forEach(el => {
+                el.disabled = false;
             });
             document.getElementById('edit_kode_aset').readOnly = false;
             document.getElementById('edit_nomor_seri').readOnly = false;
             document.getElementById('edit-barcode-warning').style.display = 'block';
-            
+
             document.getElementById('upload-baru-section').style.display = 'block';
             document.getElementById('footer-view-mode').style.display = 'none';
             document.getElementById('footer-edit-mode').style.display = 'flex';
@@ -1009,15 +1733,146 @@
             openModalDetail(currentAsetData);
         }
 
-        function tandaiHapusLampiran(filename, elementId) {
+        window.daftarHapusLampiranSementara = [];
+
+        function tandaiHapusLampiran(filePath, filename, elementId) {
             if(confirm('Yakin ingin menghapus lampiran ini? File akan terhapus permanen setelah Anda klik Simpan Perubahan.')) {
-                document.getElementById(elementId).style.display = 'none';
-                document.getElementById('hidden-hapus-lampiran').innerHTML += `<input type="hidden" name="hapus_lampiran[]" value="${filename}">`;
+                const cardEl = document.getElementById(elementId);
+                if (cardEl) {
+                    cardEl.style.display = 'none';
+                    cardEl.classList.add('ditandai-hapus');
+                }
+
+                if (!Array.isArray(window.daftarHapusLampiranSementara)) {
+                    window.daftarHapusLampiranSementara = [];
+                }
+                if (filePath && !window.daftarHapusLampiranSementara.includes(filePath)) {
+                    window.daftarHapusLampiranSementara.push(filePath);
+                }
+                if (filename && !window.daftarHapusLampiranSementara.includes(filename)) {
+                    window.daftarHapusLampiranSementara.push(filename);
+                }
+
+                const containerHapus = document.getElementById('hidden-hapus-lampiran');
+                if (containerHapus) {
+                    const inp1 = document.createElement('input');
+                    inp1.type = 'hidden';
+                    inp1.name = 'hapus_lampiran[]';
+                    inp1.value = filename;
+                    containerHapus.appendChild(inp1);
+
+                    if (filePath && filePath !== filename) {
+                        const inp2 = document.createElement('input');
+                        inp2.type = 'hidden';
+                        inp2.name = 'hapus_lampiran[]';
+                        inp2.value = filePath;
+                        containerHapus.appendChild(inp2);
+                    }
+                }
+
+                const sisaKartu = document.querySelectorAll('#daftar_lampiran_terpasang .kartu-lampiran-item:not(.ditandai-hapus)');
+                let infoKosong = document.getElementById('info-semua-lampiran-dihapus');
+                if (sisaKartu.length === 0) {
+                    if (!infoKosong) {
+                        infoKosong = document.createElement('span');
+                        infoKosong.id = 'info-semua-lampiran-dihapus';
+                        infoKosong.style.cssText = 'font-size: 12px; color: #ef4444; font-weight: 600; font-style: italic; margin-top: 5px;';
+                        infoKosong.textContent = 'Semua lampiran ditandai untuk dihapus. Klik "Simpan Perubahan" untuk menyimpan.';
+                        document.getElementById('daftar_lampiran_terpasang').appendChild(infoKosong);
+                    }
+                }
             }
         }
 
         function closeModalDetail() {
             document.getElementById('modalDetailAset').classList.remove('show');
+        }
+
+        function togglePilihSemuaAset(masterChk) {
+            const isChecked = !!masterChk.checked;
+            document.querySelectorAll('.check-item-aset').forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr && tr.style.display === 'none') return;
+                chk.checked = isChecked;
+                if (tr) tr.classList.toggle('row-checked', isChecked);
+            });
+            perbaruiStatusChecklistAset();
+        }
+
+        function perbaruiStatusChecklistAset() {
+            const semuaChk = Array.from(document.querySelectorAll('.check-item-aset'));
+            const terpilih = semuaChk.filter(chk => chk.checked);
+
+            semuaChk.forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr) tr.classList.toggle('row-checked', chk.checked);
+            });
+
+            const masterChk = document.getElementById('checkAllAset');
+            if (masterChk) {
+                masterChk.checked = semuaChk.length > 0 && terpilih.length === semuaChk.length;
+                masterChk.indeterminate = terpilih.length > 0 && terpilih.length < semuaChk.length;
+            }
+
+            const labelBtn = document.getElementById('teks-btn-hapus-checklist');
+            if (labelBtn) {
+                labelBtn.textContent = terpilih.length > 0
+                    ? `Hapus Aset (${terpilih.length} Terpilih)`
+                    : 'Hapus Aset';
+            }
+        }
+
+        async function prosesHapusAsetChecklist() {
+            const terpilih = Array.from(document.querySelectorAll('.check-item-aset:checked'));
+
+            if (terpilih.length === 0) {
+                tampilkanToastPeringatan('Pilih aset yang mau dihapus');
+                document.querySelectorAll('.aset-checkbox').forEach(chk => {
+                    chk.classList.remove('highlight-warning');
+                    void chk.offsetWidth;
+                    chk.classList.add('highlight-warning');
+                    setTimeout(() => chk.classList.remove('highlight-warning'), 1000);
+                });
+                return false;
+            }
+
+            const ids = terpilih.map(chk => chk.value);
+            const kodes = terpilih.map(chk => chk.getAttribute('data-kode') || chk.value).slice(0, 5);
+            const infoKode = kodes.join(', ') + (terpilih.length > 5 ? ', ...' : '');
+
+            if (!confirm(`Apakah Anda yakin ingin menghapus ${terpilih.length} data aset yang dipilih (${infoKode}) secara permanen?`)) {
+                return false;
+            }
+
+            if (typeof window.tampilkanLoadingPindahHalaman === 'function') {
+                window.tampilkanLoadingPindahHalaman(`Menghapus ${terpilih.length} Data Aset...`, 'Mohon tunggu, sedang menghapus data aset terpilih dari server.');
+            }
+
+            try {
+                const delUrl = new URL(window.location.href);
+                delUrl.searchParams.set('_bulk_delete_aset', String(Date.now()));
+                delUrl.searchParams.set('ids', ids.join(','));
+
+                const res = await fetch(delUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                    return;
+                }
+            } catch (err) {
+            }
+
+            const fallbackUrl = new URL(window.location.href);
+            fallbackUrl.searchParams.set('_bulk_delete_aset', '1');
+            fallbackUrl.searchParams.set('ids', ids.join(','));
+            window.location.href = fallbackUrl.toString();
         }
 
         function submitHapusAset() {
@@ -1032,9 +1887,9 @@
             if (event.target === sidebarTambah) closeSidebarTambah();
             if (event.target === modalDetail) closeModalDetail();
         }
-        
+
         function kalkulasiUrutanOtomatis() {
-            // Urut kode per cabang: nomor terakhir cabang yang dipilih + 1 (cabang belum dipilih -> 1)
+
             let cabangId = document.getElementById('pilih_cabang').value;
             document.getElementById('input_urut_kode').value = (cabangId ? (URUTAN_CABANG[cabangId] || 0) : 0) + 1;
             let itemId = document.getElementById('pilih_aset').value;
@@ -1048,16 +1903,16 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => { document.querySelectorAll('.toast-popup').forEach(el => el.classList.remove('show')); }, 2500);
-            
+
             let today = new Date();
             let yyyy = today.getFullYear();
             let mm = String(today.getMonth() + 1).padStart(2, '0');
             let dd = String(today.getDate()).padStart(2, '0');
             let todayFormat = `${yyyy}-${mm}-${dd}`;
-            
+
             let inputTglPengadaan = document.getElementById('input_tanggal_pengadaan');
-            if (inputTglPengadaan && !inputTglPengadaan.value) { 
-                inputTglPengadaan.value = todayFormat; 
+            if (inputTglPengadaan && !inputTglPengadaan.value) {
+                inputTglPengadaan.value = todayFormat;
             }
 
             let inputTanggalKode = document.getElementById('input_tanggal_kode');
@@ -1065,11 +1920,11 @@
                 inputTanggalKode.value = todayFormat;
             }
 
-            document.querySelectorAll('#form-tambah-fisik input, #form-tambah-fisik select').forEach(element => {
+            document.querySelectorAll('#form-tambah-fisik input:not([type="file"]), #form-tambah-fisik select').forEach(element => {
                 element.addEventListener('input', updateAutoGenerate);
                 element.addEventListener('change', updateAutoGenerate);
             });
-            
+
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
         });
@@ -1091,7 +1946,7 @@
             if(tanggalKodeVal) {
                 let parts = tanggalKodeVal.split('-');
                 if(parts.length === 3) {
-                    formatHariBulanTahun = parts[2] + parts[1] + parts[0]; 
+                    formatHariBulanTahun = parts[2] + parts[1] + parts[0];
                 }
             }
 
@@ -1102,13 +1957,46 @@
             document.getElementById('hasil_seri_final').value = `${awalSerial}-${urutSeri}`;
         }
 
-        function filterAsetByKategori() {
-            let selectedKatId = document.getElementById('pilih_kategori').value;
+        let MASTER_ASET_OPTIONS = null;
+
+        function ensureMasterAsetOptionsCached() {
+            if (MASTER_ASET_OPTIONS !== null) return;
             let selectAset = document.getElementById('pilih_aset');
+            MASTER_ASET_OPTIONS = [];
+            if (!selectAset) return;
             selectAset.querySelectorAll('option').forEach(option => {
                 if (option.value === "") return;
-                option.style.display = (selectedKatId === "" || option.getAttribute('data-kategori') === selectedKatId) ? "" : "none";
+                MASTER_ASET_OPTIONS.push({
+                    value: option.value,
+                    text: option.textContent,
+                    kategori: String(option.getAttribute('data-kategori') || ''),
+                    serial: option.getAttribute('data-serial') || '',
+                    urutan: parseInt(option.getAttribute('data-urutan') || '1', 10) || 1
+                });
             });
+        }
+
+        function filterAsetByKategori() {
+            ensureMasterAsetOptionsCached();
+            let selectedKatId = String(document.getElementById('pilih_kategori').value || '');
+            let selectAset = document.getElementById('pilih_aset');
+            if (!selectAset) return;
+
+            selectAset.innerHTML = '<option value="">-- Pilih Nama Aset --</option>';
+
+            let filtered = MASTER_ASET_OPTIONS.filter(item => selectedKatId === "" || item.kategori === selectedKatId);
+            filtered.sort((a, b) => a.urutan - b.urutan);
+
+            filtered.forEach(item => {
+                let opt = document.createElement('option');
+                opt.value = item.value;
+                opt.textContent = item.text;
+                opt.setAttribute('data-kategori', item.kategori);
+                opt.setAttribute('data-serial', item.serial);
+                opt.setAttribute('data-urutan', String(item.urutan));
+                selectAset.appendChild(opt);
+            });
+
             selectAset.value = "";
         }
 
@@ -1123,15 +2011,384 @@
         function closeModalImport() {
             document.getElementById('modalImportExcel').classList.remove('show');
         }
-        
+
         let originalWindowClick = window.onclick;
         window.onclick = function(event) {
             if(originalWindowClick) originalWindowClick(event);
-            
+
             let modalImport = document.getElementById('modalImportExcel');
             if (event.target === modalImport) closeModalImport();
         }
+
+        const BATAS_MAKS_LAMPIRAN_BYTES = 5 * 1024 * 1024;
+        const EKSTENSI_LAMPIRAN_DIIZINKAN = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
+        const MIME_LAMPIRAN_DIIZINKAN = [
+            'image/jpeg',
+            'image/jpg',
+            'image/pjpeg',
+            'image/png',
+            'image/x-png',
+            'application/pdf',
+            'application/x-pdf',
+            'application/msword',
+            'application/vnd.ms-word',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-word.document.macroenabled.12',
+            'application/vnd.ms-excel',
+            'application/msexcel',
+            'application/x-msexcel',
+            'application/x-ms-excel',
+            'application/x-excel',
+            'application/x-dos_ms_excel',
+            'application/xls',
+            'application/x-xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel.sheet.macroenabled.12',
+            'application/octet-stream'
+        ];
+
+        function ambilEkstensiLampiran(namaFile) {
+            const nama = String(namaFile || '').trim();
+            const idx = nama.lastIndexOf('.');
+            if (idx <= 0 || idx === nama.length - 1) return '';
+            return nama.slice(idx + 1).toLowerCase();
+        }
+
+        function apakahFormatLampiranValid(file) {
+            if (!file || !file.name) return false;
+            const ext = ambilEkstensiLampiran(file.name);
+            if (!EKSTENSI_LAMPIRAN_DIIZINKAN.includes(ext)) {
+                return false;
+            }
+            const mime = String(file.type || '').toLowerCase().trim();
+            if (mime !== '') {
+                if (['jpg', 'jpeg'].includes(ext) && !['image/jpeg', 'image/jpg', 'image/pjpeg'].includes(mime)) {
+                    return false;
+                }
+                if (ext === 'png' && !['image/png', 'image/x-png'].includes(mime)) {
+                    return false;
+                }
+                if (ext === 'pdf' && !['application/pdf', 'application/x-pdf'].includes(mime)) {
+                    return false;
+                }
+                if (!MIME_LAMPIRAN_DIIZINKAN.includes(mime)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function tampilkanToastPeringatan(pesan) {
+            let existing = document.getElementById('toast-lampiran-error');
+            if (existing) existing.remove();
+
+            let toast = document.createElement('div');
+            toast.id = 'toast-lampiran-error';
+            toast.className = 'toast-popup toast-error show';
+            toast.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>${pesan}</span>`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 500);
+            }, 3500);
+        }
+
+        document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.backgroundColor = el.getAttribute('data-bg'); });
+        window.DATA_META_LAMPIRAN = JSON.parse(document.getElementById('json-meta-lampiran').value || '{}');
+
+        function formatUkuranFileJS(bytes) {
+            const b = Number(bytes) || 0;
+            if (b <= 0) return '0 KB';
+            if (b >= 1048576) {
+                return (b / 1048576).toFixed(2).replace('.', ',') + ' MB';
+            }
+            return Math.max(b / 1024, 0.1).toFixed(1).replace('.', ',') + ' KB';
+        }
+
+        function ambilTanggalDeviceIndo(fullMonth = false) {
+            const d = new Date();
+            return d.toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: fullMonth ? 'long' : 'short',
+                year: 'numeric'
+            });
+        }
+
+        async function muatUkuranLampiranOtomatis(filename, ukuranElemId, tglElemId, perluUpdateTgl) {
+            try {
+                const res = await fetch('/masteradmin/view-lampiran/' + encodeURIComponent(filename), {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const szBytes = blob.size || 0;
+                const szText = formatUkuranFileJS(szBytes);
+
+                const ukEl = document.getElementById(ukuranElemId);
+                if (ukEl && szBytes > 0) {
+                    ukEl.textContent = 'Ukuran: ' + szText;
+                }
+
+                let tglBaru = '';
+                const lastMod = res.headers.get('Last-Modified');
+                if (perluUpdateTgl && lastMod) {
+                    const dMod = new Date(lastMod);
+                    if (!isNaN(dMod.getTime())) {
+                        tglBaru = dMod.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+                        const tglEl = document.getElementById(tglElemId);
+                        if (tglEl) {
+                            tglEl.textContent = 'Diunggah: ' + tglBaru;
+                        }
+                    }
+                }
+
+                if (!window.DATA_META_LAMPIRAN) window.DATA_META_LAMPIRAN = {};
+                window.DATA_META_LAMPIRAN[filename] = {
+                    tgl: tglBaru || (window.DATA_META_LAMPIRAN[filename]?.tgl || ambilTanggalDeviceIndo()),
+                    size: szText,
+                    size_bytes: szBytes
+                };
+
+                const cacheUrl = new URL(window.location.href);
+                cacheUrl.searchParams.set('_cache_lampiran_info', '1');
+                cacheUrl.searchParams.set('filename', filename);
+                cacheUrl.searchParams.set('size_bytes', String(szBytes));
+                cacheUrl.searchParams.set('size_text', szText);
+                if (tglBaru) cacheUrl.searchParams.set('tgl_upload', tglBaru);
+                fetch(cacheUrl.toString(), { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+            } catch (err) {
+            }
+        }
+
+        async function kirimSinkronisasiLampiranKeServer(payload) {
+            try {
+                const syncUrl = new URL(window.location.href);
+                syncUrl.searchParams.set('_sync_lampiran_meta', String(Date.now()));
+                syncUrl.searchParams.set('payload', JSON.stringify(payload));
+                const res = await fetch(syncUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return !!data.success;
+                }
+            } catch (err) {
+            }
+            return false;
+        }
+
+        function validasiUkuranLampiran(inputEl, infoId, resetPaksa) {
+            if (!inputEl || !inputEl.files) return true;
+            const infoEl = infoId ? document.getElementById(infoId) : null;
+            const files = Array.from(inputEl.files);
+
+            if (files.length === 0) {
+                if (!resetPaksa && inputEl.dataset.statusLampiranError === '1') {
+                    return false;
+                }
+                inputEl.dataset.statusLampiranError = '0';
+                if (infoEl) {
+                    infoEl.style.color = 'var(--text-muted)';
+                    infoEl.style.fontWeight = '400';
+                    infoEl.innerText = 'Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).';
+                }
+                inputEl.style.borderColor = '#cbd5e1';
+                return true;
+            }
+
+            const fileFormatSalah = [];
+            const fileMelebihi = [];
+            const fileValid = [];
+
+            files.forEach(file => {
+                if (!apakahFormatLampiranValid(file)) {
+                    const ext = ambilEkstensiLampiran(file.name);
+                    fileFormatSalah.push(ext ? `${file.name} (.${ext.toUpperCase()})` : file.name);
+                } else if (file.size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                    const ukuranMB = (file.size / (1024 * 1024)).toFixed(2);
+                    fileMelebihi.push(`${file.name} (${ukuranMB} MB)`);
+                } else {
+                    fileValid.push(file);
+                }
+            });
+
+            if (fileFormatSalah.length > 0 || fileMelebihi.length > 0) {
+                inputEl.dataset.statusLampiranError = '1';
+                inputEl.value = '';
+                if (typeof DataTransfer !== 'undefined') {
+                    try {
+                        inputEl.files = (new DataTransfer()).files;
+                    } catch (err) {}
+                }
+
+                const pesanList = [];
+                if (fileFormatSalah.length > 0) {
+                    pesanList.push(`Format file tidak sesuai! Hanya diizinkan JPG, PNG, PDF, DOC, dan XLS. Ditolak: ${fileFormatSalah.join(', ')}`);
+                }
+                if (fileMelebihi.length > 0) {
+                    pesanList.push(`Ukuran file melebihi batas maksimal 5 MB: ${fileMelebihi.join(', ')}`);
+                }
+
+                const pesanErrorGabungan = pesanList.join(' | ');
+                tampilkanToastPeringatan(pesanErrorGabungan);
+
+                if (infoEl) {
+                    infoEl.style.color = 'var(--danger-color)';
+                    infoEl.style.fontWeight = '700';
+                    if (fileFormatSalah.length > 0 && fileMelebihi.length > 0) {
+                        infoEl.innerText = `Ditolak (Format salah: ${fileFormatSalah.join(', ')} & Ukuran > 5 MB: ${fileMelebihi.join(', ')})`;
+                    } else if (fileFormatSalah.length > 0) {
+                        infoEl.innerText = `Format tidak sesuai (Wajib JPG, PNG, PDF, DOC, XLS): ${fileFormatSalah.join(', ')} gagal diunggah.`;
+                    } else {
+                        infoEl.innerText = `Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
+                    }
+                }
+                inputEl.style.borderColor = 'var(--danger-color)';
+                return false;
+            }
+
+            inputEl.dataset.statusLampiranError = '0';
+            if (infoEl) {
+                const tglDevice = ambilTanggalDeviceIndo();
+                const rincianFile = fileValid.map(f => `${f.name} (${formatUkuranFileJS(f.size)})`).join(', ');
+                infoEl.style.color = 'var(--secondary-color)';
+                infoEl.style.fontWeight = '600';
+                infoEl.innerText = `${fileValid.length} file siap diunggah: ${rincianFile} — Tanggal Upload: ${tglDevice}`;
+            }
+            inputEl.style.borderColor = 'var(--secondary-color)';
+            return true;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+
+            const tglDevicePenuh = ambilTanggalDeviceIndo(true);
+            document.querySelectorAll('.label-tanggal-device').forEach(el => {
+                el.textContent = tglDevicePenuh;
+            });
+
+            ['input_lampiran_tambah', 'input_lampiran_edit'].forEach(function(idInput) {
+                const elInput = document.getElementById(idInput);
+                const idInfo = idInput === 'input_lampiran_tambah' ? 'info_ukuran_lampiran_tambah' : 'info_ukuran_lampiran_edit';
+                if (elInput) {
+                    elInput.addEventListener('click', function() {
+                        elInput.dataset.statusLampiranError = '0';
+                    });
+                    elInput.addEventListener('drop', function() {
+                        elInput.dataset.statusLampiranError = '0';
+                        setTimeout(() => validasiUkuranLampiran(elInput, idInfo), 10);
+                    });
+                }
+            });
+
+            const formTambahFisik = document.getElementById('form-tambah-fisik');
+            if (formTambahFisik) {
+                formTambahFisik.addEventListener('submit', async function(e) {
+                    if (formTambahFisik.dataset.lampiranSynced === '1') {
+                        return true;
+                    }
+                    const inputTambah = document.getElementById('input_lampiran_tambah');
+                    const filesBaru = (inputTambah && inputTambah.files) ? Array.from(inputTambah.files) : [];
+                    if (filesBaru.length > 0) {
+                        for (let i = 0; i < filesBaru.length; i++) {
+                            if (!apakahFormatLampiranValid(filesBaru[i]) || filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                                e.preventDefault();
+                                validasiUkuranLampiran(inputTambah, 'info_ukuran_lampiran_tambah');
+                                return false;
+                            }
+                        }
+                        e.preventDefault();
+                        const tglDevice = ambilTanggalDeviceIndo();
+                        await kirimSinkronisasiLampiranKeServer({
+                            mode: 'tambah',
+                            kode_aset: document.getElementById('hasil_kode_final')?.value || '',
+                            device_date: tglDevice,
+                            new_files: filesBaru.map(f => ({
+                                name: f.name,
+                                size_bytes: f.size,
+                                size_text: formatUkuranFileJS(f.size),
+                                tgl_upload: tglDevice
+                            }))
+                        });
+                        formTambahFisik.dataset.lampiranSynced = '1';
+                        formTambahFisik.submit();
+                        return false;
+                    }
+                });
+            }
+
+            const formEditFisik = document.getElementById('form-edit-fisik');
+            if (formEditFisik) {
+                formEditFisik.addEventListener('submit', async function(e) {
+                    if (formEditFisik.dataset.lampiranSynced === '1') {
+                        return true;
+                    }
+                    const inputEdit = document.getElementById('input_lampiran_edit');
+                    const filesBaru = (inputEdit && inputEdit.files) ? Array.from(inputEdit.files) : [];
+                    if (filesBaru.length > 0) {
+                        for (let i = 0; i < filesBaru.length; i++) {
+                            if (!apakahFormatLampiranValid(filesBaru[i]) || filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                                e.preventDefault();
+                                validasiUkuranLampiran(inputEdit, 'info_ukuran_lampiran_edit');
+                                return false;
+                            }
+                        }
+                    }
+
+                    const hapusList = Array.isArray(window.daftarHapusLampiranSementara) ? window.daftarHapusLampiranSementara : [];
+                    if (hapusList.length > 0 || filesBaru.length > 0) {
+                        e.preventDefault();
+                        const tglDevice = ambilTanggalDeviceIndo();
+                        const idAsetEdit = currentAsetData ? (currentAsetData.aset_id || currentAsetData.id) : '';
+                        await kirimSinkronisasiLampiranKeServer({
+                            mode: 'edit',
+                            aset_id: idAsetEdit,
+                            kode_aset: document.getElementById('edit_kode_aset')?.value || '',
+                            hapus_list: hapusList,
+                            device_date: tglDevice,
+                            new_files: filesBaru.map(f => ({
+                                name: f.name,
+                                size_bytes: f.size,
+                                size_text: formatUkuranFileJS(f.size),
+                                tgl_upload: tglDevice
+                            }))
+                        });
+                        formEditFisik.dataset.lampiranSynced = '1';
+                        formEditFisik.submit();
+                        return false;
+                    }
+                });
+            }
+        });
     </script>
 
+    <script>
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 82;
+                    mainEl.style.setProperty('padding-top', (tinggi + 24) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+        })();
+    </script>
 </body>
 </html>

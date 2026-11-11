@@ -8,7 +8,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
         body { background-color: #f8fafc; display: flex; height: 100vh; overflow: hidden; }
-        
+
         .content-container {
             margin-left: 270px;
             flex-grow: 1;
@@ -31,7 +31,7 @@
 
         h1 { color: #1a4f91; font-size: 28px; margin-bottom: 10px; }
         p { color: #64748b; font-size: 15px; margin-bottom: 25px; line-height: 1.5; }
-        
+
         .btn-back {
             display: inline-block;
             padding: 10px 20px;
@@ -46,7 +46,7 @@
     </style>
 </head>
 <body>
-    <!-- Memanggil sidebar yang sudah dipisah -->
+
     @include('layouts.mastersidebar')
 
     <div class="content-container">

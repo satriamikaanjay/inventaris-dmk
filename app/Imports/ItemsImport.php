@@ -13,7 +13,7 @@ class ItemsImport implements ToModel, WithStartRow, WithCalculatedFormulas
 {
     public function startRow(): int
     {
-        return 2; // Mulai dari baris ke-2 (melewati header)
+        return 2;
     }
 
     private function transformDate($value)

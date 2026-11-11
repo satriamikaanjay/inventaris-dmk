@@ -10,22 +10,20 @@ use Illuminate\Http\Request;
 
 class NotifikasiController extends Controller
 {
-    private const BATAS_WAKTUNYA  = 7;    // 0 - 7 hari lagi (Mendesak)
-    private const BATAS_MENDEKATI = 30;   // 8 - 30 hari lagi (Mendekati)
+    private const BATAS_WAKTUNYA  = 7;
+    private const BATAS_MENDEKATI = 30;
     private const PER_HALAMAN     = 20;
 
     public function index(Request $request)
     {
         $hariIni = Carbon::today();
 
-        // Tambahkan 'rusak' ke dalam opsi tipe yang valid
         $tipe = in_array($request->query('tipe'), ['terlewat', 'waktunya', 'mendekati', 'rusak'], true)
             ? $request->query('tipe')
             : 'semua';
 
         $dasar = $this->queryDasar($request);
 
-        // Hitung total untuk kelima kartu di atas
         $hitung = [];
         foreach (['semua', 'terlewat', 'waktunya', 'mendekati', 'rusak'] as $jenis) {
             $hitung[$jenis] = $this->rentang($dasar, $jenis, $hariIni)->count();
@@ -38,7 +36,6 @@ class NotifikasiController extends Controller
             ->paginate(self::PER_HALAMAN)
             ->withQueryString();
 
-        // Pisahkan logika penentuan status "Servis" dan "Rusak"
         $notifs->getCollection()->transform(function ($aset) use ($hariIni) {
             $selisih = null;
             $jenis_servis = null;
@@ -57,7 +54,6 @@ class NotifikasiController extends Controller
             $aset->selisih = $selisih;
             $aset->jenis_servis = $jenis_servis;
             
-            // Tandai jika kata "Rusak" ada di status_aset
             $aset->is_rusak = stripos($aset->status_aset, 'Rusak') !== false;
 
             return $aset;
@@ -70,13 +66,12 @@ class NotifikasiController extends Controller
             'cabangs'  => Cabang::orderBy('nama_cabang')->get(),
             'hariIni'  => $hariIni,
             'batas'    => ['waktunya' => self::BATAS_WAKTUNYA, 'mendekati' => self::BATAS_MENDEKATI],
-            'statuses' => StatusAset::all(), // Kirim data warna ke view
+            'statuses' => StatusAset::all(),
         ]);
     }
 
     private function queryDasar(Request $request)
     {
-        // Hilangkan whereNotNull karena aset rusak mungkin belum punya jadwal servis
         $query = DetailAset::query();
 
         if ($request->filled('cabang')) {
@@ -110,7 +105,6 @@ class NotifikasiController extends Controller
             'mendekati' => $q->whereNotNull('servis_berikutnya')->where('servis_berikutnya', '>', $waktunya)->where('servis_berikutnya', '<=', $mendekati),
             'rusak'     => $q->where('status_aset', 'like', '%Rusak%'),
             default     => $q->where(function ($sub) use ($hari, $mendekati) {
-                // Tampilkan jika Servis <= mendekati ATAU berstatus Rusak
                 $sub->where(function ($s1) use ($mendekati) {
                     $s1->whereNotNull('servis_berikutnya')
                        ->where('servis_berikutnya', '<=', $mendekati);

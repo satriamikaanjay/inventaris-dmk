@@ -6,9 +6,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
 public function up(): void
 {
     Schema::table('detail_aset', function (Blueprint $table) {
@@ -23,6 +20,5 @@ public function up(): void
 
 public function down(): void
 {
-    // opsional
 }
 };

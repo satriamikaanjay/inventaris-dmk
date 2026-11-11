@@ -4,14 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes; // Tambahkan ini
-
+use Illuminate\Database\Eloquent\SoftDeletes;
 class RiwayatAktivitas extends Model
 {
-    use HasFactory, SoftDeletes; // Tambahkan SoftDeletes di sini
-
-    protected $table = 'riwayat_aktivitas'; // Sesuaikan dengan nama tabel Anda
-
+    use HasFactory, SoftDeletes;
+    protected $table = 'riwayat_aktivitas';
     protected $fillable = [
         'user_id',
         'aktivitas',
@@ -19,7 +16,6 @@ class RiwayatAktivitas extends Model
         'status',
     ];
 
-    // Relasi ke User
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');

@@ -6,14 +6,11 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
 {
     Schema::table('detail_aset', function (Blueprint $table) {
         $table->dropUnique('aset_kode_aset_unique');
-        $table->index('kode_aset'); // tetap cepat saat dicari
+        $table->index('kode_aset');
     });
 }
 

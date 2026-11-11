@@ -11,15 +11,13 @@ class DetailAset extends Model
 
     protected $table = 'detail_aset';
     
-    // Beri tahu Laravel bahwa primary key-nya adalah aset_id, bukan id
     protected $primaryKey = 'aset_id'; 
 
-    // Masukkan semua field panjang Anda di sini
     protected $fillable = [
         'item_id', 
         'kode_aset',
         'kategori_id',
-        'cabang_id', // INI YANG SEBELUMNYA TERTINGGAL
+        'cabang_id',
         'merk',
         'nomor_seri',
         'unit',
@@ -46,19 +44,16 @@ class DetailAset extends Model
         'lampiran',
     ];
 
-    // Relasi kembali ke Master Item
     public function item()
     {
         return $this->belongsTo(Item::class, 'item_id');
     }
 
-    // Relasi ke Kategori
     public function kategori()
     {
         return $this->belongsTo(Kategori::class, 'kategori_id');
     }
 
-    // Relasi ke Cabang
     public function cabang()
     {
         return $this->belongsTo(Cabang::class, 'cabang_id');

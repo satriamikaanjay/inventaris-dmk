@@ -422,7 +422,7 @@
         @endif
 
         <div class="layout-grid">
-            <!-- Form tambah cabang -->
+
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Cabang Baru</h2>
                 <form action="{{ route('cabang.store') }}" method="POST">
@@ -437,7 +437,6 @@
                 </form>
             </div>
 
-            <!-- Daftar cabang -->
             <div class="card-box">
                 <h2 class="section-title">Daftar Cabang Tersimpan</h2>
                 <div class="category-chips" style="flex-direction: row; flex-wrap: wrap;">

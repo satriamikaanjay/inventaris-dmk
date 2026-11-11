@@ -6,7 +6,7 @@
   	<title>Dashboard Master Admin</title>
   	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
   	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
-  	
+
   	<style>
     		:root {
       			--primary-color: #1a4f91;
@@ -34,7 +34,6 @@
       			overflow-x: hidden;
     		}
 
-    		/* Sidebar Layout */
     		sidebar {
       			width: var(--sidebar-width);
       			background-color: #ffffff;
@@ -156,7 +155,6 @@
       			color: var(--text-muted);
     		}
 
-    		/* Main Content Layout */
     		main {
       			margin-left: var(--sidebar-width);
       			flex-grow: 1;
@@ -418,12 +416,10 @@
 </head>
 <body>
 
-  	<!-- Sidebar Navigation -->
   	@include('layouts.mastersidebar')
 
-  	<!-- Main Wrapper -->
   	<main>
-        <!-- CSS Tambahan Khusus Dashboard Ini -->
+
         <style>
             .custom-scroll::-webkit-scrollbar { width: 6px; }
             .custom-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -439,11 +435,8 @@
             </div>
         </header>
 
-        <!-- ========================================== -->
-        <!-- BARIS 1: KOTAK ANGKA RINGKASAN (KPI CARDS) -->
-        <!-- ========================================== -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-top: 15px; margin-bottom: 25px;">
-            
+
             <div style="background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
                 <div style="font-size: 12px; color: #64748b; font-weight: 600; margin-bottom: 8px;">Total Pengguna</div>
                 <div style="font-size: 26px; font-weight: 800; color: #1e293b; line-height: 1;">{{ $totalPengguna }}</div>
@@ -476,12 +469,8 @@
 
         </div>
 
-        <!-- ========================================== -->
-        <!-- BARIS 2: PANEL RINCIAN DAFTAR -->
-        <!-- ========================================== -->
         <div class="dashboard-panels" style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; align-items: start;">
-            
-            <!-- PANEL KIRI: Tabel Distribusi Cabang -->
+
             <div style="background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden;">
                 <div style="padding: 18px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #1e293b; font-size: 14px;">
                     Distribusi Aset per Cabang
@@ -500,12 +489,10 @@
                 </div>
             </div>
 
-            <!-- PANEL KANAN: Daftar Aset Rusak -->
             <div style="background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden;">
                 <div style="padding: 18px 20px; background: #fef2f2; border-bottom: 1px solid #fecaca; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                     <span style="font-weight: 700; color: #b91c1c; font-size: 14px;">Detail Aset Perlu Servis / Rusak</span>
-                    
-                    <!-- DROPDOWN PILIH CABANG -->
+
                     <select id="selectCabangRusak" onchange="filterCabangRusak(this.value)" style="padding: 6px 12px; border: 1px solid #fca5a5; border-radius: 8px; font-size: 12px; font-weight: 600; background: #fff; color: #b91c1c; outline: none; cursor: pointer;">
                         <option value="semua">-- Tampilkan Semua Cabang ({{ $totalMendekatiServis }}) --</option>
                         @foreach($servisDetail as $namaCabang => $daftarAset)
@@ -513,18 +500,18 @@
                         @endforeach
                     </select>
                 </div>
-                
+
                 <div class="custom-scroll" style="max-height: 450px; overflow-y: auto; padding: 25px;">
-                    
+
                     @forelse($servisDetail as $namaCabang => $daftarAset)
-                    <!-- Setiap blok cabang diberi ID berbasis slug agar bisa difilter oleh dropdown -->
+
                     <div class="cabang-rusak-item" data-cabang="{{ Str::slug($namaCabang) }}" style="margin-bottom: 25px;">
-                        
+
                         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 12px;">
                             <strong style="color: #0f172a; font-size: 14px;">🏢 {{ $namaCabang }}</strong>
                             <span style="background: #fee2e2; color: #ef4444; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;">{{ count($daftarAset) }} Aset</span>
                         </div>
-                        
+
                         <ul style="list-style: none; padding: 0; margin: 0;">
                             @foreach($daftarAset as $infoAset)
                             <li style="padding: 10px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; color: #475569; position: relative; padding-left: 18px;">
@@ -553,8 +540,7 @@
 <script>
     function updateClock() {
         const now = new Date();
-        
-        // Daftar nama hari dan bulan dalam bahasa Indonesia
+
         const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
 
@@ -567,17 +553,13 @@
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
 
-        // Gabungkan formatnya (bisa ditambah detik jika mau: ${seconds})
         const currentTime = `${dayName}, ${date} ${monthName} ${year} ${hours}:${minutes}:${seconds} WIB`;
 
-        // Masukkan ke dalam elemen HTML
         document.getElementById('live-clock').innerText = currentTime;
     }
 
-    // Jalankan fungsi saat halaman pertama kali dimuat
     updateClock();
 
-    // Perbarui setiap 1 detik agar jamnya terus bergerak
     setInterval(updateClock, 1000);
 </script>
 
