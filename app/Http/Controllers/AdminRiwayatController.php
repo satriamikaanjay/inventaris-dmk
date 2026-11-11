@@ -3,8 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\RiwayatAktivitas; // Sesuaikan dengan nama model log Anda
-
+use App\Models\RiwayatAktivitas;
 class AdminRiwayatController extends Controller
 {
     public function index(Request $request)
@@ -23,7 +22,7 @@ class AdminRiwayatController extends Controller
         $riwayats = $query->paginate(15)->withQueryString();
         $tahunList = RiwayatAktivitas::selectRaw('YEAR(created_at) as tahun')->distinct()->pluck('tahun');
 
-        return view('riwayat_aktivitas', compact('riwayats', 'tahunList'));
+        return view('admin.riwayat', compact('riwayats', 'tahunList'));
     }
 
     public function clear()

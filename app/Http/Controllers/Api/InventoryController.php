@@ -10,7 +10,6 @@ use App\Models\Cabang;
 
 class InventoryController extends Controller
 {
-    // 1. DATA INVENTARIS & DETAIL BARANG
     public function index()
     {
         try {
@@ -18,18 +17,16 @@ class InventoryController extends Controller
             
             $mappedAset = $asetList->map(function ($data) {
                 return [
-                    // INI HARUS SAMA PERSIS DENGAN @SerializedName DI ANDROID
-                    'id'                => $data->aset_id, // Android minta "id", bukan "aset_id"
+                    'id'                => $data->aset_id,
                     'kode_aset'         => $data->kode_aset,
                     'nama_aset'         => $data->item ? $data->item->nama_aset : '-',
                     'kategori'          => $data->kategori ? $data->kategori->nama_kategori : '-',
                     'kategori_id'       => $data->kategori_id,
                     'status'            => $data->status_aset,
                     'status_raw'        => $data->status_aset,
-                    'lokasi'            => $data->lokasi_saat_ini ?: ($data->Ruangan ?: '-'), // Menjawab detail lokasi yang kosong
+                    'lokasi'            => $data->lokasi_saat_ini ?: ($data->Ruangan ?: '-'),
                     'unit'              => $data->unit ?: 0,
                     
-                    // Menggabungkan merk dan nomor seri untuk mengisi kolom "spesifikasi"
                     'spesifikasi'       => ($data->merk ?: '-') . ' | Seri: ' . ($data->nomor_seri ?: '-'),
                     'merk'              => $data->merk ?: '-',
                     'nomor_seri'        => $data->nomor_seri ?: '-',
@@ -45,7 +42,7 @@ class InventoryController extends Controller
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Data berhasil diambil',
-                'total'   => $mappedAset->count(), // Menyesuaikan InventoryListResponse
+                'total'   => $mappedAset->count(),
                 'data'    => $mappedAset
             ], 200);
 
@@ -59,11 +56,9 @@ class InventoryController extends Controller
         }
     }
 
-    // 2. DATA FILTER KATEGORI
     public function categories()
     {
         try {
-            // Android meminta List<CategoryItem> yang punya id dan nama_kategori
             $kategori = Kategori::select('id', 'nama_kategori')->get();
             
             return response()->json([
@@ -76,11 +71,9 @@ class InventoryController extends Controller
         }
     }
 
-    // 3. DATA FILTER CABANG
     public function branches()
     {
         try {
-            // Android meminta List<BranchItem> yang punya id dan nama_cabang
             $cabang = Cabang::select('id', 'nama_cabang')->get();
             
             return response()->json([

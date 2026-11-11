@@ -1,5 +1,5 @@
-<?php
-    /* RIWAYAT_REALTIME_SCOPED_V2 */
+@php
+
     $__userLoginRiwayat = \Illuminate\Support\Facades\Auth::user();
     $__userIdRiwayat = \Illuminate\Support\Facades\Auth::id();
     $__roleUserRiwayat = $__userLoginRiwayat
@@ -14,13 +14,9 @@
         session(['active_sidebar_panel' => 'admin']);
     }
 
-    // Fungsi pembantu untuk membangun query RiwayatAktivitas sesuai hak akses role & filter aktif
     $__buildRiwayatQuery = function () use ($__isMasterAdminRiwayat, $__userIdRiwayat) {
         $q = \App\Models\RiwayatAktivitas::with('user');
 
-        // ATURAN PRIVASI ROLE:
-        // - Jika Admin (bukan Master Admin): HANYA tampilkan riwayat milik akun Admin itu sendiri!
-        // - Jika Master Admin: Tampilkan seluruh riwayat (Master Admin + seluruh Admin lainnya + Sistem).
         if (!$__isMasterAdminRiwayat) {
             $q->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
         }
@@ -87,7 +83,6 @@
         return $q->orderByDesc('created_at')->orderByDesc('id');
     };
 
-    // 1. Endpoint AJAX: Bersihkan Log sesuai scope Role (tanpa reload halaman)
     if (request()->has('_clear_riwayat_scoped')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -115,7 +110,6 @@
         exit;
     }
 
-    // 2. Endpoint AJAX Polling Real-Time (Sisi Admin & Master Admin tanpa refresh web)
     if (request()->has('_poll_riwayat_realtime')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -150,7 +144,6 @@
                 ];
             }
 
-            // Ambil juga daftar seluruh ID riwayat sesuai scope role untuk sinkronisasi badge sidebar
             $allIdsQuery = \App\Models\RiwayatAktivitas::query();
             if (!$__isMasterAdminRiwayat) {
                 $allIdsQuery->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
@@ -173,7 +166,6 @@
         exit;
     }
 
-    // 3. Timpa variabel $riwayats dan $tahunList agar halaman awal wajib mengikuti aturan Role Scope
     try {
         $riwayats = $__buildRiwayatQuery()->paginate(15)->withQueryString();
 
@@ -195,39 +187,16 @@
     } catch (\Throwable $e) {
     }
 
-    // Sinkronkan otomatis ke file riwayat.blade.php lain jika project memisahkan folder views/admin & views/masteradmin
-    try {
-        $__currentRiwayatFile = __FILE__;
-        $__kandidatRiwayatFiles = [
-            resource_path('views/riwayat.blade.php'),
-            resource_path('views/admin/riwayat.blade.php'),
-            resource_path('views/masteradmin/riwayat.blade.php'),
-        ];
-        if (is_file($__currentRiwayatFile)) {
-            $__isiRiwayatIni = (string) file_get_contents($__currentRiwayatFile);
-            if (str_contains($__isiRiwayatIni, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
-                foreach ($__kandidatRiwayatFiles as $__targetRFile) {
-                    if (is_file($__targetRFile) && is_writable($__targetRFile) && realpath($__targetRFile) !== realpath($__currentRiwayatFile)) {
-                        $__isiTargetR = (string) file_get_contents($__targetRFile);
-                        if (!str_contains($__isiTargetR, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
-                            file_put_contents($__targetRFile, $__isiRiwayatIni);
-                        }
-                    }
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-    }
-?>
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Riwayat Aktivitas - Sistem <?php echo e($__isMasterAdminRiwayat ? 'Master Admin' : 'Admin'); ?></title>
+    <title>Riwayat Aktivitas - Sistem {{ $__isMasterAdminRiwayat ? 'Master Admin' : 'Admin' }}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
-    
+
     <style>
         :root {
             --primary-color: #1a4f91;
@@ -256,7 +225,6 @@
             overflow-x: hidden;
         }
 
-        /* Main Content Layout */
         main {
             margin-left: var(--sidebar-width);
             flex-grow: 1;
@@ -268,7 +236,6 @@
             width: calc(100% - var(--sidebar-width));
         }
 
-        /* ===== NAVBAR / HEADER FIXED BESERTA FITUR SEARCH DI DALAMNYA ===== */
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -354,7 +321,6 @@
             opacity: 0.9;
         }
 
-        /* Banner Informasi Scope & Indikator Real-Time */
         .scope-banner {
             display: flex;
             justify-content: space-between;
@@ -408,7 +374,6 @@
             100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
-        /* Table Section Styles */
         .card-box {
             background: #fff;
             padding: 20px;
@@ -491,7 +456,6 @@
             border-bottom: none;
         }
 
-        /* Warna Baris Berbeda untuk Riwayat Baru (Otomatis Menghilang Setelah Terbaca) */
         .riwayat-row {
             background-color: transparent;
             transition: background-color 1s ease;
@@ -611,7 +575,6 @@
             }
         }
 
-        /* ===== PAGINASI ===== */
         .custom-pagination-wrap { margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border-color); }
         .custom-pagination-wrap nav > div:first-child { display: none !important; }
         .custom-pagination-wrap nav > div:last-child { display: flex !important; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; width: 100%; }
@@ -628,16 +591,14 @@
 </head>
 <body>
 
-    <!-- Sidebar Navigation (Otomatis menyesuaikan Master Admin atau Admin) -->
-    <?php if($__isMasterAdminRiwayat): ?>
-        <?php echo $__env->make('layouts.mastersidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-    <?php else: ?>
-        <?php echo $__env->make('layouts.adminsidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-    <?php endif; ?>
+    @if($__isMasterAdminRiwayat)
+        @include('layouts.mastersidebar')
+    @else
+        @include('layouts.adminsidebar')
+    @endif
 
-    <!-- Main Content Layout -->
     <main>
-        <!-- NAVBAR FIXED (BERISI JUDUL HALAMAN, TOMBOL AKSI, SERTA FITUR SEARCH & FILTER) -->
+
         <header class="main-header" id="navbar-riwayat-fixed">
             <div class="navbar-top-row">
                 <div class="header-title">
@@ -649,97 +610,93 @@
                         <span>Riwayat Aktivitas</span>
                     </h1>
                     <p>
-                        <?php if($__isMasterAdminRiwayat): ?>
+                        @if($__isMasterAdminRiwayat)
                             Pantau seluruh catatan log aktivitas dari Master Admin dan seluruh Admin secara real-time
-                        <?php else: ?>
+                        @else
                             Pantau catatan log aktivitas pribadi Anda secara real-time
-                        <?php endif; ?>
+                        @endif
                     </p>
                 </div>
                 <div class="header-actions" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <div class="rt-live-pill" title="Tabel ini otomatis memperbarui data tanpa perlu refresh halaman">
                         <span class="rt-live-dot"></span>
-                        <span>Live Real-Time (<span id="label-jumlah-riwayat"><?php echo e(method_exists($riwayats, 'total') ? $riwayats->total() : $riwayats->count()); ?></span> log)</span>
+                        <span>Live Real-Time (<span id="label-jumlah-riwayat">{{ method_exists($riwayats, 'total') ? $riwayats->total() : $riwayats->count() }}</span> log)</span>
                     </div>
-                    <form id="form-clear-riwayat" action="<?php echo e(route('riwayat_aktivitas.clear')); ?>" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
-                        <?php echo csrf_field(); ?>
-                        <?php echo method_field('DELETE'); ?>
+                    <button type="button" class="btn" id="btn-baca-semua-riwayat" onclick="prosesBacaSemuaRiwayat()" style="background: #10b981; color: #ffffff; border: 1px solid #059669; font-weight: 700;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>Baca Semua</span>
+                        <span id="badge-btn-baca-semua" style="display: none; background: #ffffff; color: #059669; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-left: 2px;">0</span>
+                    </button>
+                    <form id="form-clear-riwayat" action="{{ route('riwayat_aktivitas.clear') }}" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
+                        @csrf
+                        @method('DELETE')
                         <button type="submit" class="btn btn-danger-soft" id="btn-bersihkan-log" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; font-weight: 700;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                            <span><?php echo e($__isMasterAdminRiwayat ? 'Bersihkan Semua Log' : 'Bersihkan Log Saya'); ?></span>
+                            <span>{{ $__isMasterAdminRiwayat ? 'Bersihkan Semua Log' : 'Bersihkan Log Saya' }}</span>
                         </button>
                     </form>
                 </div>
             </div>
 
-            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
             <div class="navbar-search-row">
-                <form method="GET" action="<?php echo e(url()->current()); ?>" class="filter-form" id="form-filter-riwayat">
+                <form method="GET" action="{{ url()->current() }}" class="filter-form" id="form-filter-riwayat">
                     <div class="search-box">
                         <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); flex-shrink: 0;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                        <input type="text" id="input-search-riwayat" name="search" value="<?php echo e(request('search')); ?>" placeholder="<?php echo e($__isMasterAdminRiwayat ? 'Cari aktivitas, modul, atau nama pengguna...' : 'Cari aktivitas atau modul Anda...'); ?>" autocomplete="off">
+                        <input type="text" id="input-search-riwayat" name="search" value="{{ request('search') }}" placeholder="{{ $__isMasterAdminRiwayat ? 'Cari aktivitas, modul, atau nama pengguna...' : 'Cari aktivitas atau modul Anda...' }}" autocomplete="off">
                     </div>
 
-                    <!-- Filter Jenis Aktivitas -->
                     <select name="jenis" id="select-jenis-riwayat" class="filter-select">
                         <option value="">-- Semua Jenis Aktivitas --</option>
-                        <option value="Tambah" <?php echo e(request('jenis') == 'Tambah' ? 'selected' : ''); ?>>Penambahan Data</option>
-                        <option value="Ubah" <?php echo e(request('jenis') == 'Ubah' ? 'selected' : ''); ?>>Perubahan Data</option>
-                        <option value="Hapus" <?php echo e(request('jenis') == 'Hapus' ? 'selected' : ''); ?>>Penghapusan Data</option>
-                        <option value="Sistem" <?php echo e(request('jenis') == 'Sistem' ? 'selected' : ''); ?>>Aktivitas Sistem (Login/Lainnya)</option>
+                        <option value="Tambah" {{ request('jenis') == 'Tambah' ? 'selected' : '' }}>Penambahan Data</option>
+                        <option value="Ubah" {{ request('jenis') == 'Ubah' ? 'selected' : '' }}>Perubahan Data</option>
+                        <option value="Hapus" {{ request('jenis') == 'Hapus' ? 'selected' : '' }}>Penghapusan Data</option>
+                        <option value="Sistem" {{ request('jenis') == 'Sistem' ? 'selected' : '' }}>Aktivitas Sistem (Login/Lainnya)</option>
                     </select>
 
-                    <!-- Filter Bulan -->
                     <select name="bulan" id="select-bulan-riwayat" class="filter-select">
                         <option value="">-- Semua Bulan --</option>
-                        <?php for($m = 1; $m <= 12; $m++): ?>
-                            <option value="<?php echo e($m); ?>" <?php echo e(request('bulan') == $m ? 'selected' : ''); ?>>
-                                <?php echo e(DateTime::createFromFormat('!m', $m)->format('F')); ?>
-
+                        @for($m = 1; $m <= 12; $m++)
+                            <option value="{{ $m }}" {{ request('bulan') == $m ? 'selected' : '' }}>
+                                {{ DateTime::createFromFormat('!m', $m)->format('F') }}
                             </option>
-                        <?php endfor; ?>
+                        @endfor
                     </select>
 
-                    <!-- Filter Tahun -->
                     <select name="tahun" id="select-tahun-riwayat" class="filter-select">
                         <option value="">-- Semua Tahun --</option>
-                        <?php $__currentLoopData = $tahunList ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $thn): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                            <option value="<?php echo e($thn); ?>" <?php echo e(request('tahun') == $thn ? 'selected' : ''); ?>>
-                                <?php echo e($thn); ?>
-
+                        @foreach($tahunList ?? [] as $thn)
+                            <option value="{{ $thn }}" {{ request('tahun') == $thn ? 'selected' : '' }}>
+                                {{ $thn }}
                             </option>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        @endforeach
                     </select>
 
                     <button type="submit" class="btn btn-primary">Filter</button>
-                    <?php if(request('search') || request('bulan') || request('tahun') || request('jenis')): ?>
-                        <a href="<?php echo e(url()->current()); ?>" class="btn" style="background: #e2e8f0; color: #334155;">Reset</a>
-                    <?php endif; ?>
+                    @if(request('search') || request('bulan') || request('tahun') || request('jenis'))
+                        <a href="{{ url()->current() }}" class="btn" style="background: #e2e8f0; color: #334155;">Reset</a>
+                    @endif
                 </form>
             </div>
         </header>
 
-        <!-- Banner Informasi Hak Akses Log -->
-        <div class="scope-banner <?php echo e($__isMasterAdminRiwayat ? 'master-mode' : 'admin-mode'); ?>">
+        <div class="scope-banner {{ $__isMasterAdminRiwayat ? 'master-mode' : 'admin-mode' }}">
             <div style="display: flex; align-items: center; gap: 8px;">
-                <?php if($__isMasterAdminRiwayat): ?>
+                @if($__isMasterAdminRiwayat)
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     <span><strong>Akses Penuh Master Admin:</strong> Menampilkan seluruh riwayat aktivitas dari <strong>Master Admin</strong> maupun <strong>semua Admin</strong>.</span>
-                <?php else: ?>
+                @else
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                    <span><strong>Privasi Riwayat Admin:</strong> Anda hanya melihat riwayat aktivitas milik akun Anda sendiri (<strong><?php echo e($__userLoginRiwayat->nama_lengkap ?? 'Admin'); ?></strong>).</span>
-                <?php endif; ?>
+                    <span><strong>Privasi Riwayat Admin:</strong> Anda hanya melihat riwayat aktivitas milik akun Anda sendiri (<strong>{{ $__userLoginRiwayat->nama_lengkap ?? 'Admin' }}</strong>).</span>
+                @endif
             </div>
         </div>
 
-        <?php if(session('success')): ?>
+        @if(session('success'))
             <div id="alert-session-riwayat" style="background: #d1fae5; color: #065f46; padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 14px; border-left: 4px solid #10b981;">
-                <?php echo e(session('success')); ?>
-
+                {{ session('success') }}
             </div>
-        <?php endif; ?>
+        @endif
 
-        <!-- Table Container -->
         <div class="card-box">
 
             <div style="overflow-x: auto;">
@@ -754,70 +711,68 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-riwayat-aktivitas">
-                        <?php $__empty_1 = true; $__currentLoopData = $riwayats; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $riwayat): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                            <?php
+                        @forelse($riwayats as $riwayat)
+                            @php
                                 $idUnikRiwayat = (is_object($riwayat) && method_exists($riwayat, 'getKey') && $riwayat->getKey() !== null)
                                     ? $riwayat->getKey()
                                     : ($riwayat->id ?? md5(($riwayat->created_at ?? '') . ($riwayat->aktivitas ?? '') . $loop->index));
                                 $isMilikSendiri = (int) ($riwayat->user_id ?? 0) === (int) $__userIdRiwayat;
-                            ?>
-                            <tr class="riwayat-row" data-riwayat-id="<?php echo e($idUnikRiwayat); ?>">
+                            @endphp
+                            <tr class="riwayat-row" data-riwayat-id="{{ $idUnikRiwayat }}">
                                 <td style="font-size: 12px; color: var(--text-muted); white-space: nowrap;">
-                                    <span class="waktu-text"><?php echo e($riwayat->created_at ? $riwayat->created_at->format('d M Y, H:i') : '-'); ?></span>
+                                    <span class="waktu-text">{{ $riwayat->created_at ? $riwayat->created_at->format('d M Y, H:i') : '-' }}</span>
                                     <span class="badge-baru">BARU</span>
                                 </td>
                                 <td>
                                     <div style="font-weight: 600;">
-                                        <?php echo e($riwayat->user ? $riwayat->user->nama_lengkap : 'Sistem / Tamu'); ?>
-
-                                        <?php if($isMilikSendiri): ?>
+                                        {{ $riwayat->user ? $riwayat->user->nama_lengkap : 'Sistem / Tamu' }}
+                                        @if($isMilikSendiri)
                                             <span class="user-self-tag">Anda</span>
-                                        <?php endif; ?>
+                                        @endif
                                     </div>
                                     <div style="font-size: 11px; color: var(--text-muted);">
-                                        <?php echo e($riwayat->user ? str_replace('_', ' ', Str::title($riwayat->user->role)) : 'System'); ?>
-
+                                        {{ $riwayat->user ? str_replace('_', ' ', Str::title($riwayat->user->role)) : 'System' }}
                                     </div>
                                 </td>
-                                <td><?php echo e($riwayat->aktivitas); ?></td>
-                                <td><span style="font-weight: 500;"><?php echo e($riwayat->modul); ?></span></td>
+                                <td>{{ $riwayat->aktivitas }}</td>
+                                <td><span style="font-weight: 500;">{{ $riwayat->modul }}</span></td>
                                 <td>
-                                    <?php if($riwayat->status == 'Berhasil'): ?>
+                                    @if($riwayat->status == 'Berhasil')
                                         <span class="badge badge-success">Berhasil</span>
-                                    <?php elseif($riwayat->status == 'Peringatan'): ?>
+                                    @elseif($riwayat->status == 'Peringatan')
                                         <span class="badge badge-warning">Peringatan</span>
-                                    <?php else: ?>
+                                    @else
                                         <span class="badge badge-info">Informasi</span>
-                                    <?php endif; ?>
+                                    @endif
                                 </td>
                             </tr>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                        @empty
                             <tr id="row-empty-riwayat">
                                 <td colspan="5" class="empty-state">
                                     Belum ada catatan riwayat aktivitas yang terekam.
                                 </td>
                             </tr>
-                        <?php endif; ?>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
 
             <div class="custom-pagination-wrap">
-                <?php echo e($riwayats->links()); ?>
-
+                {{ $riwayats->links() }}
             </div>
         </div>
     </main>
 
-    <!-- Toast Notifikasi Real-Time -->
     <div id="rt-toast-riwayat" class="rt-toast-notif">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         <span id="rt-toast-riwayat-text">Aktivitas baru tercatat secara real-time!</span>
     </div>
 
+    <input type="hidden" id="json-is-master-riwayat" value="{{ json_encode($__isMasterAdminRiwayat) }}">
+
     <script>
         (function () {
-            const IS_MASTER_ADMIN = <?php echo json_encode($__isMasterAdminRiwayat, 15, 512) ?>;
+            const IS_MASTER_ADMIN = JSON.parse(document.getElementById('json-is-master-riwayat').value || 'false');
             let observerBaris = null;
             let toastTimer = null;
 
@@ -842,34 +797,38 @@
                 }, 3200);
             }
 
-            // Fungsi otomatis membaca baris tanpa perlu diklik saat halaman dibuka / baris terlihat
+            let latestScopedIds = [];
+
             function prosesOtomatisTerbaca(tr) {
-                if (!tr || tr.getAttribute('data-sedang-dibaca') === '1') return;
-                tr.setAttribute('data-sedang-dibaca', '1');
-
+                if (!tr) return;
                 const id = tr.getAttribute('data-riwayat-id');
-
-                // Kurangi/hilangkan angka badge merah di sidebar secara otomatis saat halaman dibuka
-                setTimeout(function () {
-                    if (typeof window.tandaiSatuRiwayatDibaca === 'function') {
-                        window.tandaiSatuRiwayatDibaca(id);
-                    }
-                }, 400);
-
-                // Setelah user melihat warna baris berbeda (2,5 detik), warna baris menghilang otomatis
-                setTimeout(function () {
-                    tr.classList.remove('belum-dibaca');
-                }, 2500);
+                if (typeof window.tandaiSatuRiwayatDibaca === 'function') {
+                    window.tandaiSatuRiwayatDibaca(id);
+                }
+                tr.classList.remove('belum-dibaca');
             }
 
             function daftarkanObserverKeBaris(tr) {
                 if (!tr) return;
-                if (observerBaris) {
-                    observerBaris.observe(tr);
-                } else {
-                    prosesOtomatisTerbaca(tr);
-                }
+                tr.addEventListener('click', function () {
+                    if (tr.classList.contains('belum-dibaca')) {
+                        prosesOtomatisTerbaca(tr);
+                    }
+                });
             }
+
+            window.prosesBacaSemuaRiwayat = function () {
+                if (typeof window.tandaiSemuaRiwayatDibaca === 'function') {
+                    window.tandaiSemuaRiwayatDibaca(latestScopedIds);
+                }
+                document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
+                    tr.classList.remove('belum-dibaca');
+                });
+                if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                    window.hitungRiwayatBelumDibaca();
+                }
+                tampilkanToastRealtime('Seluruh riwayat aktivitas telah ditandai sudah dibaca.');
+            };
 
             function buatHtmlBarisRiwayat(item, paksaHighlightBaru = false) {
                 const id = String(item.id || '');
@@ -910,7 +869,6 @@
                 return tr;
             }
 
-            // Polling Real-Time setiap 2 detik tanpa perlu me-refresh halaman (berlaku untuk Admin & Master Admin)
             let sedangPollingRiwayat = false;
             async function sinkronkanRiwayatRealtime() {
                 if (sedangPollingRiwayat || document.hidden) return;
@@ -932,7 +890,11 @@
                     const data = await res.json();
                     if (!data || !data.success || !Array.isArray(data.items)) return;
 
-                    // Perbarui counter jumlah log di bagian atas
+                    if (Array.isArray(data.scoped_ids)) {
+                        latestScopedIds = data.scoped_ids.map(String);
+                        window.__extraScopedRiwayatIds = latestScopedIds;
+                    }
+
                     const labelJumlah = document.getElementById('label-jumlah-riwayat');
                     if (labelJumlah && typeof data.total_count === 'number') {
                         labelJumlah.textContent = String(data.total_count);
@@ -941,7 +903,6 @@
                     const tbody = document.getElementById('tbody-riwayat-aktivitas');
                     if (!tbody) return;
 
-                    // Jika riwayat kosong (misal baru saja dibersihkan)
                     if (data.items.length === 0) {
                         if (!document.getElementById('row-empty-riwayat')) {
                             tbody.innerHTML = `
@@ -955,19 +916,16 @@
                         return;
                     }
 
-                    // Bandingkan daftar ID yang saat ini tampil di tabel dengan hasil polling terbaru
                     const existingRows = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
                     const existingIds = existingRows.map(r => r.getAttribute('data-riwayat-id'));
                     const incomingIds = data.items.map(it => String(it.id));
 
-                    // Cek apakah ada ID baru yang belum ada di tabel saat ini
                     const itemBaruList = data.items.filter(it => !existingIds.includes(String(it.id)));
 
                     if (itemBaruList.length > 0) {
                         const rowEmpty = document.getElementById('row-empty-riwayat');
                         if (rowEmpty) rowEmpty.remove();
 
-                        // Masukkan baris-baris baru ke urutan paling atas tabel
                         for (let i = itemBaruList.length - 1; i >= 0; i--) {
                             const itemBaru = itemBaruList[i];
                             const trBaru = buatHtmlBarisRiwayat(itemBaru, true);
@@ -975,7 +933,6 @@
                             daftarkanObserverKeBaris(trBaru);
                         }
 
-                        // Jaga agar jumlah baris per halaman tetap rapi (maksimal 15 baris)
                         const semuaBarisSekarang = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
                         if (semuaBarisSekarang.length > 15) {
                             semuaBarisSekarang.slice(15).forEach(trLama => trLama.remove());
@@ -985,17 +942,21 @@
                         const pesanNotif = IS_MASTER_ADMIN
                             ? `Aktivitas baru (${infoTerbaru.nama_user}): ${infoTerbaru.aktivitas}`
                             : `Aktivitas baru tercatat: ${infoTerbaru.aktivitas}`;
+                        if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                            window.hitungRiwayatBelumDibaca();
+                        }
                         tampilkanToastRealtime(pesanNotif);
                     } else if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
-                        // Jika ada baris yang dihapus sebagian, sinkronkan tabel secara mulus
+
                         tbody.innerHTML = '';
                         data.items.forEach(item => {
                             const tr = buatHtmlBarisRiwayat(item, false);
                             tbody.appendChild(tr);
-                            if (tr.classList.contains('belum-dibaca')) {
-                                daftarkanObserverKeBaris(tr);
-                            }
+                            daftarkanObserverKeBaris(tr);
                         });
+                        if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                            window.hitungRiwayatBelumDibaca();
+                        }
                     }
                 } catch (err) {
                 } finally {
@@ -1003,7 +964,6 @@
                 }
             }
 
-            // Fungsi Bersihkan Log tanpa reload halaman (tetap mengikuti scope Role)
             window.prosesBersihkanLogRealtime = async function (e) {
                 if (e) e.preventDefault();
                 const pesanKonfirmasi = IS_MASTER_ADMIN
@@ -1083,7 +1043,6 @@
 
                 const barisList = document.querySelectorAll('tr.riwayat-row[data-riwayat-id]');
 
-                // 1. Tampilkan warna baris berbeda untuk riwayat terbaru yang belum dibaca
                 barisList.forEach(function (tr) {
                     const id = tr.getAttribute('data-riwayat-id');
                     const sudahDibaca = typeof window.apakahRiwayatSudahDibaca === 'function'
@@ -1093,33 +1052,17 @@
                     if (!sudahDibaca) {
                         tr.classList.add('belum-dibaca');
                     }
+                    daftarkanObserverKeBaris(tr);
                 });
 
-                // 2. Gunakan sensor keterlihatan layar (IntersectionObserver) agar otomatis terbaca tanpa diklik
-                if ('IntersectionObserver' in window) {
-                    observerBaris = new IntersectionObserver(function (entries, obs) {
-                        entries.forEach(function (entry) {
-                            if (entry.isIntersecting) {
-                                prosesOtomatisTerbaca(entry.target);
-                                obs.unobserve(entry.target);
-                            }
-                        });
-                    }, { threshold: 0.1 });
-
-                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
-                        observerBaris.observe(tr);
-                    });
-                } else {
-                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
-                        prosesOtomatisTerbaca(tr);
-                    });
+                if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                    window.hitungRiwayatBelumDibaca();
                 }
 
-                // 3. Jalankan polling real-time setiap 2 detik tanpa refresh
                 setInterval(sinkronkanRiwayatRealtime, 2000);
             });
         })();
     </script>
 
 </body>
-</html><?php /**PATH C:\laragon\www\INVENTARIS-DMK\resources\views/masteradmin/riwayat.blade.php ENDPATH**/ ?>
+</html>

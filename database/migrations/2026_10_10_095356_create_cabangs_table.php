@@ -15,7 +15,6 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // PERBAIKAN: Nama tabel diubah menjadi 'detail_aset'
         Schema::table('detail_aset', function (Blueprint $table) {
             $table->unsignedBigInteger('cabang_id')->nullable()->after('kategori_id');
         });
@@ -23,7 +22,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // PERBAIKAN: Nama tabel diubah menjadi 'detail_aset'
         Schema::table('detail_aset', function (Blueprint $table) {
             $table->dropColumn('cabang_id');
         });

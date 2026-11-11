@@ -8,6 +8,6 @@ class AdminDivisiController extends Controller
 {
     public function index()
     {
-        return view('divisi');
+        return view('admin.divisi');
     }
 }

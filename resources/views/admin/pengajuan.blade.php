@@ -1,6 +1,5 @@
 @php
-    // PROTEKSI MIDDLEWARE & ROLE GUARD: Halaman Pengajuan khusus untuk Admin!
-    // Jika Master Admin mencoba mengakses /pengajuan lewat URL, arahkan kembali ke Dashboard Master Admin.
+
     $__cekRolePengajuan = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -36,7 +35,6 @@
 
     session(['active_sidebar_panel' => 'admin']);
 
-    // Baca konfigurasi hak akses per-pengajuan dari storage/app/roles_permissions.json
     $rolesStoragePath = storage_path('app/roles_permissions.json');
     $izinPengajuan = [
         'pengajuan'              => true,
@@ -68,7 +66,6 @@
         }
     }
 
-    // Tentukan tab jenis pengajuan yang diminta dari query URL (?jenis=peminjaman|pengembalian|peleburan|servis)
     $daftarJenisValid = ['peminjaman', 'pengembalian', 'peleburan', 'servis'];
     $adaQueryJenisEksplisit = request()->has('jenis') || request()->has('pengajuan');
     $jenisAktif = strtolower((string) request()->query('jenis', request()->query('pengajuan', 'peminjaman')));
@@ -76,8 +73,6 @@
         $jenisAktif = 'peminjaman';
     }
 
-    // Jika user membuka /pengajuan tanpa parameter ?jenis= dan peminjaman sedang ditutup,
-    // arahkan ke tab pertama yang masih terbuka (namun jika tidak ada atau diminta spesifik, tampilkan Akses Dicabut)
     if (!$adaQueryJenisEksplisit && empty($izinPengajuan['pengajuan_' . $jenisAktif])) {
         foreach ($daftarJenisValid as $jKandidat) {
             if (!empty($izinPengajuan['pengajuan_' . $jKandidat])) {
@@ -169,7 +164,6 @@
             margin-top: 5px;
         }
 
-        /* 4 Tombol Utama Pilihan Pengajuan */
         .pengajuan-top-buttons {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -208,7 +202,6 @@
             box-shadow: 0 6px 14px rgba(26, 79, 145, 0.22);
         }
 
-        /* Panel Konten Masing-Masing Pengajuan */
         .pengajuan-section {
             display: none;
             background: #ffffff;
@@ -256,7 +249,6 @@
             font-weight: 600;
         }
 
-        /* Kartu Peringatan Akses Sub-Pengajuan Dicabut */
         .sub-pengajuan-revoked-box {
             display: none;
             background: #ffffff;
@@ -316,15 +308,14 @@
             </div>
         </header>
 
-        <!-- 4 BUTTON UTAMA PENGAJUAN -->
         <div class="pengajuan-top-buttons"
              id="bar-tombol-pengajuan"
-             style="{{ !$menuUtamaPengajuanBoleh ? 'display:none;' : '' }}">
+             data-init-hide="{{ !$menuUtamaPengajuanBoleh ? '1' : '0' }}">
             <button type="button"
                     class="btn-tab-pengajuan {{ $jenisAktif === 'peminjaman' ? 'active' : '' }}"
                     data-tab-jenis="peminjaman"
                     data-subperm-key="pengajuan_peminjaman"
-                    style="{{ empty($izinPengajuan['pengajuan_peminjaman']) ? 'display:none;' : '' }}"
+                    data-init-hide="{{ empty($izinPengajuan['pengajuan_peminjaman']) ? '1' : '0' }}"
                     onclick="bukaTabPengajuan('peminjaman')">
                 <span>📦</span>
                 <span>Pengajuan Peminjaman</span>
@@ -334,7 +325,7 @@
                     class="btn-tab-pengajuan {{ $jenisAktif === 'pengembalian' ? 'active' : '' }}"
                     data-tab-jenis="pengembalian"
                     data-subperm-key="pengajuan_pengembalian"
-                    style="{{ empty($izinPengajuan['pengajuan_pengembalian']) ? 'display:none;' : '' }}"
+                    data-init-hide="{{ empty($izinPengajuan['pengajuan_pengembalian']) ? '1' : '0' }}"
                     onclick="bukaTabPengajuan('pengembalian')">
                 <span>🔄</span>
                 <span>Pengajuan Pengembalian</span>
@@ -344,7 +335,7 @@
                     class="btn-tab-pengajuan {{ $jenisAktif === 'peleburan' ? 'active' : '' }}"
                     data-tab-jenis="peleburan"
                     data-subperm-key="pengajuan_peleburan"
-                    style="{{ empty($izinPengajuan['pengajuan_peleburan']) ? 'display:none;' : '' }}"
+                    data-init-hide="{{ empty($izinPengajuan['pengajuan_peleburan']) ? '1' : '0' }}"
                     onclick="bukaTabPengajuan('peleburan')">
                 <span>🔥</span>
                 <span>Pengajuan Peleburan</span>
@@ -354,14 +345,13 @@
                     class="btn-tab-pengajuan {{ $jenisAktif === 'servis' ? 'active' : '' }}"
                     data-tab-jenis="servis"
                     data-subperm-key="pengajuan_servis"
-                    style="{{ empty($izinPengajuan['pengajuan_servis']) ? 'display:none;' : '' }}"
+                    data-init-hide="{{ empty($izinPengajuan['pengajuan_servis']) ? '1' : '0' }}"
                     onclick="bukaTabPengajuan('servis')">
                 <span>🛠️</span>
                 <span>Pengajuan Servis</span>
             </button>
         </div>
 
-        <!-- KOTAK PERINGATAN JIKA SUB-PENGAJUAN YANG SEDANG DIBUKA DICABUT OLEH MASTER ADMIN -->
         <div id="box-akses-pengajuan-dicabut" class="sub-pengajuan-revoked-box {{ !$tabAktifSaatIniBoleh ? 'active' : '' }}">
             <div style="font-size: 44px; margin-bottom: 12px;">🚫</div>
             <h2 id="judul-akses-pengajuan-dicabut" style="color: #0f172a; font-size: 20px; font-weight: 800; margin-bottom: 8px;">
@@ -377,7 +367,6 @@
             </div>
         </div>
 
-        <!-- ================= 1. PENGAJUAN PEMINJAMAN ================= -->
         <section id="section-pengajuan-peminjaman"
                  class="pengajuan-section {{ ($jenisAktif === 'peminjaman' && $tabAktifSaatIniBoleh) ? 'active' : '' }}"
                  data-section-jenis="peminjaman">
@@ -388,7 +377,6 @@
             </div>
         </section>
 
-        <!-- ================= 2. PENGAJUAN PENGEMBALIAN ================= -->
         <section id="section-pengajuan-pengembalian"
                  class="pengajuan-section {{ ($jenisAktif === 'pengembalian' && $tabAktifSaatIniBoleh) ? 'active' : '' }}"
                  data-section-jenis="pengembalian">
@@ -399,7 +387,6 @@
             </div>
         </section>
 
-        <!-- ================= 3. PENGAJUAN PELEBURAN ================= -->
         <section id="section-pengajuan-peleburan"
                  class="pengajuan-section {{ ($jenisAktif === 'peleburan' && $tabAktifSaatIniBoleh) ? 'active' : '' }}"
                  data-section-jenis="peleburan">
@@ -410,7 +397,6 @@
             </div>
         </section>
 
-        <!-- ================= 4. PENGAJUAN SERVIS ================= -->
         <section id="section-pengajuan-servis"
                  class="pengajuan-section {{ ($jenisAktif === 'servis' && $tabAktifSaatIniBoleh) ? 'active' : '' }}"
                  data-section-jenis="servis">
@@ -421,6 +407,7 @@
             </div>
         </section>
     </main>
+    <input type="hidden" id="json-jenis-aktif-pengajuan" value="{{ json_encode($jenisAktif) }}">
 
     <script>
         const NAMA_KATEGORI_PENGAJUAN = {
@@ -430,7 +417,8 @@
             servis: 'Pengajuan Servis'
         };
 
-        window.jenisPengajuanAktif = @json($jenisAktif);
+        document.querySelectorAll('[data-init-hide="1"]').forEach(function (el) { el.style.display = 'none'; });
+        window.jenisPengajuanAktif = JSON.parse(document.getElementById('json-jenis-aktif-pengajuan').value || '"peminjaman"');
 
         window.sinkronkanStatusAksesPengajuan = function (perms) {
             const jenis = window.jenisPengajuanAktif || 'peminjaman';
@@ -451,7 +439,7 @@
             const pesanDicabut = document.getElementById('pesan-akses-pengajuan-dicabut');
 
             if (!subIniBoleh) {
-                // Sembunyikan semua section konten pengajuan dan tampilkan kotak "Hak Akses Dicabut"
+
                 document.querySelectorAll('.pengajuan-section').forEach(sec => sec.classList.remove('active'));
                 if (boxDicabut) {
                     boxDicabut.classList.add('active');
@@ -484,12 +472,10 @@
 
             window.jenisPengajuanAktif = jenis;
 
-            // Aktifkan tombol tab yang sesuai
             document.querySelectorAll('.btn-tab-pengajuan').forEach(btn => {
                 btn.classList.toggle('active', btn.getAttribute('data-tab-jenis') === jenis);
             });
 
-            // Sinkronkan highlight sub-button di sidebar
             document.querySelectorAll('.submenu-pengajuan-btn').forEach(subBtn => {
                 subBtn.classList.toggle('active', subBtn.getAttribute('data-jenis') === jenis);
             });
@@ -499,7 +485,6 @@
                 wrapSidebar.classList.add('open');
             }
 
-            // Cek apakah kategori pengajuan ini diizinkan menurut state permission real-time saat ini
             const permsSaatIni = window.__adminCurrentPerms || null;
             if (permsSaatIni) {
                 window.sinkronkanStatusAksesPengajuan(permsSaatIni);
@@ -509,7 +494,6 @@
                 });
             }
 
-            // Perbarui URL di address bar menjadi /pengajuan?jenis=... tanpa reload penuh
             if (updateUrl && window.history && window.history.replaceState) {
                 const urlBaru = new URL(window.location.href);
                 urlBaru.searchParams.delete('pengajuan');
@@ -520,7 +504,7 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             const params = new URLSearchParams(window.location.search);
-            const jenisAwal = params.get('jenis') || params.get('pengajuan') || @json($jenisAktif);
+            const jenisAwal = params.get('jenis') || params.get('pengajuan') || window.jenisPengajuanAktif;
             window.bukaTabPengajuan(jenisAwal, false);
         });
     </script>

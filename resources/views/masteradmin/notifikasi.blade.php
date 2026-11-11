@@ -1,4 +1,8 @@
 @php
+    $__roleUserNotif = \Illuminate\Support\Facades\Auth::check()
+        ? strtolower(str_replace([' ', '-'], '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
+        : '';
+
     $resetReqFilePath = storage_path('app/password_reset_requests.json');
     $lockFilePath = storage_path('app/admin_login_locks.json');
 
@@ -10,13 +14,18 @@
         }
     }
 
-    // Handler AJAX untuk memproses Reset Password & Buka Blokir Admin langsung dari halaman Notifikasi
     if (request()->has('_notif_reset_action')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+
+        if ($__roleUserNotif !== 'master_admin' && $__roleUserNotif !== 'masteradmin') {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Akses ditolak: Hanya Master Admin yang berwenang.']);
+            exit;
+        }
 
         $act = (string) request('_notif_reset_action');
 
@@ -47,7 +56,6 @@
             }
             unset($rItem);
 
-            // Jika email sama dengan request pending lain, tandai selesai juga
             if ($targetEmail !== '') {
                 foreach ($daftarResetRequests as &$rItem2) {
                     if (strtolower((string) ($rItem2['email'] ?? '')) === strtolower($targetEmail)) {
@@ -62,16 +70,24 @@
             } catch (\Throwable $e) {
             }
 
-            // Update password di tabel users jika Master Admin mengisi password baru
             $pesanPassword = 'Blokir login Admin berhasil dibuka.';
             if ($newPass !== '' && $targetEmail !== '') {
                 try {
                     if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
                         $affected = \Illuminate\Support\Facades\DB::table('users')
                             ->where('email', $targetEmail)
+                            ->whereIn('role', ['admin', 'Admin', 'user', 'User'])
                             ->update([
                                 'password' => \Illuminate\Support\Facades\Hash::make($newPass),
                             ]);
+                        if ($affected === 0 && \Illuminate\Support\Facades\Schema::hasColumn('users', 'nama_lengkap')) {
+                            $affected = \Illuminate\Support\Facades\DB::table('users')
+                                ->where('nama_lengkap', $targetEmail)
+                                ->whereIn('role', ['admin', 'Admin', 'user', 'User'])
+                                ->update([
+                                    'password' => \Illuminate\Support\Facades\Hash::make($newPass),
+                                ]);
+                        }
                         if ($affected > 0) {
                             $pesanPassword = 'Password baru untuk ' . $targetEmail . ' berhasil disimpan & blokir login dibuka!';
                         } else {
@@ -82,20 +98,19 @@
                 }
             }
 
-            // Buka blokir 5x gagal login pada admin_login_locks.json
             $resetLock = [
                 'failed_count' => 0,
                 'is_blocked'   => false,
                 'last_email'   => '',
                 'blocked_at'   => null,
                 'updated_at'   => round(microtime(true) * 1000),
+                'clients'      => [],
             ];
             try {
                 file_put_contents($lockFilePath, json_encode($resetLock, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
             } catch (\Throwable $e) {
             }
 
-            // Catat ke RiwayatAktivitas
             if (class_exists(\App\Models\RiwayatAktivitas::class)) {
                 try {
                     $riwayat = new \App\Models\RiwayatAktivitas();
@@ -190,17 +205,16 @@
         .btn-primary { background: var(--primary-color); color: #fff; border: none; }
         .btn:hover { opacity: 0.9; }
 
-        /* ===== NOTIFIKASI KARTU (Hanya Informasi) ===== */
         .notif-ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 14px; margin-bottom: 20px; }
         @media (max-width: 1200px) { .notif-ringkas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (max-width: 800px) { .notif-ringkas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 500px) { .notif-ringkas { grid-template-columns: 1fr; } }
-        
+
         .notif-kartu { --warna: #1a4f91; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--border-color); border-top: 4px solid var(--warna); border-radius: 14px; padding: 16px 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
         .notif-kartu .angka { font-size: 30px; font-weight: 800; color: var(--warna); line-height: 1.1; }
         .notif-kartu .judul { font-size: 14px; font-weight: 700; margin-top: 4px; color: var(--text-color); }
         .notif-kartu .ket { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-        
+
         .kartu-semua { --warna: #1a4f91; }
         .kartu-rusak { --warna: #e11d48; }
         .kartu-terlewat { --warna: #dc2626; }
@@ -208,7 +222,6 @@
         .kartu-mendekati { --warna: #0ea5e9; }
         .kartu-reset-pw { --warna: #7c3aed; }
 
-        /* ===== PANEL PERMINTAAN RESET PASSWORD ADMIN ===== */
         .reset-req-section {
             display: flex;
             flex-direction: column;
@@ -380,7 +393,7 @@
         .notif-item { display: flex; gap: 16px; align-items: flex-start; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px 18px; transition: 0.2s; }
         .notif-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .notif-badge { text-align: center; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; display: inline-block; white-space: nowrap; }
-        
+
         .notif-isi { flex: 1; min-width: 0; }
         .notif-nama { font-size: 15px; font-weight: 700; }
         .notif-kode { font-size: 12px; color: var(--text-muted); margin-top: 4px; word-break: break-all; }
@@ -389,12 +402,11 @@
         .notif-aksi { flex-shrink: 0; align-self: center; }
         .btn-lihat { display: inline-block; padding: 8px 14px; border-radius: 8px; background: rgba(26, 79, 145, 0.1); color: var(--primary-color); font-size: 12.5px; font-weight: 700; text-decoration: none; }
         .btn-lihat:hover { background: var(--primary-color); color: #fff; }
-        
+
         .notif-kosong { text-align: center; padding: 50px 20px; color: var(--text-muted); background: #fff; border: 1px dashed var(--border-color); border-radius: 14px; }
         .notif-kosong .judul { font-size: 16px; font-weight: 700; color: #0f766e; margin-bottom: 4px; }
         .notif-info { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
 
-        /* PAGINASI */
         .custom-pagination-wrap nav > div:first-child { display: none !important; }
         .custom-pagination-wrap nav > div:last-child { display: flex !important; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; width: 100%; }
         .custom-pagination-wrap nav p { font-size: 13px !important; color: var(--text-muted) !important; margin: 0 !important; }
@@ -406,8 +418,7 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
-    
-        /* ===== HEADER / NAVBAR HALAMAN FIXED DENGAN FITUR SEARCH & FILTER DI DALAMNYA ===== */
+
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -486,7 +497,6 @@
             $adaFilter  = $tipe !== 'semua' || !empty($paramDasar);
         @endphp
 
-        <!-- NAVBAR FIXED (BERISI JUDUL HALAMAN SERTA FITUR SEARCH & FILTER NOTIFIKASI) -->
         <header class="main-header" id="navbar-notifikasi-fixed">
             <div class="navbar-top-row">
                 <div class="header-title">
@@ -516,10 +526,9 @@
                 </div>
             </div>
 
-            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
             <div class="navbar-search-row">
                 <form method="GET" action="{{ route('notifikasi.index') }}" class="notif-filter" id="form-filter-notifikasi">
-                    <!-- 1. Kolom Pencarian -->
+
                     <div class="cari-wrap">
                         <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: var(--text-muted); flex-shrink: 0;">
                             <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -527,7 +536,6 @@
                         <input type="text" id="input-search-notifikasi" name="q" value="{{ request('q') }}" placeholder="Cari kode, nama aset, merk, ruangan, cabang, atau teknisi..." autocomplete="off">
                     </div>
 
-                    <!-- 2. Dropdown Filter Tipe Peringatan -->
                     <select name="tipe" id="select-tipe-notifikasi" onchange="this.form.submit()">
                         <option value="semua" {{ $tipe === 'semua' ? 'selected' : '' }}>Semua Jenis Peringatan</option>
                         <option value="rusak" {{ $tipe === 'rusak' ? 'selected' : '' }}>Hanya Aset Rusak</option>
@@ -536,7 +544,6 @@
                         <option value="mendekati" {{ $tipe === 'mendekati' ? 'selected' : '' }}>Hanya Mendekati Servis</option>
                     </select>
 
-                    <!-- 3. Dropdown Filter Cabang -->
                     <select name="cabang" id="select-cabang-notifikasi" onchange="this.form.submit()">
                         <option value="">Semua Cabang</option>
                         @foreach($cabangs as $cabang)
@@ -544,7 +551,6 @@
                         @endforeach
                     </select>
 
-                    <!-- 4. Tombol Terapkan & Reset -->
                     <button type="submit" class="btn btn-primary" style="padding: 9px 18px; border-radius: 10px; gap: 6px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
@@ -564,7 +570,6 @@
             </div>
         </header>
 
-        <!-- Ringkasan Kartu (Sekarang hanya Keterangan / Tidak bisa diklik) -->
         <div class="notif-ringkas">
             <div class="notif-kartu kartu-semua">
                 <div class="angka">{{ $hitung['semua'] }}</div>
@@ -601,7 +606,7 @@
         </div>
 
         @if($__isMasterAdminNotif)
-        <!-- DAFTAR PERMINTAAN RESET PASSWORD DARI ADMIN (REAL-TIME) -->
+
         <div id="container-reset-requests" class="reset-req-section">
             @foreach($pendingResetList as $reqItem)
                 <div class="reset-req-card" id="reset-card-{{ $reqItem['id'] }}" data-req-id="{{ $reqItem['id'] }}">
@@ -609,7 +614,7 @@
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <span class="reset-req-badge"> PERMINTAAN RESET PASSWORD ADMIN</span>
                             @if(!empty($reqItem['is_blocked']))
-                                <span class="notif-badge" style="background: #dc2626;">AKUN TERBLOKIR (5/5 GAGAL)</span>
+                                <span class="notif-badge" style="background: #dc2626;">AKUN TERBLOKIR (3/3 GAGAL)</span>
                             @endif
                             <span style="font-size: 11.5px; color: #64748b; font-weight: 600;"> {{ $reqItem['created_at'] ?? 'Baru saja' }}</span>
                         </div>
@@ -634,34 +639,29 @@
         </div>
         @endif
 
-
-
-        <!-- Daftar Notifikasi -->
         <div class="notif-list">
             @forelse($notifs as $aset)
             @php
-                // 1. Logika Warna Kerusakan (Menyalin dari Data Aset)
-                $warnaRusak = '#ef4444'; // Default merah
+
+                $warnaRusak = '#ef4444';
                 if(isset($statuses)) {
                     $match = $statuses->where('nama_status', $aset->status_aset)->first();
                     if($match && !empty($match->warna_status)) $warnaRusak = $match->warna_status;
                 }
 
-                // 2. Logika Warna Servis (Menyalin dari Data Aset)
-                $warnaServis = '#1a4f91'; 
+                $warnaServis = '#1a4f91';
                 $teksServis = '';
                 $labelServis = '';
-                
+
                 if ($aset->jenis_servis) {
                     $teksServis = $aset->jenis_servis === 'terlewat'
                         ? 'Terlewat ' . abs($aset->selisih) . ' hari'
                         : ($aset->selisih === 0 ? 'Hari ini' : $aset->selisih . ' hari lagi');
-                        
-                    $warnaServis = $aset->jenis_servis === 'mendekati' ? '#f59e0b' : '#ef4444'; 
+
+                    $warnaServis = $aset->jenis_servis === 'mendekati' ? '#f59e0b' : '#ef4444';
                     $labelServis = ['terlewat' => 'TERLEWAT SERVIS', 'waktunya' => 'MENDESAK SERVIS', 'mendekati' => 'MENDEKATI SERVIS'][$aset->jenis_servis];
                 }
 
-                // 3. Penentuan Tema Background 
                 $borderCard = $aset->is_rusak ? $warnaRusak : $warnaServis;
                 $hex = ltrim($borderCard, '#');
                 $bgCard = 'rgba(26, 79, 145, 0.03)';
@@ -670,18 +670,18 @@
                     $bgCard = "rgba($r, $g, $b, 0.05)";
                 }
             @endphp
-            
-            <div class="notif-item" style="border-left: 5px solid {{ $borderCard }}; background: {{ $bgCard }};">
-                
+
+            <div class="notif-item" data-border-left="{{ $borderCard }}" data-bg="{{ $bgCard }}">
+
                 <div style="display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; min-width: 130px;">
                     @if($aset->is_rusak)
-                        <div class="notif-badge" style="background: {{ $warnaRusak }}; border: 1px solid rgba(0,0,0,0.1);" title="Status Kerusakan Aset">
+                        <div class="notif-badge" data-bg="{{ $warnaRusak }}" style="border: 1px solid rgba(0,0,0,0.1);" title="Status Kerusakan Aset">
                             {{ strtoupper($aset->status_aset) }}
                         </div>
                     @endif
-                    
+
                     @if($aset->jenis_servis)
-                        <div class="notif-badge" style="background: {{ $warnaServis }}; border: 1px solid rgba(0,0,0,0.1);" title="{{ $labelServis }}">
+                        <div class="notif-badge" data-bg="{{ $warnaServis }}" style="border: 1px solid rgba(0,0,0,0.1);" title="{{ $labelServis }}">
                             {{ $teksServis }}
                         </div>
                     @endif
@@ -690,11 +690,11 @@
                 <div class="notif-isi">
                     <div class="notif-nama">{{ $aset->item->nama_aset ?? 'Aset tidak diketahui' }}</div>
                     <div class="notif-kode">
-                        {{ $aset->kode_aset }} 
-                        @if($aset->is_rusak) &middot; <span style="color: {{ $warnaRusak }}; font-weight: 700;">{{ $aset->status_aset }}</span> @endif
-                        @if($aset->jenis_servis) &middot; <span style="color: {{ $warnaServis }}; font-weight: 700;">{{ $labelServis }}</span> @endif
+                        {{ $aset->kode_aset }}
+                        @if($aset->is_rusak) &middot; <span data-color="{{ $warnaRusak }}" style="font-weight: 700;">{{ $aset->status_aset }}</span> @endif
+                        @if($aset->jenis_servis) &middot; <span data-color="{{ $warnaServis }}" style="font-weight: 700;">{{ $labelServis }}</span> @endif
                     </div>
-                    
+
                     <div class="notif-meta">
                         <span><b>Cabang:</b> {{ $aset->cabang->nama_cabang ?? '-' }}</span>
                         <span><b>Kategori:</b> {{ $aset->kategori->nama_kategori ?? '-' }}</span>
@@ -806,7 +806,7 @@
                 card.setAttribute('data-req-id', reqItem.id);
 
                 const badgeBlocked = reqItem.is_blocked
-                    ? '<span class="notif-badge" style="background: #dc2626;">AKUN TERBLOKIR (5/5 GAGAL)</span>'
+                    ? '<span class="notif-badge" style="background: #dc2626;">AKUN TERBLOKIR (3/3 GAGAL)</span>'
                     : '';
 
                 card.innerHTML = `
@@ -836,8 +836,6 @@
                 return card;
             }
 
-            // Polling real-time setiap 3 detik agar saat Admin klik "Lupa Password -> Minta Reset" di halaman login,
-            // langsung muncul di halaman Notifikasi Master Admin tanpa refresh!
             setInterval(async () => {
                 if (document.hidden) return;
                 try {
@@ -890,7 +888,6 @@
                 });
             }
 
-            // Live instant filter pada daftar kartu notifikasi saat mengetik di kolom pencarian navbar
             document.addEventListener('DOMContentLoaded', function () {
                 const inputSearch = document.getElementById('input-search-notifikasi');
                 const notifList = document.querySelector('.notif-list');
@@ -927,6 +924,19 @@
         })();
     </script>
 
+    <script>
+        (function () {
+            document.querySelectorAll('[data-bg]').forEach(function (el) {
+                el.style.background = el.getAttribute('data-bg');
+            });
+            document.querySelectorAll('[data-color]').forEach(function (el) {
+                el.style.color = el.getAttribute('data-color');
+            });
+            document.querySelectorAll('[data-border-left]').forEach(function (el) {
+                el.style.borderLeft = '5px solid ' + el.getAttribute('data-border-left');
+            });
+        })();
+    </script>
 </body>
 
 </html>

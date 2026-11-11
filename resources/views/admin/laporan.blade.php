@@ -1,5 +1,5 @@
-<?php
-    /* LAPORAN_RESMI_MASTER_V2 */
+@php
+
     $__userLoginLaporan = \Illuminate\Support\Facades\Auth::user();
     $__roleUserLaporan = $__userLoginLaporan
         ? strtolower(str_replace(' ', '_', trim((string) ($__userLoginLaporan->role ?? ''))))
@@ -12,7 +12,6 @@
         session(['active_sidebar_panel' => 'admin']);
     }
 
-    // Endpoint AJAX untuk mencatat aktivitas cetak laporan (PDF / Excel) ke RiwayatAktivitas
     if (request()->has('_log_cetak_laporan')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -47,7 +46,6 @@
         exit;
     }
 
-    // Ambil daftar Cabang dan Kategori dari database untuk dropdown filter
     $daftarCabangLaporan = [];
     $daftarKategoriLaporan = [];
 
@@ -72,21 +70,17 @@
     } catch (\Throwable $e) {
     }
 
-    // Ambil data transaksi nyata dari database untuk:
-    // 1. Peminjaman
-    // 2. Pengajuan
-    // 3. Pengembalian
-    // 4. Peleburan
-    // Jika tabel/transaksi dari sisi User belum ada di database, maka hasilnya murni 0 (kosong).
     $dataLaporanDatabase = [
         'peminjaman'   => [],
         'pengajuan'    => [],
         'pengembalian' => [],
         'peleburan'    => [],
+        'servis'       => [],
+        'inventaris'   => [],
     ];
 
     try {
-        // Peta lookup DetailAset agar jika ada tabel transaksi (peminjamans, pengajuans, dll) bisa dilengkapi detail asetnya
+
         $asetMapById = [];
         $semuaDetailAset = [];
         if (class_exists(\App\Models\DetailAset::class)) {
@@ -102,7 +96,6 @@
             }
         }
 
-        // Helper konversi baris tabel transaksi khusus (jika tabel sudah dibuat di DB)
         $ambilDariTabelTransaksi = function (array $namaTabelKandidat, string $jenisFilter = '') use ($asetMapById) {
             $hasilBaris = [];
             foreach ($namaTabelKandidat as $namaTbl) {
@@ -147,15 +140,15 @@
             return $hasilBaris;
         };
 
-        // 1. Data Peminjaman dari tabel transaksi peminjaman (atau detail_asets yang berstatus eksplisit 'Dipinjam')
         $dataLaporanDatabase['peminjaman'] = $ambilDariTabelTransaksi(['peminjamans', 'peminjaman_asets', 'peminjaman', 'transaksi_peminjamans']);
         if (empty($dataLaporanDatabase['peminjaman'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
-                if ($st === 'dipinjam' || $st === 'sedang dipinjam') {
+                $stMutasi = strtolower(trim((string) ($da->riwayat_mutasi ?? '')));
+                if ($st === 'dipinjam' || $st === 'sedang dipinjam' || str_contains($st, 'pinjam') || str_contains($stMutasi, 'pinjam')) {
                     $tglPinjam = (!empty($da->tanggal_mutasi) && $da->tanggal_mutasi !== '-')
-                        ? (string) $da->tanggal_mutasi
-                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : '');
+                        ? substr(trim((string) $da->tanggal_mutasi), 0, 10)
+                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->tanggal_pengadaan ? substr(trim((string) $da->tanggal_pengadaan), 0, 10) : ''));
                     $dataLaporanDatabase['peminjaman'][] = [
                         'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
                         'kode_aset'        => (string) ($da->kode_aset ?? '-'),
@@ -178,13 +171,14 @@
             }
         }
 
-        // 2. Data Pengajuan dari tabel transaksi pengajuan (atau detail_asets yang berstatus eksplisit 'Diajukan')
         $dataLaporanDatabase['pengajuan'] = $ambilDariTabelTransaksi(['pengajuans', 'pengajuan_asets', 'pengajuan', 'permohonan_asets']);
         if (empty($dataLaporanDatabase['pengajuan'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
-                if ($st === 'diajukan' || $st === 'menunggu persetujuan') {
-                    $tglAju = $da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->created_at ? $da->created_at->format('Y-m-d') : '');
+                $stMaint = strtolower(trim((string) ($da->status_maintenance ?? '')));
+                $stLeburAju = strtolower(trim((string) ($da->status_peleburan ?? '')));
+                if ($st === 'diajukan' || $st === 'menunggu persetujuan' || str_contains($st, 'aju') || str_contains($st, 'menunggu') || str_contains($stMaint, 'aju') || str_contains($stLeburAju, 'aju')) {
+                    $tglAju = $da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->created_at ? $da->created_at->format('Y-m-d') : ($da->tanggal_pengadaan ? substr(trim((string) $da->tanggal_pengadaan), 0, 10) : ''));
                     $dataLaporanDatabase['pengajuan'][] = [
                         'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
                         'kode_aset'        => (string) ($da->kode_aset ?? '-'),
@@ -207,15 +201,15 @@
             }
         }
 
-        // 3. Data Pengembalian dari tabel transaksi pengembalian (atau detail_asets yang berstatus eksplisit 'Dikembalikan')
         $dataLaporanDatabase['pengembalian'] = $ambilDariTabelTransaksi(['pengembalians', 'pengembalian_asets', 'pengembalian', 'transaksi_pengembalians']);
         if (empty($dataLaporanDatabase['pengembalian'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
-                if ($st === 'dikembalikan' || $st === 'selesai dipinjam') {
+                $stMutasi = strtolower(trim((string) ($da->riwayat_mutasi ?? '')));
+                if ($st === 'dikembalikan' || $st === 'selesai dipinjam' || str_contains($st, 'kembali') || str_contains($stMutasi, 'kembali')) {
                     $tglKembali = (!empty($da->tanggal_mutasi) && $da->tanggal_mutasi !== '-')
-                        ? (string) $da->tanggal_mutasi
-                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : '');
+                        ? substr(trim((string) $da->tanggal_mutasi), 0, 10)
+                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->tanggal_pengadaan ? substr(trim((string) $da->tanggal_pengadaan), 0, 10) : ''));
                     $dataLaporanDatabase['pengembalian'][] = [
                         'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
                         'kode_aset'        => (string) ($da->kode_aset ?? '-'),
@@ -238,15 +232,16 @@
             }
         }
 
-        // 4. Data Peleburan dari tabel transaksi peleburan (atau detail_asets yang memiliki tanggal/status peleburan nyata)
         $dataLaporanDatabase['peleburan'] = $ambilDariTabelTransaksi(['peleburans', 'peleburan_asets', 'peleburan', 'transaksi_peleburans']);
         if (empty($dataLaporanDatabase['peleburan'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
                 $stLebur = trim((string) ($da->status_peleburan ?? ''));
-                $tglLebur = (!empty($da->tanggal_peleburan) && $da->tanggal_peleburan !== '-') ? (string) $da->tanggal_peleburan : '';
+                $stLeburLower = strtolower($stLebur);
+                $tglLebur = (!empty($da->tanggal_peleburan) && $da->tanggal_peleburan !== '-') ? substr(trim((string) $da->tanggal_peleburan), 0, 10) : '';
+                $adaStatusLeburValid = ($stLebur !== '' && $stLebur !== '-' && !in_array($stLeburLower, ['tidak ada', 'normal', 'aktif', 'tersedia', 'baik', 'bagus', 'belum', 'tidak'], true));
 
-                if ($st === 'dilebur' || ($stLebur !== '' && $stLebur !== '-' && strtolower($stLebur) !== 'tidak ada') || $tglLebur !== '') {
+                if ($st === 'dilebur' || str_contains($st, 'lebur') || str_contains($st, 'hapus') || str_contains($st, 'afkir') || $adaStatusLeburValid || (float) ($da->nilai_jual ?? 0) > 0) {
                     $dataLaporanDatabase['peleburan'][] = [
                         'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
                         'kode_aset'        => (string) ($da->kode_aset ?? '-'),
@@ -260,50 +255,84 @@
                         'merk'             => (string) ($da->merk ?? '-'),
                         'unit'             => max(1, (int) ($da->unit ?? 1)),
                         'penanggung_jawab' => (string) ($da->penanggung_jawab ?: '-'),
-                        'status_aset'      => $stLebur !== '' && $stLebur !== '-' ? $stLebur : (string) $da->status_aset,
+                        'status_aset'      => $adaStatusLeburValid ? $stLebur : (string) $da->status_aset,
                         'harga_beli'       => (float) ($da->harga_beli ?? 0),
                         'biaya_terkait'    => (float) ($da->nilai_jual ?? 0),
-                        'tanggal'          => $tglLebur !== '' ? $tglLebur : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ''),
+                        'tanggal'          => $tglLebur !== '' ? $tglLebur : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->tanggal_pengadaan ? substr(trim((string) $da->tanggal_pengadaan), 0, 10) : '')),
                     ];
                 }
             }
         }
-    } catch (\Throwable $e) {
-    }
 
-    $namaUserCetak = $__userLoginLaporan->nama_lengkap ?? 'Master Admin';
-    $jabatanUserCetak = $__isMasterAdminLaporan ? 'Master Admin Sistem Inventaris' : 'Admin Inventaris Aset';
-
-    // Sinkronkan otomatis ke file laporan.blade.php lain jika project memisahkan folder views/admin & views/masteradmin
-    try {
-        $__currentLaporanFile = __FILE__;
-        $__kandidatLaporanFiles = [
-            resource_path('views/laporan.blade.php'),
-            resource_path('views/admin/laporan.blade.php'),
-            resource_path('views/masteradmin/laporan.blade.php'),
-        ];
-        if (is_file($__currentLaporanFile)) {
-            $__isiLaporanIni = (string) file_get_contents($__currentLaporanFile);
-            if (str_contains($__isiLaporanIni, '/* LAPORAN_RESMI_MASTER_V2 */')) {
-                foreach ($__kandidatLaporanFiles as $__targetLFile) {
-                    if (is_file($__targetLFile) && is_writable($__targetLFile) && realpath($__targetLFile) !== realpath($__currentLaporanFile)) {
-                        $__isiTargetL = (string) file_get_contents($__targetLFile);
-                        if (!str_contains($__isiTargetL, '/* LAPORAN_RESMI_MASTER_V2 */')) {
-                            file_put_contents($__targetLFile, $__isiLaporanIni);
-                        }
-                    }
+        $dataLaporanDatabase['servis'] = $ambilDariTabelTransaksi(['servis_asets', 'maintenance_asets', 'perbaikan_asets']);
+        if (empty($dataLaporanDatabase['servis'])) {
+            foreach ($semuaDetailAset as $idx => $da) {
+                $st = strtolower(trim((string) ($da->status_aset ?? '')));
+                $stMaint = trim((string) ($da->status_maintenance ?? ''));
+                $stMaintLower = strtolower($stMaint);
+                $adaMaintValid = ($stMaint !== '' && $stMaint !== '-' && !in_array($stMaintLower, ['normal', 'tidak ada', 'baik', 'bagus', 'tersedia'], true));
+                if (str_contains($st, 'rusak') || str_contains($st, 'perbaikan') || str_contains($st, 'servis') || str_contains($st, 'maintenance') || $adaMaintValid || (float) ($da->biaya_servis ?? 0) > 0) {
+                    $tglServis = (!empty($da->servis_terakhir) && $da->servis_terakhir !== '-')
+                        ? substr(trim((string) $da->servis_terakhir), 0, 10)
+                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ($da->tanggal_pengadaan ? substr(trim((string) $da->tanggal_pengadaan), 0, 10) : ''));
+                    $dataLaporanDatabase['servis'][] = [
+                        'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
+                        'kode_aset'        => (string) ($da->kode_aset ?? '-'),
+                        'nomor_seri'       => (string) ($da->nomor_seri ?? '-'),
+                        'nama_aset'        => (string) ($da->item->nama_aset ?? '-'),
+                        'kategori_id'      => (string) ($da->kategori_id ?? ''),
+                        'nama_kategori'    => (string) ($da->kategori->nama_kategori ?? '-'),
+                        'cabang_id'        => (string) ($da->cabang_id ?? ''),
+                        'nama_cabang'      => (string) ($da->cabang->nama_cabang ?? '-'),
+                        'ruangan'          => (string) ($da->Ruangan ?? $da->lokasi_saat_ini ?? '-'),
+                        'merk'             => (string) ($da->merk ?? '-'),
+                        'unit'             => max(1, (int) ($da->unit ?? 1)),
+                        'penanggung_jawab' => (string) ($da->teknisi && $da->teknisi !== '-' ? $da->teknisi : ($da->penanggung_jawab ?: '-')),
+                        'status_aset'      => (string) ($da->status_aset ?: ($adaMaintValid ? $stMaint : 'Perbaikan')),
+                        'harga_beli'       => (float) ($da->harga_beli ?? 0),
+                        'biaya_terkait'    => (float) ($da->biaya_servis ?? 0),
+                        'tanggal'          => $tglServis,
+                    ];
                 }
             }
         }
+
+        foreach ($semuaDetailAset as $idx => $da) {
+            $tglPengadaan = (!empty($da->tanggal_pengadaan) && $da->tanggal_pengadaan !== '-')
+                ? substr(trim((string) $da->tanggal_pengadaan), 0, 10)
+                : ($da->created_at ? $da->created_at->format('Y-m-d') : ($da->updated_at ? $da->updated_at->format('Y-m-d') : ''));
+            $dataLaporanDatabase['inventaris'][] = [
+                'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
+                'kode_aset'        => (string) ($da->kode_aset ?? '-'),
+                'nomor_seri'       => (string) ($da->nomor_seri ?? '-'),
+                'nama_aset'        => (string) ($da->item->nama_aset ?? '-'),
+                'kategori_id'      => (string) ($da->kategori_id ?? ''),
+                'nama_kategori'    => (string) ($da->kategori->nama_kategori ?? '-'),
+                'cabang_id'        => (string) ($da->cabang_id ?? ''),
+                'nama_cabang'      => (string) ($da->cabang->nama_cabang ?? '-'),
+                'ruangan'          => (string) ($da->Ruangan ?? $da->lokasi_saat_ini ?? '-'),
+                'merk'             => (string) ($da->merk ?? '-'),
+                'unit'             => max(1, (int) ($da->unit ?? 1)),
+                'penanggung_jawab' => (string) ($da->penanggung_jawab ?: '-'),
+                'status_aset'      => (string) ($da->status_aset ?: 'Tersedia'),
+                'harga_beli'       => (float) ($da->harga_beli ?? 0),
+                'biaya_terkait'    => (float) ($da->biaya_servis ?? 0),
+                'tanggal'          => $tglPengadaan,
+            ];
+        }
     } catch (\Throwable $e) {
     }
-?>
+
+    $namaUserCetak = $__userLoginLaporan->nama_lengkap ?? ($__isMasterAdminLaporan ? 'Master Admin' : 'Admin');
+    $jabatanUserCetak = $__isMasterAdminLaporan ? 'Master Admin Sistem Inventaris' : 'Admin Inventaris Aset';
+
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laporan Resmi Aset - <?php echo e($__isMasterAdminLaporan ? 'Master Admin' : 'Admin'); ?></title>
+    <title>Laporan Resmi Aset - {{ $__isMasterAdminLaporan ? 'Master Admin' : 'Admin' }}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -438,7 +467,6 @@
             box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
         }
 
-        /* Panel Filter Dropdown */
         .card-box {
             background: #ffffff;
             padding: 22px;
@@ -490,7 +518,6 @@
             box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.1);
         }
 
-        /* Kartu Ringkasan Statistik Laporan */
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -556,7 +583,6 @@
             font-weight: 500;
         }
 
-        /* Tabel Data di Halaman Utama */
         .table-wrap {
             width: 100%;
             overflow-x: auto;
@@ -606,6 +632,8 @@
         .badge-kembali { background: #d1fae5; color: #065f46; }
         .badge-lebur { background: #fee2e2; color: #991b1b; }
         .badge-pengajuan { background: #fef3c7; color: #92400e; }
+        .badge-servis { background: #ffedd5; color: #c2410c; }
+        .badge-inventaris { background: #e0f2fe; color: #0369a1; }
 
         .empty-table-box {
             display: flex;
@@ -628,7 +656,6 @@
             justify-content: center;
         }
 
-        /* Toast Peringatan */
         .laporan-toast {
             position: fixed;
             bottom: 24px;
@@ -656,7 +683,6 @@
             opacity: 1;
         }
 
-        /* ================= MODAL POP-UP PREVIEW LAPORAN RESMI (PDF & EXCEL) ================= */
         .preview-modal-backdrop {
             position: fixed;
             inset: 0;
@@ -712,7 +738,6 @@
             flex-wrap: wrap;
         }
 
-        /* Panel Pengaturan Kop Surat & Logo di dalam Modal */
         .kop-editor-drawer {
             display: none;
             background: #ffffff;
@@ -738,7 +763,6 @@
             justify-content: center;
         }
 
-        /* KERTAS LAPORAN RESMI (A4 PREVIEW) */
         .official-paper {
             background: #ffffff;
             width: 100%;
@@ -753,7 +777,6 @@
             justify-content: space-between;
         }
 
-        /* KOP SURAT RESMI (LOGO KIRI, INFO PT/MITRA TENGAH, LOGO KANAN) */
         .kop-surat-header {
             display: grid;
             grid-template-columns: 95px 1fr 95px;
@@ -821,7 +844,6 @@
             color: #1e293b;
         }
 
-        /* Judul & Nomor Dokumen Laporan Resmi */
         .doc-title-block {
             text-align: center;
             margin-bottom: 20px;
@@ -844,7 +866,6 @@
             color: #334155;
         }
 
-        /* Tabel Metadata Dokumen */
         .doc-meta-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -874,7 +895,6 @@
             color: #0f172a;
         }
 
-        /* Kotak Ringkasan di dalam Dokumen PDF */
         .doc-summary-strip {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -904,7 +924,6 @@
             color: #0f172a;
         }
 
-        /* Tabel Resmi di dalam Dokumen PDF */
         .official-table {
             width: 100%;
             border-collapse: collapse;
@@ -946,7 +965,6 @@
             print-color-adjust: exact;
         }
 
-        /* Blok Tanda Tangan & Pengesahan Resmi */
         .doc-signature-section {
             margin-top: 28px;
             display: grid;
@@ -986,7 +1004,6 @@
             margin-top: 2px;
         }
 
-        /* ATURAN CETAK (PRINT PDF LANGSUNG BERSIH HANYA KERTAS RESMI) */
         @media print {
             @page {
                 size: A4 portrait;
@@ -1003,7 +1020,12 @@
             main,
             .preview-modal-topbar,
             .kop-editor-drawer,
-            .laporan-toast {
+            .laporan-toast,
+            .nav-loading-overlay,
+            #global-page-nav-loader,
+            .perm-rt-toast,
+            .perm-revoked-overlay,
+            #admin-perm-status-banner {
                 display: none !important;
             }
 
@@ -1048,18 +1070,46 @@
                 grid-template-columns: 65px 1fr 65px;
             }
         }
+
+        @media screen {
+            .main-header {
+                position: fixed !important;
+                top: 0 !important;
+                left: var(--sidebar-width, 270px) !important;
+                right: 0 !important;
+                width: calc(100% - var(--sidebar-width, 270px)) !important;
+                background: rgba(255, 255, 255, 0.98) !important;
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                padding: 18px 25px !important;
+                margin: 0 !important;
+                border-bottom: 2px solid var(--border-color) !important;
+                box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+                z-index: 95 !important;
+            }
+            main {
+                padding-top: 108px !important;
+            }
+        }
+        @media screen and (max-width: 768px) {
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 18px !important;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <?php if($__isMasterAdminLaporan): ?>
-        <?php echo $__env->make('layouts.mastersidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-    <?php else: ?>
-        <?php echo $__env->make('layouts.adminsidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-    <?php endif; ?>
+    @if($__isMasterAdminLaporan)
+        @include('layouts.mastersidebar')
+    @else
+        @include('layouts.adminsidebar')
+    @endif
 
     <main>
-        <!-- HEADER UTAMA & TOMBOL CETAK PDF / EXCEL -->
+
         <header class="main-header">
             <div class="header-title">
                 <div class="header-icon-box">
@@ -1099,7 +1149,6 @@
             </div>
         </header>
 
-        <!-- PANEL FILTER DROPDOWN (RINGKAS, TANPA TOMBOL GANDA) -->
         <div class="card-box">
             <div class="filter-grid">
                 <div class="form-group">
@@ -1112,6 +1161,8 @@
                         <option value="pengajuan">Laporan Pengajuan Aset</option>
                         <option value="pengembalian">Laporan Pengembalian Aset</option>
                         <option value="peleburan">Laporan Peleburan Aset</option>
+                        <option value="servis">Laporan Servis & Pemeliharaan Aset</option>
+                        <option value="inventaris">Laporan Data Inventaris Aset (Semua Aset)</option>
                     </select>
                 </div>
 
@@ -1154,9 +1205,9 @@
                     </label>
                     <select id="filter-cabang-laporan" onchange="renderLaporanUtama()">
                         <option value="">-- Semua Cabang --</option>
-                        <?php $__currentLoopData = $daftarCabangLaporan; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $cb): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                            <option value="<?php echo e($cb['id']); ?>"><?php echo e($cb['nama']); ?></option>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        @foreach($daftarCabangLaporan as $cb)
+                            <option value="{{ $cb['id'] }}">{{ $cb['nama'] }}</option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -1167,9 +1218,9 @@
                     </label>
                     <select id="filter-kategori-laporan" onchange="renderLaporanUtama()">
                         <option value="">-- Semua Kategori --</option>
-                        <?php $__currentLoopData = $daftarKategoriLaporan; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $kt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                            <option value="<?php echo e($kt['id']); ?>"><?php echo e($kt['nama']); ?></option>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                        @foreach($daftarKategoriLaporan as $kt)
+                            <option value="{{ $kt['id'] }}">{{ $kt['nama'] }}</option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -1183,7 +1234,6 @@
             </div>
         </div>
 
-        <!-- 4 KARTU RINGKASAN EKSEKUTIF -->
         <div class="summary-grid">
             <div class="summary-card">
                 <div class="summary-card-left">
@@ -1242,7 +1292,6 @@
             </div>
         </div>
 
-        <!-- TABEL DATA LAPORAN DI HALAMAN UTAMA -->
         <div class="card-box">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
                 <div>
@@ -1253,8 +1302,8 @@
                         Data diambil langsung dari database sesuai jenis laporan dan rentang waktu yang dipilih.
                     </p>
                 </div>
-                <div id="indikator-status-cetak" style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; background: #fee2e2; color: #b91c1c;">
-                    0 Data Tersedia (Tidak Dapat Dicetak)
+                <div id="indikator-status-cetak" style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 8px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;">
+                    0 Data Tersedia (Siap Cetak PDF / Excel Laporan Nihil)
                 </div>
             </div>
 
@@ -1275,14 +1324,13 @@
                         </tr>
                     </thead>
                     <tbody id="tbody-laporan-utama">
-                        <!-- Diisi secara dinamis oleh JS -->
+
                     </tbody>
                 </table>
             </div>
         </div>
     </main>
 
-    <!-- TOAST NOTIFIKASI TANPA EMOJI -->
     <div id="toast-laporan" class="laporan-toast">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
             <circle cx="12" cy="12" r="10"></circle>
@@ -1292,10 +1340,9 @@
         <span id="toast-laporan-text">Tidak dapat mencetak laporan karena belum ada data (0 data).</span>
     </div>
 
-    <!-- ================= POP-UP MODAL PREVIEW LAPORAN RESMI (PDF & EXCEL) ================= -->
     <div class="preview-modal-backdrop" id="modalPreviewLaporan">
         <div class="preview-modal-dialog">
-            <!-- Topbar Kontrol Pop-Up Preview -->
+
             <div class="preview-modal-topbar">
                 <div class="preview-modal-title">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1338,7 +1385,6 @@
                 </div>
             </div>
 
-            <!-- Drawer Pengaturan Kop Surat, Informasi PT/Mitra & Upload Logo Kiri/Kanan -->
             <div class="kop-editor-drawer" id="drawerEditorKop">
                 <div style="font-size: 12.5px; font-weight: 800; color: var(--primary-color); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -1380,13 +1426,12 @@
                 </div>
             </div>
 
-            <!-- Area Kertas A4 Preview Laporan Resmi -->
             <div class="preview-modal-body">
                 <div class="official-paper" id="kertas-laporan-resmi">
                     <div>
-                        <!-- 1. KOP SURAT RESMI (LOGO KIRI - INFO PT/MITRA TENGAH - LOGO KANAN) -->
+
                         <div class="kop-surat-header">
-                            <!-- Pojok Kiri: Logo Utama PT / Sistem -->
+
                             <div class="kop-logo-box" id="box-logo-kiri">
                                 <svg width="82" height="82" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                                     <defs>
@@ -1403,7 +1448,6 @@
                                 </svg>
                             </div>
 
-                            <!-- Tengah: Informasi Resmi PT / Mitra, Alamat, Email, Kontak -->
                             <div class="kop-center-info">
                                 <div class="kop-instansi-atas" id="teks-kop-induk">DIVISI MANAJEMEN INVENTARIS & ASET TERPADU</div>
                                 <div class="kop-nama-pt" id="teks-kop-pt">PT MITRA ASET NUSANTARA</div>
@@ -1412,7 +1456,6 @@
                                 <div class="kop-kontak" id="teks-kop-kontak">Telp: (031) 8945-2210 | Email: official@mitraasetnusantara.co.id | Web: www.mitraasetnusantara.co.id</div>
                             </div>
 
-                            <!-- Pojok Kanan: Logo Mitra / ISO Badge Resmi -->
                             <div class="kop-logo-box" id="box-logo-kanan">
                                 <svg width="82" height="82" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
                                     <defs>
@@ -1429,13 +1472,11 @@
                             </div>
                         </div>
 
-                        <!-- 2. JUDUL DOKUMEN & NOMOR SURAT LAPORAN -->
                         <div class="doc-title-block">
                             <h2 id="pdf-judul-dokumen">LAPORAN REKAPITULASI PEMINJAMAN ASET INVENTARIS</h2>
                             <div class="doc-number" id="pdf-nomor-dokumen">Nomor Dokumen: 001/LAP-AST/PMJ/X/2026</div>
                         </div>
 
-                        <!-- 3. METADATA INFORMASI LAPORAN -->
                         <div class="doc-meta-grid">
                             <div>
                                 <div class="doc-meta-row">
@@ -1462,12 +1503,11 @@
                                 </div>
                                 <div class="doc-meta-row" style="margin-top: 4px;">
                                     <span class="doc-meta-label">Dicetak Oleh</span>
-                                    <span class="doc-meta-val">: <?php echo e($namaUserCetak); ?> (<?php echo e($__isMasterAdminLaporan ? 'Master Admin' : 'Admin'); ?>)</span>
+                                    <span class="doc-meta-val">: {{ $namaUserCetak }} ({{ $__isMasterAdminLaporan ? 'Master Admin' : 'Admin' }})</span>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 4. KOTAK RINGKASAN EKSEKUTIF DI DALAM PDF -->
                         <div class="doc-summary-strip">
                             <div class="doc-summary-item">
                                 <div class="ds-label" id="pdf-sum-label-1">Total Aset Dipinjam</div>
@@ -1487,7 +1527,6 @@
                             </div>
                         </div>
 
-                        <!-- 5. TABEL DATA LAPORAN RESMI -->
                         <table class="official-table" id="tabel-resmi-cetak">
                             <thead>
                                 <tr>
@@ -1504,15 +1543,14 @@
                                 </tr>
                             </thead>
                             <tbody id="tbody-pdf-resmi">
-                                <!-- Diisi otomatis oleh JS -->
+
                             </tbody>
                             <tfoot id="tfoot-pdf-resmi">
-                                <!-- Baris Total diisi otomatis oleh JS -->
+
                             </tfoot>
                         </table>
                     </div>
 
-                    <!-- 6. BLOK PENGESAHAN & TANDA TANGAN RESMI -->
                     <div class="doc-signature-section">
                         <div class="sig-box">
                             <div>Mengetahui & Menyetujui,</div>
@@ -1523,11 +1561,11 @@
                         </div>
 
                         <div class="sig-box">
-                            <div id="teks-sig-tanggal">Sidoarjo, <?php echo e(date('d F Y')); ?></div>
+                            <div id="teks-sig-tanggal">Sidoarjo, {{ date('d F Y') }}</div>
                             <div style="font-weight: 700; margin-top: 2px;">Disusun & Disahkan Oleh,</div>
-                            <div class="sig-space">( Tanda Tangan Master Admin )</div>
-                            <div class="sig-name"><?php echo e($namaUserCetak); ?></div>
-                            <div class="sig-role"><?php echo e($jabatanUserCetak); ?></div>
+                            <div class="sig-space">( Tanda Tangan {{ $__isMasterAdminLaporan ? 'Master Admin' : 'Admin' }} )</div>
+                            <div class="sig-name">{{ $namaUserCetak }}</div>
+                            <div class="sig-role">{{ $jabatanUserCetak }}</div>
                         </div>
                     </div>
                 </div>
@@ -1535,10 +1573,14 @@
         </div>
     </div>
 
+    <input type="hidden" id="json-data-laporan-db" value="{{ json_encode($dataLaporanDatabase) }}">
+    <input type="hidden" id="json-nama-user-cetak" value="{{ json_encode($namaUserCetak) }}">
+    <input type="hidden" id="json-jabatan-user-cetak" value="{{ json_encode($jabatanUserCetak) }}">
+
     <script>
-        const DATA_LAPORAN_DB = <?php echo json_encode($dataLaporanDatabase, 15, 512) ?>;
-        const NAMA_USER_CETAK = <?php echo json_encode($namaUserCetak, 15, 512) ?>;
-        const JABATAN_USER_CETAK = <?php echo json_encode($jabatanUserCetak, 15, 512) ?>;
+        const DATA_LAPORAN_DB = JSON.parse(document.getElementById('json-data-laporan-db').value || '{}');
+        const NAMA_USER_CETAK = JSON.parse(document.getElementById('json-nama-user-cetak').value || '""');
+        const JABATAN_USER_CETAK = JSON.parse(document.getElementById('json-jabatan-user-cetak').value || '""');
 
         let stateLaporan = {
             jenis: 'peminjaman',
@@ -1582,6 +1624,22 @@
                 kodeDok: 'PLB',
                 labelUtama: 'Total Aset Dilebur',
                 labelSekunder: 'Total Nilai Jual Peleburan'
+            },
+            servis: {
+                nama: 'Laporan Servis & Pemeliharaan Aset',
+                judulTabel: 'Daftar Laporan Servis & Pemeliharaan Aset',
+                judulPdf: 'LAPORAN REKAPITULASI SERVIS & PEMELIHARAAN ASET INVENTARIS',
+                kodeDok: 'SRV',
+                labelUtama: 'Total Aset Servis / Rusak',
+                labelSekunder: 'Total Biaya Servis'
+            },
+            inventaris: {
+                nama: 'Laporan Data Inventaris Aset',
+                judulTabel: 'Daftar Keseluruhan Data Inventaris Aset',
+                judulPdf: 'LAPORAN REKAPITULASI DATA INVENTARIS ASET FISIK',
+                kodeDok: 'INV',
+                labelUtama: 'Total Aset Tercatat',
+                labelSekunder: 'Total Biaya Pemeliharaan'
             }
         };
 
@@ -1604,7 +1662,8 @@
 
         function formatTanggalIndo(ymdStr) {
             if (!ymdStr || ymdStr === '-') return '-';
-            const d = new Date(ymdStr + 'T00:00:00');
+            const cleanYmd = String(ymdStr).trim().substring(0, 10);
+            const d = new Date(cleanYmd + 'T00:00:00');
             if (isNaN(d.getTime())) return ymdStr;
             return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         }
@@ -1625,7 +1684,6 @@
                 .replace(/'/g, '&#039;');
         }
 
-        // Terapkan Template Waktu dari Dropdown (1 Bulan, 2 Bulan, 3 Bulan, 6 Bulan, 1 Tahun, Semua, atau Custom)
         function terapkanTemplateWaktu(kodeTemplate) {
             stateLaporan.template = kodeTemplate;
 
@@ -1726,7 +1784,6 @@
             const kategoriId = document.getElementById('filter-kategori-laporan')?.value || '';
             const keyword = (document.getElementById('filter-keyword-laporan')?.value || '').trim().toLowerCase();
 
-            // Ambil murni dari database sesuai jenis laporan (tanpa data dummy/fallback palsu)
             const sumberDataJenis = Array.isArray(DATA_LAPORAN_DB[jenis]) ? DATA_LAPORAN_DB[jenis] : [];
 
             const hasil = sumberDataJenis.filter(item => {
@@ -1759,7 +1816,6 @@
 
             stateLaporan.filteredRows = hasil;
 
-            // Hitung ringkasan statistik
             const totalAset = hasil.length;
             const totalUnit = hasil.reduce((sum, r) => sum + (Number(r.unit) || 1), 0);
             const totalHarga = hasil.reduce((sum, r) => sum + (Number(r.harga_beli) || 0), 0);
@@ -1776,30 +1832,29 @@
             document.getElementById('stat-total-sekunder').textContent = formatRupiah(totalSekunder);
             document.getElementById('judul-tabel-halaman').textContent = konfig.judulTabel;
 
-            // Atur status aktif/nonaktif tombol Cetak PDF & Excel berdasarkan ketersediaan data
             const btnPdf = document.getElementById('btn-utama-pdf');
             const btnExcel = document.getElementById('btn-utama-excel');
             const indikatorCetak = document.getElementById('indikator-status-cetak');
 
+            if (btnPdf) btnPdf.classList.remove('is-disabled');
+            if (btnExcel) btnExcel.classList.remove('is-disabled');
+
             if (totalAset === 0) {
-                if (btnPdf) btnPdf.classList.add('is-disabled');
-                if (btnExcel) btnExcel.classList.add('is-disabled');
                 if (indikatorCetak) {
-                    indikatorCetak.style.background = '#fee2e2';
-                    indikatorCetak.style.color = '#b91c1c';
-                    indikatorCetak.textContent = '0 Data Tersedia (Tidak Dapat Dicetak)';
+                    indikatorCetak.style.background = '#eff6ff';
+                    indikatorCetak.style.color = '#1d4ed8';
+                    indikatorCetak.style.border = '1px solid #bfdbfe';
+                    indikatorCetak.textContent = '0 Data Tersedia (Siap Cetak PDF / Excel Laporan Nihil)';
                 }
             } else {
-                if (btnPdf) btnPdf.classList.remove('is-disabled');
-                if (btnExcel) btnExcel.classList.remove('is-disabled');
                 if (indikatorCetak) {
                     indikatorCetak.style.background = '#d1fae5';
                     indikatorCetak.style.color = '#065f46';
+                    indikatorCetak.style.border = '1px solid #a7f3d0';
                     indikatorCetak.textContent = `${totalAset} Data Siap Dicetak (PDF / Excel)`;
                 }
             }
 
-            // Render baris ke tabel utama
             const tbody = document.getElementById('tbody-laporan-utama');
             if (!tbody) return;
 
@@ -1818,8 +1873,8 @@
                                 <div style="font-size: 14px; font-weight: 700; color: #334155;">
                                     Belum Ada Data ${escapeHtml(konfig.nama)} (0 Data)
                                 </div>
-                                <div style="font-size: 12.5px; color: #64748b; text-align: center; max-width: 520px;">
-                                    Saat ini belum ada transaksi pada database untuk kategori <strong>${escapeHtml(konfig.nama)}</strong> di periode <strong>${escapeHtml(periodeText)}</strong>. Laporan baru dapat dicetak setelah data tersedia.
+                                <div style="font-size: 12.5px; color: #64748b; text-align: center; max-width: 540px;">
+                                    Saat ini belum ada transaksi pada database untuk kategori <strong>${escapeHtml(konfig.nama)}</strong> di periode <strong>${escapeHtml(periodeText)}</strong>. Anda tetap dapat mengklik tombol <strong>Cetak PDF</strong> di atas untuk mencetak dokumen laporan resmi (status nihil / 0 data).
                                 </div>
                             </div>
                         </td>
@@ -1832,6 +1887,8 @@
                     if (jenis === 'pengembalian') badgeClass = 'badge-kembali';
                     else if (jenis === 'peleburan') badgeClass = 'badge-lebur';
                     else if (jenis === 'pengajuan') badgeClass = 'badge-pengajuan';
+                    else if (jenis === 'servis') badgeClass = 'badge-servis';
+                    else if (jenis === 'inventaris') badgeClass = 'badge-inventaris';
 
                     const nilaiTampil = (jenis === 'peleburan' && r.biaya_terkait > 0) ? r.biaya_terkait : r.harga_beli;
 
@@ -1901,29 +1958,39 @@
             const tfootPdf = document.getElementById('tfoot-pdf-resmi');
 
             let akumulasiNilaiTabel = 0;
-            tbodyPdf.innerHTML = rows.map((r, i) => {
-                const tglTampil = formatTanggalIndo(r.tanggal);
-                const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
-                akumulasiNilaiTabel += nilaiBaris;
-
-                return `
+            if (rows.length === 0) {
+                tbodyPdf.innerHTML = `
                     <tr>
-                        <td style="text-align: center; font-weight: 700;">${i + 1}</td>
-                        <td style="font-weight: 700;">${escapeHtml(r.kode_aset)}</td>
-                        <td>
-                            <div style="font-weight: 700;">${escapeHtml(r.nama_aset)}</div>
-                            <div style="font-size: 9.5px; color: #475569;">Merk: ${escapeHtml(r.merk)} | SN: ${escapeHtml(r.nomor_seri)}</div>
+                        <td colspan="10" style="text-align: center; padding: 28px 16px; color: #334155; font-style: italic; font-weight: 600; background: #f8fafc;">
+                            NIHIL — Belum ada data transaksi ${escapeHtml(konfig.nama)} pada periode ${escapeHtml(periodeText)} (0 Data Tercatat).
                         </td>
-                        <td>${escapeHtml(r.nama_kategori)}</td>
-                        <td>${escapeHtml(r.nama_cabang)} (${escapeHtml(r.ruangan)})</td>
-                        <td>${escapeHtml(r.penanggung_jawab)}</td>
-                        <td>${escapeHtml(tglTampil)}</td>
-                        <td style="text-align: center; font-weight: 700;">${r.unit}</td>
-                        <td>${escapeHtml(r.status_aset)}</td>
-                        <td style="text-align: right; font-weight: 700;">${formatRupiah(nilaiBaris)}</td>
                     </tr>
                 `;
-            }).join('');
+            } else {
+                tbodyPdf.innerHTML = rows.map((r, i) => {
+                    const tglTampil = formatTanggalIndo(r.tanggal);
+                    const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
+                    akumulasiNilaiTabel += nilaiBaris;
+
+                    return `
+                        <tr>
+                            <td style="text-align: center; font-weight: 700;">${i + 1}</td>
+                            <td style="font-weight: 700;">${escapeHtml(r.kode_aset)}</td>
+                            <td>
+                                <div style="font-weight: 700;">${escapeHtml(r.nama_aset)}</div>
+                                <div style="font-size: 9.5px; color: #475569;">Merk: ${escapeHtml(r.merk)} | SN: ${escapeHtml(r.nomor_seri)}</div>
+                            </td>
+                            <td>${escapeHtml(r.nama_kategori)}</td>
+                            <td>${escapeHtml(r.nama_cabang)} (${escapeHtml(r.ruangan)})</td>
+                            <td>${escapeHtml(r.penanggung_jawab)}</td>
+                            <td>${escapeHtml(tglTampil)}</td>
+                            <td style="text-align: center; font-weight: 700;">${r.unit}</td>
+                            <td>${escapeHtml(r.status_aset)}</td>
+                            <td style="text-align: right; font-weight: 700;">${formatRupiah(nilaiBaris)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
 
             tfootPdf.innerHTML = `
                 <tr>
@@ -1935,23 +2002,16 @@
             `;
         }
 
-        // Buka Pop-Up Preview Laporan Resmi HANYA jika data > 0
         function bukaModalPreviewLaporan(modeFokus = 'pdf') {
             const rows = stateLaporan.filteredRows || [];
-            const konfig = KONFIG_JENIS_LAPORAN[stateLaporan.jenis] || KONFIG_JENIS_LAPORAN.peminjaman;
-
-            if (rows.length === 0) {
-                tampilkanToastPeringatan(`Tidak dapat mencetak ${konfig.nama} karena datanya masih 0 di database.`);
-                return;
-            }
-
             renderDokumenPreviewResmi();
             const modal = document.getElementById('modalPreviewLaporan');
             const headerTxt = document.getElementById('modal-preview-header-text');
             if (headerTxt) {
+                const infoNihil = rows.length === 0 ? ' (Laporan Nihil / 0 Data)' : '';
                 headerTxt.textContent = modeFokus === 'excel'
-                    ? 'Preview Dokumen Laporan Resmi — Siap Diunduh ke Excel (.xls) atau Dicetak ke PDF'
-                    : 'Preview Dokumen Laporan Resmi (Ukuran A4) — Siap Dicetak ke PDF';
+                    ? `Preview Dokumen Laporan Resmi${infoNihil} — Siap Diunduh ke Excel (.xls) atau Dicetak ke PDF`
+                    : `Preview Dokumen Laporan Resmi (Ukuran A4)${infoNihil} — Siap Dicetak ke PDF`;
             }
             if (modal) modal.classList.add('show');
         }
@@ -2039,22 +2099,12 @@
         }
 
         function eksekusiCetakPdfResmi() {
-            const rows = stateLaporan.filteredRows || [];
-            if (rows.length === 0) {
-                tampilkanToastPeringatan('Tidak dapat mencetak PDF karena tidak ada data (0 data).');
-                return;
-            }
             catatLogCetakKeServer('PDF');
             window.print();
         }
 
         function eksekusiUnduhExcelResmi() {
             const rows = stateLaporan.filteredRows || [];
-            if (rows.length === 0) {
-                tampilkanToastPeringatan('Tidak dapat mengekspor Excel karena tidak ada data (0 data).');
-                return;
-            }
-
             catatLogCetakKeServer('EXCEL');
             const jenis = stateLaporan.jenis;
             const konfig = KONFIG_JENIS_LAPORAN[jenis] || KONFIG_JENIS_LAPORAN.peminjaman;
@@ -2072,25 +2122,33 @@
             const totalUnit = rows.reduce((s, r) => s + (Number(r.unit) || 1), 0);
             let totalNilai = 0;
 
-            const barisHtml = rows.map((r, idx) => {
-                const tglTampil = formatTanggalIndo(r.tanggal);
-                const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
-                totalNilai += nilaiBaris;
-                return `
+            const barisHtml = rows.length === 0
+                ? `
                     <tr>
-                        <td style="border:1px solid #000; text-align:center;">${idx + 1}</td>
-                        <td style="border:1px solid #000; font-weight:bold;">${escapeHtml(r.kode_aset)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_aset)} (Merk: ${escapeHtml(r.merk)})</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_kategori)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.nama_cabang)} - ${escapeHtml(r.ruangan)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.penanggung_jawab)}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(tglTampil)}</td>
-                        <td style="border:1px solid #000; text-align:center;">${r.unit}</td>
-                        <td style="border:1px solid #000;">${escapeHtml(r.status_aset)}</td>
-                        <td style="border:1px solid #000; text-align:right;">${formatRupiah(nilaiBaris)}</td>
+                        <td colspan="10" style="border:1px solid #000; text-align:center; padding:18px; font-style:italic; color:#334155;">
+                            NIHIL — Belum ada data transaksi ${escapeHtml(konfig.nama)} pada periode ${escapeHtml(periode)} (0 Data Tercatat).
+                        </td>
                     </tr>
-                `;
-            }).join('');
+                `
+                : rows.map((r, idx) => {
+                    const tglTampil = formatTanggalIndo(r.tanggal);
+                    const nilaiBaris = (jenis === 'peleburan' && r.biaya_terkait > 0) ? Number(r.biaya_terkait) : Number(r.harga_beli || 0);
+                    totalNilai += nilaiBaris;
+                    return `
+                        <tr>
+                            <td style="border:1px solid #000; text-align:center;">${idx + 1}</td>
+                            <td style="border:1px solid #000; font-weight:bold;">${escapeHtml(r.kode_aset)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_aset)} (Merk: ${escapeHtml(r.merk)})</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_kategori)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.nama_cabang)} - ${escapeHtml(r.ruangan)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.penanggung_jawab)}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(tglTampil)}</td>
+                            <td style="border:1px solid #000; text-align:center;">${r.unit}</td>
+                            <td style="border:1px solid #000;">${escapeHtml(r.status_aset)}</td>
+                            <td style="border:1px solid #000; text-align:right;">${formatRupiah(nilaiBaris)}</td>
+                        </tr>
+                    `;
+                }).join('');
 
             const excelHtml = `
                 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -2157,8 +2215,8 @@
                             <td colspan="5" style="text-align:center; font-size:9pt;">${escapeHtml(JABATAN_USER_CETAK)}</td>
                         </tr>
                     </table>
-                </body>
-                </html>
+                <\/body>
+                <\/html>
             `;
 
             const blob = new Blob(['\ufeff', excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
@@ -2180,10 +2238,32 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             muatPengaturanKopTersimpan();
-            // Default awal: Laporan Peminjaman Aset dalam 1 Bulan Terakhir
+
             terapkanTemplateWaktu('1_bulan');
             pilihJenisLaporan('peminjaman');
         });
+
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header');
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 82;
+                    mainEl.style.setProperty('padding-top', (tinggi + 24) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+        })();
     </script>
 </body>
-</html><?php /**PATH C:\laragon\www\INVENTARIS-DMK\resources\views/masteradmin/laporan.blade.php ENDPATH**/ ?>
+</html>

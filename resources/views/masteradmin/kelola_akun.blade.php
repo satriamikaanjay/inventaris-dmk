@@ -1,5 +1,5 @@
 @php
-    // Sinkronisasi otomatis: Ubah abort(403) pada KelolaAkunController / routes menjadi redirect ke Dashboard Admin
+
     try {
         $__kandidatFilePatch = array_merge(
             glob(app_path('Http/Controllers/*.php')) ?: [],
@@ -35,7 +35,6 @@
     } catch (\Throwable $e) {
     }
 
-    // PROTEKSI MIDDLEWARE & ROLE GUARD: Halaman Kelola Akun HANYA boleh diakses oleh Master Admin!
     $__cekRoleUserKelola = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -71,7 +70,6 @@
 
     session(['active_sidebar_panel' => 'masteradmin']);
 
-    // Fallback aman apabila variabel belum dikirim dari route/controller
     if (!isset($roles) || !is_array($roles)) {
         $roles = [
             'master_admin' => 'Master Admin',
@@ -490,7 +488,6 @@
             border-left: 4px solid #ef4444;
         }
 
-        /* ===== KELOLA AKUN ===== */
         .role-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
         @media (max-width: 1280px) { .role-grid { grid-template-columns: 1fr; } }
         .role-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
@@ -552,9 +549,8 @@
                 $bolehHapus = $kodeRole !== 'master_admin';
                 $isiLama   = old('role') === $kodeRole;
             @endphp
-            <section class="role-col" style="--role-color: {{ $warna }};">
+            <section class="role-col" data-role-color="{{ $warna }}">
 
-                <!-- Form tambah akun -->
                 <div class="card-box" style="border-top: 4px solid var(--role-color);">
                     <h2 class="section-title">Tambah {{ $labelRole }}</h2>
                     <form action="{{ route('kelola_akun.store') }}" method="POST" autocomplete="off">
@@ -583,7 +579,6 @@
                     </form>
                 </div>
 
-                <!-- Daftar akun -->
                 <div class="card-box">
                     <h2 class="section-title">Daftar {{ $labelRole }} <span class="role-count">{{ $daftar->count() }}</span></h2>
 
@@ -613,7 +608,6 @@
                                 </div>
                             </div>
 
-                            <!-- Form edit (muncul saat tombol Edit diklik) -->
                             <form class="akun-edit" action="{{ route('kelola_akun.update', $idAkun) }}" method="POST" autocomplete="off">
                                 @csrf
                                 @method('PUT')
@@ -656,6 +650,7 @@
     </main>
 
     <script>
+        document.querySelectorAll('[data-role-color]').forEach(function (el) { el.style.setProperty('--role-color', el.getAttribute('data-role-color')); });
         document.addEventListener('DOMContentLoaded', function () {
             setTimeout(() => {
                 document.querySelectorAll('.toast-popup').forEach(el => el.classList.remove('show'));

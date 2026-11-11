@@ -1,5 +1,5 @@
 @php
-    // PROTEKSI MIDDLEWARE & ROLE GUARD: Halaman Roles & Permission HANYA boleh diakses oleh Master Admin!
+
     $__cekRoleUserRoles = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -37,7 +37,6 @@
 
     $rolesStoragePath = storage_path('app/roles_permissions.json');
 
-    // Daftar 10 modul beserta kapabilitas aksi nyata yang ada di masing-masing halaman
     $daftarModulSistem = [
         'dashboard' => [
             'nama'      => 'Dashboard',
@@ -188,8 +187,6 @@
         $perluSimpanBersih = true;
     }
 
-    // Hapus role Master Admin dari daftar Roles & Permission jika masih tersimpan di JSON lama,
-    // karena Master Admin adalah pemegang kendali penuh sistem dan hanya mengatur role Admin / User.
     if (isset($configRoles['roles']['master_admin'])) {
         unset($configRoles['roles']['master_admin']);
         $perluSimpanBersih = true;
@@ -199,7 +196,6 @@
         $perluSimpanBersih = true;
     }
 
-    // Pastikan role Admin selalu tersedia sebagai role utama yang diatur sementara User belum dibuat
     if (empty($configRoles['roles'])) {
         $configRoles['roles']['admin'] = [
             'key'         => 'admin',
@@ -416,12 +412,13 @@
                 'last_email'   => '',
                 'blocked_at'   => null,
                 'updated_at'   => round(microtime(true) * 1000),
+                'clients'      => [],
             ];
             try {
                 file_put_contents($lockFile, json_encode($resetData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
             } catch (\Throwable $e) {
             }
-            $catatRiwayatRole('Membuka blokir akses login Admin (Reset 5x percobaan gagal login).', 'Berhasil');
+            $catatRiwayatRole('Membuka blokir akses login Admin (Reset 3x percobaan gagal login).', 'Berhasil');
             echo json_encode([
                 'success' => true,
                 'message' => 'Blokir login Admin berhasil dibuka! Admin kini dapat login kembali.',
@@ -433,7 +430,6 @@
         exit;
     }
 
-    // Baca status blokir login Admin untuk ditampilkan ke Master Admin
     $statusBlokirLoginAdmin = ['failed_count' => 0, 'is_blocked' => false, 'last_email' => '', 'blocked_at' => null];
     $lockFileAdmin = storage_path('app/admin_login_locks.json');
     if (is_file($lockFileAdmin)) {
@@ -949,7 +945,6 @@
         .pill-custom { background: #e0f2fe; color: #0369a1; }
         .pill-hidden { background: #fee2e2; color: #991b1b; }
 
-        /* COOLDOWN 2 DETIK ANTI-SPAM KLIK */
         .perm-cooldown-lock {
             pointer-events: none !important;
             opacity: 0.62;
@@ -977,8 +972,7 @@
         .toast-popup.show { right: 25px; }
         .toast-success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
         .toast-error { background: #fee2e2; color: #b91c1c; border-left: 4px solid #ef4444; }
-    
-        /* ===== HEADER / NAVBAR HALAMAN FIXED (TIDAK TENGGELAM SAAT SCROLL KE BAWAH / ATAS) ===== */
+
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -1031,8 +1025,7 @@
             </div>
         </header>
 
-        <!-- BANNER BUKA BLOKIR LOGIN ADMIN (MUNCUL JIKA ADMIN TERBLOKIR KARENA 5X SALAH SANDI) -->
-        <div id="banner-admin-terblokir" style="display: {{ !empty($statusBlokirLoginAdmin['is_blocked']) ? 'flex' : 'none' }}; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: #fef2f2; border: 2px solid #ef4444; padding: 14px 20px; border-radius: 14px; color: #991b1b;">
+        <div id="banner-admin-terblokir" data-init-display="{{ !empty($statusBlokirLoginAdmin['is_blocked']) ? 'flex' : 'none' }}" style="display: none; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: #fef2f2; border: 2px solid #ef4444; padding: 14px 20px; border-radius: 14px; color: #991b1b;">
             <div>
                 <div style="font-size: 14px; font-weight: 800; color: #dc2626; display: flex; align-items: center; gap: 8px;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
@@ -1040,10 +1033,10 @@
                         <line x1="12" y1="9" x2="12" y2="13"></line>
                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                     </svg>
-                    <span>Akses Login Admin Sedang Terblokir (5 Kali Salah Kata Sandi / Data)</span>
+                    <span>Akses Login Admin Sedang Terblokir (3 Kali Salah Kata Sandi / Data)</span>
                 </div>
                 <div style="font-size: 12px; color: #7f1d1d; margin-top: 3px;">
-                    Terdeteksi kegagalan login Admin 5 kali berturut-turut{{ !empty($statusBlokirLoginAdmin['last_email']) ? ' pada email: ' . $statusBlokirLoginAdmin['last_email'] : '' }}. Klik tombol di samping untuk membuka blokir agar Admin dapat login kembali.
+                    Terdeteksi kegagalan login Admin 3 kali berturut-turut{{ !empty($statusBlokirLoginAdmin['last_email']) ? ' pada email: ' . $statusBlokirLoginAdmin['last_email'] : '' }}. Klik tombol di samping untuk membuka blokir agar Admin dapat login kembali.
                 </div>
             </div>
             <button type="button" class="btn btn-success" onclick="bukaBlokirLoginAdmin()" style="padding: 10px 18px; font-size: 13px;">
@@ -1055,7 +1048,6 @@
             </button>
         </div>
 
-        <!-- BARIS 1: KPI RINGKASAN -->
         <div class="kpi-grid">
             <div class="kpi-card" style="border-left: 4px solid var(--primary-color);">
                 <div class="kpi-label">Jumlah Role Sistem</div>
@@ -1082,12 +1074,10 @@
             </div>
         </div>
 
-        <!-- BARIS 2: LAYOUT KIRI (DAFTAR & TAMBAH ROLE) + KANAN (MATRIKS PERMISSION) -->
         <div class="roles-layout">
 
-            <!-- KOLOM KIRI: DAFTAR ROLE & FORM TAMBAH ROLE BARU -->
             <div style="display: flex; flex-direction: column; gap: 20px;">
-                
+
                 <div class="card-box" style="border-top: 4px solid var(--primary-color);">
                     <div class="section-title">
                         <span>Daftar Role Tersimpan</span>
@@ -1106,7 +1096,7 @@
                                  onclick="pilihRoleUntukDiatur('{{ $rKey }}')">
                                 <div class="role-card-top">
                                     <span class="role-badge-name">
-                                        <span class="role-dot" style="background: {{ $rData['badge_color'] ?? '#1a4f91' }};"></span>
+                                        <span class="role-dot" data-bg="{{ $rData['badge_color'] ?? '#1a4f91' }}"></span>
                                         {{ $rData['name'] }}
                                     </span>
                                     <span class="role-user-pill">{{ $jmlUserRoleIni }} Akun</span>
@@ -1131,7 +1121,6 @@
                     </div>
                 </div>
 
-                <!-- Form Tambah Role Baru -->
                 <div class="card-box" style="border-top: 4px solid var(--secondary-color);">
                     <div class="section-title">
                         <span>+ Tambah Role Baru</span>
@@ -1168,7 +1157,6 @@
 
             </div>
 
-            <!-- KOLOM KANAN: PENGATURAN HAK AKSES (PERMISSIONS) PER MODUL -->
             <div class="card-box" style="border-top: 4px solid var(--primary-color);">
                 <div class="section-title">
                     <div>
@@ -1183,7 +1171,6 @@
 
                 <div id="banner-locked-master" style="display: none;"></div>
 
-                <!-- Toolbar Preset Cepat Global -->
                 <div class="perm-toolbar" id="toolbar-preset-global">
                     <div>
                         <div style="font-size: 12px; font-weight: 800; color: #0f172a;">Atur Cepat Seluruh Menu untuk Role Ini:</div>
@@ -1205,7 +1192,6 @@
                     </div>
                 </div>
 
-                <!-- Tabel Matriks Hak Akses -->
                 <div class="perm-table-wrap">
                     <table class="perm-table">
                         <thead>
@@ -1319,11 +1305,15 @@
 
         </div>
     </main>
+    <input type="hidden" id="json-roles-daftar-modul" value="{{ json_encode($daftarModulSistem) }}">
+    <input type="hidden" id="json-roles-data-roles" value="{{ json_encode($configRoles['roles']) }}">
 
     <script>
-        const DAFTAR_MODUL = @json($daftarModulSistem);
+        document.querySelectorAll('[data-init-display]').forEach(function (el) { el.style.display = el.getAttribute('data-init-display'); });
+        document.querySelectorAll('[data-bg]').forEach(function (el) { el.style.background = el.getAttribute('data-bg'); });
+        const DAFTAR_MODUL = JSON.parse(document.getElementById('json-roles-daftar-modul').value || '{}');
         const MODUL_KEYS = Object.keys(DAFTAR_MODUL);
-        let DATA_ROLES = @json($configRoles['roles']);
+        let DATA_ROLES = JSON.parse(document.getElementById('json-roles-data-roles').value || '{}');
         let roleAktifKey = DATA_ROLES['admin'] ? 'admin' : Object.keys(DATA_ROLES)[0];
 
         function showToast(message, type = 'success') {
@@ -1456,7 +1446,6 @@
             });
         }
 
-        // COOLDOWN 2 DETIK (2000 ms) SETIAP MENGUBAH PERMISSION UNTUK MENCEGAH SPAM KLIK
         const COOLDOWN_MS = 2000;
         let isCooldownPermission = false;
         let cooldownInterval = null;
@@ -1472,7 +1461,6 @@
             if (tableWrap) tableWrap.classList.add('perm-cooldown-lock');
             if (toolbarGlobal) toolbarGlobal.classList.add('perm-cooldown-lock');
 
-            // Kunci seluruh checkbox, dropdown preset, dan tombol preset global selama 2 detik
             document.querySelectorAll('.perm-table input[type="checkbox"], .preset-select-row, #toolbar-preset-global button').forEach(el => {
                 el.disabled = true;
             });
@@ -1503,7 +1491,6 @@
                     if (tableWrap) tableWrap.classList.remove('perm-cooldown-lock');
                     if (toolbarGlobal) toolbarGlobal.classList.remove('perm-cooldown-lock');
 
-                    // Kembalikan state aktif/nonaktif sesuai konfigurasi role saat ini
                     const roleObj = DATA_ROLES[roleAktifKey];
                     if (roleObj) {
                         document.querySelectorAll('#toolbar-preset-global button').forEach(btn => {
@@ -1525,7 +1512,7 @@
             if (!roleObj || roleObj.locked) return;
 
             if (isCooldownPermission) {
-                // Kembalikan tampilan ke kondisi terakhir jika sedang jeda 2 detik
+
                 renderMatriksRole(roleObj);
                 showToast('Mohon tunggu jeda 2 detik sebelum mengubah hak akses lagi.', 'error');
                 return;

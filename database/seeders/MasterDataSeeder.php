@@ -15,23 +15,19 @@ class MasterDataSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Seed Kategori
         $kategori1 = Kategori::firstOrCreate(['kode_kategori' => 'ELK'], ['nama_kategori' => 'Elektronik']);
         $kategori2 = Kategori::firstOrCreate(['kode_kategori' => 'FUR'], ['nama_kategori' => 'Furniture']);
         $kategori3 = Kategori::firstOrCreate(['kode_kategori' => 'KND'], ['nama_kategori' => 'Kendaraan']);
 
-        // 2. Seed Lokasi
         Lokasi::firstOrCreate(['kode_lokasi' => 'SRV01'], ['nama_lokasi' => 'Ruang Server Lt. 3']);
         Lokasi::firstOrCreate(['kode_lokasi' => 'DIR01'], ['nama_lokasi' => 'Ruang Direksi']);
         Lokasi::firstOrCreate(['kode_lokasi' => 'GDG01'], ['nama_lokasi' => 'Gudang Utama']);
 
-        // 3. Seed Status Aset
         StatusAset::firstOrCreate(['nama_status' => 'Tersedia'], ['warna_status' => '#10b981']);
         StatusAset::firstOrCreate(['nama_status' => 'Perbaikan'], ['warna_status' => '#f59e0b']);
         StatusAset::firstOrCreate(['nama_status' => 'Rusak Parah'], ['warna_status' => '#ef4444']);
         StatusAset::firstOrCreate(['nama_status' => 'Dipinjam'], ['warna_status' => '#3b82f6']);
 
-        // 4. Seed Master Item (Item)
         $item1 = Item::firstOrCreate(
             ['awal_serial' => 'AST-LNK-2026'],
             [
@@ -65,7 +61,6 @@ class MasterDataSeeder extends Seeder
         $masterAdmin = User::where('role', 'master_admin')->first();
         $adminId = $masterAdmin ? $masterAdmin->users_id : null;
 
-        // 5. Seed Detail Aset & Riwayat Aktivitas
         $detailsData = [
             [
                 'item_id' => $item1->id,
@@ -159,7 +154,6 @@ class MasterDataSeeder extends Seeder
                 $data
             );
 
-            // Cek apakah riwayat untuk aset ini sudah ada
             $existsLog = RiwayatAktivitas::where('aktivitas', $logText)->exists();
             if (!$existsLog) {
                 RiwayatAktivitas::create([

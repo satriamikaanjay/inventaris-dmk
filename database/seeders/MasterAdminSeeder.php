@@ -9,17 +9,14 @@ use Illuminate\Support\Facades\Hash;
 
 class MasterAdminSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         User::create([
             'nama_lengkap' => 'Master Admin',
-            'email'        => 'masteradmin@gmail.com', // Email untuk login nanti
+            'email'        => 'masteradmin@gmail.com',
             'password'     => Hash::make('password123'), 
-            'role_id'      => 1, // Pastikan role_id sesuai dengan role 'Master Admin' di tabel roles
-            'role'         => 'master_admin', // Pastikan rolenya sesuai rancangan sistem Anda
+            'role_id'      => 1,
+            'role'         => 'master_admin',
         ]);
     }
 }

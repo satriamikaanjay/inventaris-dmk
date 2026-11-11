@@ -11,7 +11,6 @@
         --sidebar-width: 270px;
     }
 
-    /* Sidebar Layout */
     sidebar {
         width: var(--sidebar-width);
         background-color: #ffffff;
@@ -101,7 +100,6 @@
         color: #fff;
     }
 
-    /* Badge & Titik Merah Notifikasi Sidebar */
     .notif-badge {
         margin-left: auto;
         background-color: #ef4444;
@@ -180,7 +178,6 @@
         color: var(--text-muted);
     }
 
-    /* Banner Pembatasan Hak Akses Real-Time */
     .perm-readonly-banner {
         background: #fffbeb;
         border: 1px solid #fde68a;
@@ -250,7 +247,6 @@
         opacity: 1;
     }
 
-    /* Menu Pengajuan & Sub-Button di Sidebar Admin */
     .menu-pengajuan-wrap {
         display: flex;
         flex-direction: column;
@@ -330,7 +326,6 @@
         flex-shrink: 0;
     }
 
-    /* Panel Halaman Pengajuan di Area Utama */
     .pengajuan-view-container {
         display: none;
         flex-direction: column;
@@ -397,7 +392,6 @@
         }
     }
 
-    /* ================= OVERLAY LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) ================= */
     .nav-loading-overlay {
         position: fixed;
         inset: 0;
@@ -424,7 +418,6 @@
         pointer-events: all !important;
     }
 
-    /* Bar Progres Jaringan di Bagian Paling Atas Layar */
     .nav-top-progress-track {
         position: fixed;
         top: 0;
@@ -444,7 +437,6 @@
         transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    /* Kartu Pop-up Animasi Loading */
     .nav-loading-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -555,14 +547,13 @@
 </style>
 
 @php
-    // Registrasi otomatis route /pengajuan di routes/web.php jika belum terdaftar
+
     try {
         $__webRoutePath = base_path('routes/web.php');
         if (is_file($__webRoutePath) && is_writable($__webRoutePath)) {
             $__isiWebRoute = (string) file_get_contents($__webRoutePath);
             if (!str_contains($__isiWebRoute, "'/pengajuan'") && !str_contains($__isiWebRoute, '"/pengajuan"')) {
-                $__routePengajuanBaru = "\n// Route Halaman Pengajuan Aset Admin\n"
-                    . "\Illuminate\Support\Facades\Route::middleware(['auth'])->get('/pengajuan', function () {\n"
+                $__routePengajuanBaru = "\n\Illuminate\Support\Facades\Route::middleware(['auth'])->get('/pengajuan', function () {\n"
                     . "    if (view()->exists('pengajuan')) {\n"
                     . "        return view('pengajuan');\n"
                     . "    }\n"
@@ -577,7 +568,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Sinkronisasi otomatis: Ubah abort(403) pada KelolaAkunController / routes menjadi redirect ke Dashboard Admin
     try {
         $__kandidatFilePatch = array_merge(
             glob(app_path('Http/Controllers/*.php')) ?: [],
@@ -613,8 +603,6 @@
     } catch (\Throwable $e) {
     }
 
-    // PROTEKSI ROLE GUARD: Jika yang sedang login adalah Master Admin namun membuka halaman khusus Admin,
-    // langsung arahkan kembali ke Dashboard Master Admin!
     $__roleCekAdminSb = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -629,7 +617,6 @@
 
     session(['active_sidebar_panel' => 'admin']);
 
-    // 1. Baca konfigurasi Roles & Permission dari storage/app/roles_permissions.json
     $rolesStoragePath = storage_path('app/roles_permissions.json');
     $semuaModulDefault = [
         'dashboard', 'pengajuan', 'pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis', 'notifikasi', 'data_aset', 'barcode_aset',
@@ -680,7 +667,6 @@
         }
     }
 
-    // Endpoint ringan untuk polling real-time hak akses dari browser Admin (tanpa reload)
     if (request()->has('_check_permissions_rt')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -696,7 +682,6 @@
         exit;
     }
 
-    // Deteksi modul halaman yang sedang dibuka saat ini secara presisi (tanpa bentrok wildcard *aset.index)
     $currentUriPath = strtolower(trim((string) request()->path(), '/'));
     $modulHalamanAktif = 'dashboard';
 
@@ -718,7 +703,6 @@
         $modulHalamanAktif = 'riwayat_aktivitas';
     }
 
-    // Catat otomatis aktivitas Login Admin ke RiwayatAktivitas (1x per sesi login) jika belum tercatat oleh AuthController
     try {
         if (\Illuminate\Support\Facades\Auth::check() && !session()->has('_login_riwayat_tercatat') && class_exists(\App\Models\RiwayatAktivitas::class)) {
             $userLogin = \Illuminate\Support\Facades\Auth::user();
@@ -750,32 +734,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Pasang guard otomatis pada layouts/mastersidebar.blade.php (jika belum ada)
-    try {
-        $masterSidebarPath = resource_path('views/layouts/mastersidebar.blade.php');
-        if (is_file($masterSidebarPath) && is_writable($masterSidebarPath)) {
-            $isiMasterSidebar = file_get_contents($masterSidebarPath);
-            $penandaGuard = '/* AUTO_ADMIN_SIDEBAR_GUARD */';
-            if ($isiMasterSidebar !== false && strpos($isiMasterSidebar, $penandaGuard) === false) {
-                $at = chr(64);
-                $guardPrefix = $at . "php\n"
-                    . "    {$penandaGuard}\n"
-                    . "    \$__roleLoginSaatIni = \\Illuminate\\Support\\Facades\\Auth::check()\n"
-                    . "        ? strtolower(str_replace(' ', '_', trim((string) (\\Illuminate\\Support\\Facades\\Auth::user()->role ?? ''))))\n"
-                    . "        : '';\n"
-                    . "    \$__isAkunMasterAdmin = (\$__roleLoginSaatIni === 'master_admin' || \$__roleLoginSaatIni === 'masteradmin');\n"
-                    . "    \$__pakaiAdminSidebar = (!\$__isAkunMasterAdmin && \$__roleLoginSaatIni !== '') || request('panel') === 'admin';\n"
-                    . $at . "endphp\n"
-                    . $at . "if(\$__pakaiAdminSidebar)\n"
-                    . "    " . $at . "include('layouts.adminsidebar')\n"
-                    . $at . "else\n";
-                $guardSuffix = "\n" . $at . "endif\n";
-                file_put_contents($masterSidebarPath, $guardPrefix . $isiMasterSidebar . $guardSuffix);
-            }
-        }
-    } catch (\Throwable $e) {
-    }
-
     $resolveAdminMenuUrl = function (array $adminRouteCandidates, string $defaultRoute) {
         foreach ($adminRouteCandidates as $candidate) {
             if (\Illuminate\Support\Facades\Route::has($candidate)) {
@@ -788,7 +746,6 @@
         return '#';
     };
 
-    // Hitung otomatis jumlah aset yang rusak / mendekati jadwal servis (<= 30 hari)
     $hariIniNotif = \Carbon\Carbon::today();
     $batasMendekatiNotif = $hariIniNotif->copy()->addDays(30)->toDateString();
 
@@ -800,7 +757,6 @@
         })->orWhere('status_aset', 'like', '%Rusak%');
     })->count();
 
-    // Ambil daftar ID seluruh Riwayat Aktivitas untuk badge riwayat
     $daftarIdRiwayat = [];
     try {
         if (isset($riwayats) && method_exists($riwayats, 'count') && $riwayats->count() > 0) {
@@ -858,23 +814,22 @@
            id="link-sidebar-dashboard"
            data-menu-key="dashboard"
            data-menu-group="utama"
-           style="{{ empty($permissionsUserSaatIni['dashboard']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['dashboard']['view']) ? '1' : '0' }}"
            class="menu-item {{ ($modulHalamanAktif === 'dashboard' && !request()->has('pengajuan')) ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
             Dashboard
         </a>
 
-        <!-- Menu Pengajuan (Di Bawah Dashboard) beserta 4 Button Pilihan Pengajuan -->
         <div class="menu-pengajuan-wrap {{ ($modulHalamanAktif === 'pengajuan' || request()->has('pengajuan')) ? 'open' : '' }}"
              id="wrap-menu-pengajuan"
              data-menu-key="pengajuan"
              data-menu-group="utama"
-             style="{{ (isset($permissionsUserSaatIni['pengajuan']) && empty($permissionsUserSaatIni['pengajuan']['view'])) ? 'display:none;' : '' }}">
+             data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan']) && empty($permissionsUserSaatIni['pengajuan']['view'])) ? '1' : '0' }}">
             <button type="button"
                     id="btn-sidebar-pengajuan"
                     class="menu-item menu-item-btn {{ ($modulHalamanAktif === 'pengajuan' || request()->has('pengajuan')) ? 'active' : '' }}"
                     onclick="toggleMenuPengajuanSidebar(event)">
-                <!-- Ikon Pengajuan -->
+
                 <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"/></svg>
                 <span>Pengajuan</span>
                 <svg class="chevron-pengajuan" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
@@ -884,7 +839,7 @@
                         class="submenu-pengajuan-btn"
                         data-jenis="peminjaman"
                         data-subperm-key="pengajuan_peminjaman"
-                        style="{{ (isset($permissionsUserSaatIni['pengajuan_peminjaman']) && empty($permissionsUserSaatIni['pengajuan_peminjaman']['view'])) ? 'display:none;' : '' }}"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_peminjaman']) && empty($permissionsUserSaatIni['pengajuan_peminjaman']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('peminjaman')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peminjaman</span>
@@ -893,7 +848,7 @@
                         class="submenu-pengajuan-btn"
                         data-jenis="pengembalian"
                         data-subperm-key="pengajuan_pengembalian"
-                        style="{{ (isset($permissionsUserSaatIni['pengajuan_pengembalian']) && empty($permissionsUserSaatIni['pengajuan_pengembalian']['view'])) ? 'display:none;' : '' }}"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_pengembalian']) && empty($permissionsUserSaatIni['pengajuan_pengembalian']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('pengembalian')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Pengembalian</span>
@@ -902,7 +857,7 @@
                         class="submenu-pengajuan-btn"
                         data-jenis="peleburan"
                         data-subperm-key="pengajuan_peleburan"
-                        style="{{ (isset($permissionsUserSaatIni['pengajuan_peleburan']) && empty($permissionsUserSaatIni['pengajuan_peleburan']['view'])) ? 'display:none;' : '' }}"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_peleburan']) && empty($permissionsUserSaatIni['pengajuan_peleburan']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('peleburan')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peleburan</span>
@@ -911,7 +866,7 @@
                         class="submenu-pengajuan-btn"
                         data-jenis="servis"
                         data-subperm-key="pengajuan_servis"
-                        style="{{ (isset($permissionsUserSaatIni['pengajuan_servis']) && empty($permissionsUserSaatIni['pengajuan_servis']['view'])) ? 'display:none;' : '' }}"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_servis']) && empty($permissionsUserSaatIni['pengajuan_servis']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('servis')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Servis</span>
@@ -921,7 +876,7 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.notifikasi.index', 'admin.notifikasi'], 'notifikasi.index') }}"
            data-menu-key="notifikasi"
            data-menu-group="utama"
-           style="{{ empty($permissionsUserSaatIni['notifikasi']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['notifikasi']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'notifikasi' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
             <span>Notifikasi</span>
@@ -934,7 +889,7 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.aset.index', 'admin.data_aset.index'], 'aset.index') }}"
            data-menu-key="data_aset"
            data-menu-group="aset"
-           style="{{ empty($permissionsUserSaatIni['data_aset']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['data_aset']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'data_aset' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM10 4h4v2h-4V4zm10 15H4V8h16v11z"/></svg>
             Data Aset
@@ -942,7 +897,7 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.barcode_aset.index', 'admin.barcode.index'], 'barcode_aset.index') }}"
            data-menu-key="barcode_aset"
            data-menu-group="aset"
-           style="{{ empty($permissionsUserSaatIni['barcode_aset']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['barcode_aset']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'barcode_aset' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h3v14H9V5zm4 0h2v14h-2V5zm3 0h1v14h-1V5zm3 0h2v14h-2V5z"/></svg>
             Barcode Aset
@@ -952,7 +907,7 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.kategori_aset.index', 'admin.kategori.index'], 'kategori_aset.index') }}"
            data-menu-key="kategori_aset"
            data-menu-group="master"
-           style="{{ empty($permissionsUserSaatIni['kategori_aset']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['kategori_aset']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'kategori_aset' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
             Kategori Aset
@@ -961,22 +916,17 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.cabang.index'], 'cabang.index') }}"
            data-menu-key="cabang"
            data-menu-group="master"
-           style="{{ empty($permissionsUserSaatIni['cabang']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['cabang']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'cabang' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
             Cabang
         </a>
-        
-       
-
-
-
 
         <div class="menu-section-title" data-section-group="laporan">LAPORAN & PEMANTAUAN</div>
         <a href="{{ $resolveAdminMenuUrl(['admin.laporan.index'], 'laporan.index') }}"
            data-menu-key="laporan"
            data-menu-group="laporan"
-           style="{{ empty($permissionsUserSaatIni['laporan']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['laporan']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'laporan' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
             Laporan
@@ -984,7 +934,7 @@
         <a href="{{ $resolveAdminMenuUrl(['admin.riwayat_aktivitas.index', 'admin.riwayat.index'], 'riwayat_aktivitas.index') }}"
            data-menu-key="riwayat_aktivitas"
            data-menu-group="laporan"
-           style="{{ empty($permissionsUserSaatIni['riwayat_aktivitas']['view']) ? 'display:none;' : '' }}"
+           data-init-hide="{{ empty($permissionsUserSaatIni['riwayat_aktivitas']['view']) ? '1' : '0' }}"
            class="menu-item {{ $modulHalamanAktif === 'riwayat_aktivitas' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
             <span>Riwayat Aktivitas</span>
@@ -1011,7 +961,6 @@
     </div>
 </sidebar>
 
-<!-- POP-UP ANIMASI LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & MENGIKUTI KECEPATAN JARINGAN) -->
 <div id="global-page-nav-loader" class="nav-loading-overlay" aria-live="polite" aria-busy="true">
     <div class="nav-top-progress-track">
         <div id="nav-top-progress-bar" class="nav-top-progress-bar"></div>
@@ -1027,9 +976,9 @@
             </div>
         </div>
         <div>
-            <div id="nav-loading-title" class="nav-loading-title">Memuat Halaman...</div>
+            <div id="nav-loading-title" class="nav-loading-title">Memuat Data Halaman...</div>
             <div id="nav-loading-subtitle" class="nav-loading-subtitle" style="margin-top: 4px;">
-                Menghubungkan ke server, mohon tunggu dan jangan klik berulang.
+                Sedang menyiapkan dan memuat data dari server, mohon tunggu...
             </div>
         </div>
         <div class="nav-network-pill">
@@ -1039,13 +988,21 @@
     </div>
 </div>
 
+<input type="hidden" id="json-admin-daftar-id-riwayat" value="{{ json_encode($daftarIdRiwayat) }}">
+<input type="hidden" id="json-admin-ada-aksi-baru" value="{{ json_encode($adaAksiBaru) }}">
+<input type="hidden" id="json-admin-modul-aktif" value="{{ json_encode($modulHalamanAktif) }}">
+<input type="hidden" id="json-admin-versi-perm" value="{{ json_encode($versiPermissionSaatIni) }}">
+<input type="hidden" id="json-admin-perms-user" value="{{ json_encode($permissionsUserSaatIni) }}">
+<input type="hidden" id="json-admin-url-pengajuan" value="{{ json_encode(url('/pengajuan')) }}">
 
 <script>
     (function () {
-        // 1. LOGIKA BADGE RIWAYAT AKTIVITAS
+        document.querySelectorAll('[data-init-hide="1"]').forEach(function (el) {
+            el.style.display = 'none';
+        });
         const STORAGE_KEY_RIWAYAT = 'riwayat_terbaca_auto_user_{{ Auth::id() ?? "guest" }}';
-        const semuaIdRiwayatServer = @json($daftarIdRiwayat).map(String);
-        const adaAksiBaruServer = @json($adaAksiBaru);
+        const semuaIdRiwayatServer = JSON.parse(document.getElementById('json-admin-daftar-id-riwayat').value || '[]').map(String);
+        const adaAksiBaruServer = JSON.parse(document.getElementById('json-admin-ada-aksi-baru').value || 'false');
 
         function inisialisasiJikaBelumAda() {
             try {
@@ -1079,6 +1036,11 @@
 
         function ambilSemuaIdRiwayatAktif() {
             const setIds = new Set(semuaIdRiwayatServer);
+            if (Array.isArray(window.__extraScopedRiwayatIds)) {
+                window.__extraScopedRiwayatIds.forEach(function (id) {
+                    if (id) setIds.add(String(id));
+                });
+            }
             document.querySelectorAll('tr[data-riwayat-id]').forEach(function (tr) {
                 const id = tr.getAttribute('data-riwayat-id');
                 if (id) setIds.add(String(id));
@@ -1109,6 +1071,17 @@
                 }
             }
 
+            const badgeBtnBaca = document.getElementById('badge-btn-baca-semua');
+            if (badgeBtnBaca) {
+                if (belumDibaca > 0) {
+                    badgeBtnBaca.textContent = String(belumDibaca);
+                    badgeBtnBaca.style.display = 'inline-block';
+                } else {
+                    badgeBtnBaca.textContent = '0';
+                    badgeBtnBaca.style.display = 'none';
+                }
+            }
+
             return belumDibaca;
         };
 
@@ -1128,17 +1101,19 @@
             window.hitungRiwayatBelumDibaca();
         };
 
-        window.tandaiSemuaRiwayatDibaca = function () {
+        window.tandaiSemuaRiwayatDibaca = function (extraIds) {
+            if (Array.isArray(extraIds)) {
+                window.__extraScopedRiwayatIds = extraIds.map(String);
+            }
             const semuaId = ambilSemuaIdRiwayatAktif();
             const sudahDibaca = ambilIdRiwayatDibaca();
             simpanIdRiwayatDibaca(sudahDibaca.concat(semuaId));
             window.hitungRiwayatBelumDibaca();
         };
 
-        // 2. MESIN SINKRONISASI REAL-TIME ROLES & PERMISSION (TANPA REFRESH)
-        const MODUL_HALAMAN_AKTIF = @json($modulHalamanAktif);
-        let currentVersion = @json($versiPermissionSaatIni);
-        let currentPerms = @json($permissionsUserSaatIni);
+        const MODUL_HALAMAN_AKTIF = JSON.parse(document.getElementById('json-admin-modul-aktif').value || '""');
+        let currentVersion = JSON.parse(document.getElementById('json-admin-versi-perm').value || '0');
+        let currentPerms = JSON.parse(document.getElementById('json-admin-perms-user').value || '{}');
 
         function tampilkanToastPerubahanAkses(pesan) {
             const lama = document.getElementById('perm-rt-toast-el');
@@ -1170,7 +1145,6 @@
 
             window.__adminCurrentPerms = perms;
 
-            // A. Perbarui visibilitas item menu di sidebar secara langsung (termasuk per item Pengajuan)
             const subKeysPengajuan = ['pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis'];
             let adaSubPengajuanBuka = false;
 
@@ -1199,12 +1173,10 @@
                 }
             });
 
-            // Sinkronkan halaman /pengajuan (pengajuan.blade.php) jika sedang dibuka
             if (typeof window.sinkronkanStatusAksesPengajuan === 'function') {
                 window.sinkronkanStatusAksesPengajuan(perms);
             }
 
-            // Sinkronkan juga apabila panel fallback pengajuan sedang aktif
             const panelPengajuan = document.getElementById('panel-utama-pengajuan');
             if (panelPengajuan && panelPengajuan.classList.contains('active')) {
                 const kartuIsi = document.getElementById('kartu-isi-pengajuan');
@@ -1238,7 +1210,6 @@
                 }
             }
 
-            // Sembunyikan judul grup di sidebar jika seluruh menu di bawahnya disembunyikan
             ['utama', 'aset', 'master', 'laporan'].forEach(grup => {
                 const header = document.querySelector(`.menu-section-title[data-section-group="${grup}"]`);
                 const items = Array.from(document.querySelectorAll(`[data-menu-group="${grup}"]`));
@@ -1248,14 +1219,12 @@
                 }
             });
 
-            // B. Cek hak akses modul halaman yang sedang dibuka saat ini
             const pModul = perms[MODUL_HALAMAN_AKTIF] || { view: true, create: true, edit: true, delete: true };
             const bolehView = (MODUL_HALAMAN_AKTIF === 'pengajuan') ? mainPengajuanAllowed : !!pModul.view;
             const bolehCreate = bolehView && !!pModul.create;
             const bolehEdit = bolehView && !!pModul.edit;
             const bolehDelete = bolehView && !!pModul.delete;
 
-            // 1. Jika akses melihat halaman ini dicabut oleh Master Admin -> tampilkan layar kunci real-time
             let overlay = document.getElementById('perm-revoked-overlay');
             if (!bolehView) {
                 if (!overlay) {
@@ -1280,7 +1249,6 @@
                 overlay.remove();
             }
 
-            // 2. Kontrol tombol & form TAMBAH DATA (create)
             setElemenVisible([
                 'button[onclick*="openSidebarTambah"]',
                 'button[onclick*="openModalImport"]',
@@ -1288,10 +1256,14 @@
                 '.btn-generate-semua-qr',
                 '#btn-simpan-kategori',
                 '#btn-simpan-aset',
-                '#btn-simpan-status'
+                '#btn-simpan-status',
+                '#btn-utama-pdf',
+                '#btn-utama-excel',
+                'button[onclick*="bukaModalPreviewLaporan"]',
+                'button[onclick*="eksekusiCetakPdfResmi"]',
+                'button[onclick*="eksekusiUnduhExcelResmi"]'
             ], bolehCreate);
 
-            // Tombol "Buat Label QR Baru" pada halaman Barcode Aset
             document.querySelectorAll('button[onclick*="prosesBuatQR"], .btn-create-single-qr').forEach(btn => {
                 const txt = (btn.textContent || '').trim().toLowerCase();
                 if (txt.includes('buat') || btn.classList.contains('btn-create-single-qr')) {
@@ -1311,7 +1283,6 @@
                 }
             });
 
-            // Sembunyikan kotak form tambah di sebelah kiri pada halaman Kategori Aset, Cabang, Divisi, Jabatan jika create = false
             ['#form-kategori', '#form-aset', '#form-status-aset'].forEach(formSel => {
                 const formEl = document.querySelector(formSel);
                 if (formEl) {
@@ -1326,7 +1297,6 @@
                 }
             });
 
-            // Untuk halaman Master Data lain (Cabang, Divisi, Jabatan) yang memiliki form tambah POST di kolom kiri
             document.querySelectorAll('main form[method="POST"], main form[method="post"]').forEach(formEl => {
                 const actionUrl = (formEl.getAttribute('action') || '').toLowerCase();
                 if (actionUrl.includes('logout') || formEl.classList.contains('chip-edit-form') || formEl.classList.contains('form-delete-kategori')) return;
@@ -1360,9 +1330,13 @@
                 if (sbTambah) sbTambah.classList.remove('show');
                 const modalImp = document.getElementById('modalImportExcel');
                 if (modalImp) modalImp.classList.remove('show');
+                const modalPrevLap = document.getElementById('modalPreviewLaporan');
+                if (modalPrevLap) {
+                    modalPrevLap.classList.remove('show');
+                    document.body.style.overflow = '';
+                }
             }
 
-            // 3. Kontrol tombol & form UBAH / EDIT DATA (edit)
             setElemenVisible([
                 '.btn-edit-sm',
                 'button[onclick*="enableInlineEdit"]',
@@ -1372,7 +1346,6 @@
                 '.btn-update-single-qr'
             ], bolehEdit);
 
-            // Tombol "Update QR" pada tiap kartu di halaman Barcode Aset
             document.querySelectorAll('.card-footer button.btn-qr:not(.btn-lihat-qr)').forEach(btn => {
                 const txt = (btn.textContent || '').trim().toLowerCase();
                 if (txt.includes('update')) {
@@ -1387,7 +1360,6 @@
                 }
             }
 
-            // 4. Kontrol tombol & form HAPUS DATA (delete)
             setElemenVisible([
                 '.btn-delete-sm',
                 '.form-delete-kategori',
@@ -1403,14 +1375,10 @@
                 }
             });
 
-            // Jika pada halaman chip (Kategori, Master Aset, Status, Cabang, Divisi, Jabatan) baik Edit maupun Hapus dimatikan,
-            // sembunyikan bar .chip-actions agar saat chip diklik tidak muncul ruang kosong
             document.querySelectorAll('.chip-actions').forEach(actEl => {
                 actEl.style.display = (!bolehEdit && !bolehDelete) ? 'none' : '';
             });
 
-            // 5. Pasang aturan CSS dinamis (!important) agar tombol/form yang dinonaktifkan dijamin tersembunyi
-            // termasuk di dalam modal, kartu QR, maupun chip yang baru diklik
             let dynStyle = document.getElementById('perm-dynamic-style');
             if (!dynStyle) {
                 dynStyle = document.createElement('style');
@@ -1428,6 +1396,11 @@
                     #btn-simpan-kategori,
                     #btn-simpan-aset,
                     #btn-simpan-status,
+                    #btn-utama-pdf,
+                    #btn-utama-excel,
+                    button[onclick*="bukaModalPreviewLaporan"],
+                    button[onclick*="eksekusiCetakPdfResmi"],
+                    button[onclick*="eksekusiUnduhExcelResmi"],
                     a[href*="export"],
                     button[onclick*="export"],
                     button[onclick*="cetak"],
@@ -1471,7 +1444,6 @@
             }
             dynStyle.textContent = cssRules.join('\n');
 
-            // 6. Tampilkan atau sembunyikan Banner Info Pembatasan Akses sesuai kapabilitas modul
             const MODUL_CAPS = {
                 dashboard: ['view'],
                 pengajuan: ['view'],
@@ -1570,7 +1542,6 @@
             }
         }
 
-        // 3. LOGIKA MENU PENGAJUAN & 4 BUTTON PENGAJUAN (PEMINJAMAN, PENGEMBALIAN, PELEBURAN, SERVIS)
         const INFO_KATEGORI_PENGAJUAN = {
             peminjaman: {
                 judul: 'Pengajuan Peminjaman',
@@ -1613,7 +1584,6 @@
                         </div>
                     </header>
 
-                    <!-- 4 BUTTON UTAMA PENGAJUAN -->
                     <div class="pengajuan-top-buttons">
                         <button type="button" class="btn-tab-pengajuan active" data-tab-jenis="peminjaman" onclick="pilihKategoriPengajuan('peminjaman')">
                                                         <span>Pengajuan Peminjaman</span>
@@ -1629,7 +1599,6 @@
                         </button>
                     </div>
 
-                    <!-- KONTEN JENIS PENGAJUAN YANG DIPILIH -->
                     <div class="pengajuan-content-card" id="kartu-isi-pengajuan">
                         <h2 id="judul-isi-pengajuan" style="font-size: 18px; font-weight: 800; color: var(--primary-color); margin-bottom: 6px;">
                             Pengajuan Peminjaman
@@ -1654,7 +1623,6 @@
             const panel = pastikanPanelUtamaPengajuanAda();
             if (!panel) return;
 
-            // Pastikan setiap tab button di dalam panel utama mengikuti izin currentPerms per pengajuan
             const listJenis = ['peminjaman', 'pengembalian', 'peleburan', 'servis'];
             listJenis.forEach(j => {
                 const sk = 'pengajuan_' + j;
@@ -1664,8 +1632,6 @@
                 });
             });
 
-
-            // Sembunyikan elemen asli di dalam <main> selain panel pengajuan dan banner permission
             Array.from(mainEl.children).forEach(child => {
                 if (child.id !== 'panel-utama-pengajuan' && child.id !== 'admin-perm-status-banner') {
                     if (!child.hasAttribute('data-original-display')) {
@@ -1677,7 +1643,6 @@
 
             panel.classList.add('active');
 
-            // Atur highlight menu aktif di sidebar
             document.querySelectorAll('sidebar .menu-item').forEach(el => el.classList.remove('active'));
             const btnPengajuan = document.getElementById('btn-sidebar-pengajuan');
             if (btnPengajuan) btnPengajuan.classList.add('active');
@@ -1726,10 +1691,11 @@
             if (labelAktifEl) labelAktifEl.textContent = info.judul;
         };
 
-        const URL_HALAMAN_PENGAJUAN = @json(url('/pengajuan'));
+        const URL_HALAMAN_PENGAJUAN = JSON.parse(document.getElementById('json-admin-url-pengajuan').value || '""');
 
-        // ================= LOGIKA POP-UP LOADING PINDAH HALAMAN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) =================
         let sedangPindahHalaman = false;
+        let sedangUnloadHalaman = false;
+        let jumlahRequestDataAktif = 0;
         let timerProgresJaringan = null;
         let timerTahapKoneksi = null;
         let waktuMulaiNavigasi = 0;
@@ -1746,6 +1712,34 @@
             return 'Menunggu respons jaringan server...';
         }
 
+        function apakahRequestHarusTampilkanLoader(urlInput, methodInput) {
+            const strUrl = String(urlInput || '');
+            const method = String(methodInput || 'GET').toUpperCase();
+
+            if (
+                strUrl.includes('_check_permissions_rt') ||
+                strUrl.includes('_perm_sync=') ||
+                strUrl.includes('_poll_riwayat_realtime') ||
+                strUrl.includes('_riwayat_realtime=') ||
+                strUrl.includes('poll_requests') ||
+                strUrl.includes('_notif_reset_action') ||
+                strUrl.includes('_login_lock_action') ||
+                strUrl.includes('_cache_lampiran_info') ||
+                strUrl.includes('_sync_lampiran_meta') ||
+                strUrl.includes('view-lampiran') ||
+                strUrl.includes('_log_cetak_laporan') ||
+                strUrl.includes('_roles_action=save_permissions')
+            ) {
+                return false;
+            }
+
+            if (method !== 'GET') {
+                return true;
+            }
+
+            return strUrl.includes('_bulk_delete_aset') || strUrl.includes('_clear_riwayat_scoped');
+        }
+
         window.tampilkanLoadingPindahHalaman = function (judulKustom, subjudulKustom) {
             const overlay = document.getElementById('global-page-nav-loader');
             if (!overlay) return;
@@ -1759,18 +1753,15 @@
             const netDotEl = document.getElementById('nav-network-dot');
             const barEl = document.getElementById('nav-top-progress-bar');
 
-            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Halaman...';
-            if (subEl) subEl.textContent = subjudulKustom || 'Menghubungkan ke server, mohon tunggu dan jangan klik berulang.';
+            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Data Halaman...';
+            if (subEl) subEl.textContent = subjudulKustom || 'Sedang menyiapkan dan memuat data dari server, mohon tunggu...';
             if (netStatusEl) netStatusEl.textContent = deteksiInfoKoneksiJaringan();
             if (netDotEl) netDotEl.style.background = '#10b981';
 
             overlay.classList.add('active');
             document.body.style.cursor = 'wait';
 
-            // Animasi progres bar asimtotik yang menyesuaikan waktu tunggu respons server nyata:
-            // Jika jaringan cepat (misal 150ms), halaman baru langsung terbuka.
-            // Jika jaringan lambat, progres berjalan perlahan mendekati 92% sampai server selesai merespons.
-            let progresSaatIni = 12;
+            let progresSaatIni = 18;
             if (barEl) barEl.style.width = progresSaatIni + '%';
 
             if (timerProgresJaringan) clearInterval(timerProgresJaringan);
@@ -1782,7 +1773,6 @@
                     if (barEl) barEl.style.width = progresSaatIni.toFixed(1) + '%';
                 }
 
-                // Update keterangan secara dinamis berdasarkan kondisi kecepatan internet saat itu
                 if (durasiMs > 4500) {
                     if (titleEl) titleEl.textContent = 'Koneksi Jaringan Sedang Lambat...';
                     if (subEl) subEl.textContent = 'Permintaan Anda sedang diproses oleh server. Halaman akan terbuka otomatis begitu data selesai dimuat.';
@@ -1796,6 +1786,7 @@
         };
 
         window.sembunyikanLoadingPindahHalaman = function () {
+            sedangUnloadHalaman = false;
             sedangPindahHalaman = false;
             if (timerProgresJaringan) {
                 clearInterval(timerProgresJaringan);
@@ -1815,7 +1806,67 @@
             document.body.style.cursor = '';
         };
 
-        // Cegah segala bentuk spam klik atau tekan tombol Enter/Space saat proses pindah halaman sedang berlangsung
+        if (document.readyState === 'loading') {
+            window.tampilkanLoadingPindahHalaman('Memuat Data Halaman...', 'Sedang menyiapkan dan memuat data dari server, mohon tunggu...');
+        }
+
+        if (typeof window.fetch === 'function') {
+            const fetchAsli = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                const urlTarget = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                const methodTarget = (init && init.method) ? init.method : (input && input.method ? input.method : 'GET');
+                const gunakanLoader = apakahRequestHarusTampilkanLoader(urlTarget, methodTarget);
+
+                if (gunakanLoader) {
+                    jumlahRequestDataAktif++;
+                    if (!sedangPindahHalaman) {
+                        window.tampilkanLoadingPindahHalaman('Memuat Data...', 'Sedang memproses dan memuat data dari server, mohon tunggu...');
+                    }
+                }
+
+                return fetchAsli(input, init).finally(function () {
+                    if (gunakanLoader) {
+                        jumlahRequestDataAktif = Math.max(0, jumlahRequestDataAktif - 1);
+                        setTimeout(function () {
+                            if (jumlahRequestDataAktif === 0 && !sedangUnloadHalaman) {
+                                window.sembunyikanLoadingPindahHalaman();
+                            }
+                        }, 80);
+                    }
+                });
+            };
+        }
+
+        if (typeof window.XMLHttpRequest === 'function') {
+            const openAsli = XMLHttpRequest.prototype.open;
+            const sendAsli = XMLHttpRequest.prototype.send;
+
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this._methodTargetLoader = String(method || 'GET');
+                this._urlTargetLoader = String(url || '');
+                return openAsli.apply(this, arguments);
+            };
+
+            XMLHttpRequest.prototype.send = function () {
+                const gunakanLoader = apakahRequestHarusTampilkanLoader(this._urlTargetLoader, this._methodTargetLoader);
+                if (gunakanLoader) {
+                    jumlahRequestDataAktif++;
+                    if (!sedangPindahHalaman) {
+                        window.tampilkanLoadingPindahHalaman('Memuat Data...', 'Sedang memproses dan memuat data dari server, mohon tunggu...');
+                    }
+                    this.addEventListener('loadend', function () {
+                        jumlahRequestDataAktif = Math.max(0, jumlahRequestDataAktif - 1);
+                        setTimeout(function () {
+                            if (jumlahRequestDataAktif === 0 && !sedangUnloadHalaman) {
+                                window.sembunyikanLoadingPindahHalaman();
+                            }
+                        }, 80);
+                    }, { once: true });
+                }
+                return sendAsli.apply(this, arguments);
+            };
+        }
+
         ['click', 'dblclick', 'submit'].forEach(function (evtName) {
             window.addEventListener(evtName, function (e) {
                 if (sedangPindahHalaman) {
@@ -1837,7 +1888,6 @@
             }
         }, true);
 
-        // Deteksi klik pada seluruh link navigasi (<a>) untuk langsung mengunci layar & menampilkan animasi loading
         document.addEventListener('click', function (e) {
             if (sedangPindahHalaman || e.defaultPrevented) return;
             if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -1859,7 +1909,6 @@
 
             if (targetUrl.origin !== window.location.origin) return;
 
-            // Abaikan jika hanya lompat anchor (#) di halaman yang sama
             if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search && targetUrl.hash !== '') {
                 return;
             }
@@ -1869,36 +1918,34 @@
                 ? `Membuka ${teksMenu}...`
                 : 'Memuat Halaman...';
 
+            sedangUnloadHalaman = true;
             window.tampilkanLoadingPindahHalaman(judulLoad);
         }, false);
 
-        // Deteksi submit form yang melakukan pindah/reload halaman
         document.addEventListener('submit', function (e) {
             if (sedangPindahHalaman || e.defaultPrevented) return;
             const formEl = e.target;
             if (!formEl || formEl.tagName !== 'FORM') return;
             if (formEl.getAttribute('target') === '_blank') return;
 
-            // Abaikan form yang ditangani murni via AJAX tanpa reload
             const idForm = formEl.id || '';
             if (idForm === 'form-tambah-role' || idForm === 'form-clear-riwayat') return;
 
-            // Beri jeda microtask agar handler validasi (seperti ukuran file / confirm) selesai mengecek defaultPrevented
             setTimeout(function () {
                 if (!e.defaultPrevented && !sedangPindahHalaman) {
-                    window.tampilkanLoadingPindahHalaman('Memproses Data...', 'Mohon tunggu, permintaan sedang dikirim ke server.');
+                    sedangUnloadHalaman = true;
+                    window.tampilkanLoadingPindahHalaman('Memproses & Memuat Data...', 'Mohon tunggu, permintaan sedang diproses oleh server.');
                 }
             }, 0);
         }, false);
 
-        // Pastikan saat browser mulai unload halaman menuju URL baru, loading aktif
         window.addEventListener('beforeunload', function () {
+            sedangUnloadHalaman = true;
             if (!sedangPindahHalaman) {
-                window.tampilkanLoadingPindahHalaman('Memuat Halaman...');
+                window.tampilkanLoadingPindahHalaman('Memuat Data Halaman...', 'Sedang memuat data dari server, mohon tunggu...');
             }
         });
 
-        // Pastikan saat halaman selesai dimuat (atau saat tombol Back/Forward ditekan dari bfcache), loading langsung ditutup
         window.addEventListener('pageshow', function () {
             window.sembunyikanLoadingPindahHalaman();
         });
@@ -1912,6 +1959,7 @@
             if (sedangPindahHalaman) return;
             const sedangDiHalamanPengajuan = window.location.pathname.toLowerCase().includes('/pengajuan');
             if (!sedangDiHalamanPengajuan) {
+                sedangUnloadHalaman = true;
                 window.tampilkanLoadingPindahHalaman('Membuka Menu Pengajuan...');
                 window.location.href = URL_HALAMAN_PENGAJUAN;
                 return;
@@ -1929,6 +1977,7 @@
                 window.bukaTabPengajuan(targetJenis, true);
                 return;
             }
+            sedangUnloadHalaman = true;
             window.tampilkanLoadingPindahHalaman('Membuka Halaman Pengajuan...');
             window.location.href = URL_HALAMAN_PENGAJUAN + '?jenis=' + encodeURIComponent(targetJenis);
         };

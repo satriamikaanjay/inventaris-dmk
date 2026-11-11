@@ -11,32 +11,22 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/**
- * Kelola Akun - hanya untuk Master Admin.
- * - Menambah akun Master Admin, Admin, dan User (email + password ditentukan Master Admin).
- * - Mengubah nama / email / password semua akun.
- * - Menghapus akun Admin dan User (akun Master Admin tidak bisa dihapus).
- * - Semua aktivitas dicatat ke Riwayat Aktivitas (modul "Kelola Akun").
- */
 class KelolaAkunController extends Controller
 {
     private const MODUL = 'Kelola Akun';
 
-    // nilai kolom role => label tampilan
     private const ROLES = [
         'master_admin' => 'Master Admin',
         'admin'        => 'Admin',
         'user'         => 'User',
     ];
 
-    // role yang boleh dihapus
     private const DAPAT_DIHAPUS = ['admin', 'user'];
 
     public function index()
     {
         $this->wajibMasterAdmin();
 
-        // kelompokkan akun per role (nilai role dinormalkan: "Master Admin" / "master_admin" sama saja)
         $akuns = User::orderBy('nama_lengkap')->get()
             ->groupBy(fn ($u) => $this->normalisasiRole($u->role));
 
@@ -58,7 +48,6 @@ class KelolaAkunController extends Controller
             'password'     => ['required', 'string', 'min:8', 'max:100'],
         ], $this->pesan());
 
-        // Mapping role teks ke role_id angka
         $roleIdMap = [
             'master_admin' => 1,
             'admin'        => 2,
@@ -69,8 +58,8 @@ class KelolaAkunController extends Controller
         $user->nama_lengkap = trim($data['nama_lengkap']);
         $user->email        = $data['email'];
         $user->password     = Hash::make($data['password']);
-        $user->role         = $data['role']; // Simpan teks perannya
-        $user->role_id      = $roleIdMap[$data['role']] ?? 3; // Simpan angka ID perannya
+        $user->role         = $data['role'];
+        $user->role_id      = $roleIdMap[$data['role']] ?? 3;
         $user->save();
 
         $label = self::ROLES[$data['role']];
@@ -103,7 +92,6 @@ class KelolaAkunController extends Controller
             $diubah[] = 'email';
         }
 
-        // PASTIKAN role_id TIDAK KOSONG SAAT UPDATE (Pencegahan Error)
         if (empty($user->role_id)) {
             $roleIdMap = ['master_admin' => 1, 'admin' => 2, 'user' => 3];
             $user->role_id = $roleIdMap[$user->role] ?? 3;
@@ -122,6 +110,39 @@ class KelolaAkunController extends Controller
         }
 
         $user->save();
+
+        if ($this->normalisasiRole($user->role) === 'admin') {
+            $lockFilePath = storage_path('app/admin_login_locks.json');
+            try {
+                file_put_contents($lockFilePath, json_encode([
+                    'failed_count' => 0,
+                    'is_blocked'   => false,
+                    'last_email'   => '',
+                    'blocked_at'   => null,
+                    'updated_at'   => round(microtime(true) * 1000),
+                    'clients'      => [],
+                ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            } catch (\Throwable $e) {
+            }
+
+            $resetReqFilePath = storage_path('app/password_reset_requests.json');
+            if (is_file($resetReqFilePath)) {
+                try {
+                    $daftarReq = json_decode((string) file_get_contents($resetReqFilePath), true);
+                    if (is_array($daftarReq)) {
+                        foreach ($daftarReq as &$reqItem) {
+                            if (strtolower((string) ($reqItem['email'] ?? '')) === strtolower((string) $user->email) || (int) ($reqItem['user_id'] ?? 0) === (int) $user->getKey()) {
+                                $reqItem['status'] = 'completed';
+                                $reqItem['completed_at'] = now()->format('d M Y, H:i');
+                            }
+                        }
+                        unset($reqItem);
+                        file_put_contents($resetReqFilePath, json_encode($daftarReq, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+        }
 
         $label = $this->labelRole($user->role);
         $this->catat("Memperbarui akun {$label}: {$user->nama_lengkap} ({$user->email}) - yang diubah: " . implode(', ', $diubah));
@@ -167,9 +188,6 @@ class KelolaAkunController extends Controller
             ->with('success', "Akun \"{$user->nama_lengkap}\" berhasil dihapus.");
     }
 
-    // ------------------------------------------------------------------
-
-    /** Hanya Master Admin yang boleh masuk. Percobaan lain dicatat sebagai Peringatan. */
     private function wajibMasterAdmin(): void
     {
         $pengguna = Auth::user();
@@ -180,7 +198,6 @@ class KelolaAkunController extends Controller
         }
     }
 
-    /** "Master Admin", "master-admin", "MASTER_ADMIN" => "master_admin" */
     private function normalisasiRole($role): string
     {
         return strtolower(str_replace([' ', '-'], '_', trim((string) $role)));

@@ -46,7 +46,6 @@ class KategoriController extends Controller
 
             $riwayat->forceFill($data)->save();
         } catch (\Throwable $e) {
-            // Abaikan jika gagal mencatat log agar tidak mengganggu proses utama
         }
     }
 
@@ -68,7 +67,6 @@ class KategoriController extends Controller
             'Berhasil'
         );
 
-        // JIKA REQUEST DARI AJAX (JAVASCRIPT)
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -76,7 +74,6 @@ class KategoriController extends Controller
             ]);
         }
 
-        // JIKA BUKAN AJAX (CARA LAMA)
         return redirect()->back()->with('success', 'Kategori baru berhasil ditambahkan!');
     }
 
@@ -107,7 +104,6 @@ class KategoriController extends Controller
         return redirect()->back()->with('success', 'Kategori berhasil diperbarui!');
     }
 
-    // Fungsi untuk memproses Hapus Kategori (Dukungan AJAX)
     public function destroy(Request $request, $id)
     {
         $kategori = Kategori::findOrFail($id);

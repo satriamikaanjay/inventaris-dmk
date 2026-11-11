@@ -10,7 +10,7 @@ class AdminLokasiController extends Controller
     public function index()
     {
         $lokasis = AdminLokasi::all();
-        return view('lokasi', compact('lokasis'));
+        return view('admin.lokasi', compact('lokasis'));
     }
 
     public function store(Request $request)

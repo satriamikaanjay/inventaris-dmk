@@ -2,7 +2,42 @@
     $lockFilePath = storage_path('app/admin_login_locks.json');
     $resetReqFilePath = storage_path('app/password_reset_requests.json');
 
-    $lockData = [
+    $rawClientId = trim((string) (request('client_lock_id') ?: request()->cookie('admin_login_client_id') ?: old('client_lock_id', '')));
+    $clientKey = preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawClientId);
+    if ($clientKey === '') {
+        try {
+            $sid = session()->getId();
+            if (!empty($sid)) {
+                $clientKey = 'sess_' . $sid;
+            }
+        } catch (\Throwable $e) {
+        }
+    }
+    if ($clientKey === '') {
+        $clientKey = 'ip_' . md5((string) request()->ip() . '|' . (string) request()->userAgent());
+    }
+    $clientKey = substr($clientKey, 0, 80);
+
+    $allLocks = [
+        'failed_count' => 0,
+        'is_blocked'   => false,
+        'last_email'   => '',
+        'blocked_at'   => null,
+        'updated_at'   => 0,
+        'clients'      => [],
+    ];
+
+    if (is_file($lockFilePath)) {
+        $decodedLock = json_decode((string) file_get_contents($lockFilePath), true);
+        if (is_array($decodedLock)) {
+            $allLocks = array_merge($allLocks, $decodedLock);
+            if (!isset($allLocks['clients']) || !is_array($allLocks['clients'])) {
+                $allLocks['clients'] = [];
+            }
+        }
+    }
+
+    $defaultClientLock = [
         'failed_count' => 0,
         'is_blocked'   => false,
         'last_email'   => '',
@@ -10,12 +45,46 @@
         'updated_at'   => 0,
     ];
 
-    if (is_file($lockFilePath)) {
-        $decodedLock = json_decode((string) file_get_contents($lockFilePath), true);
-        if (is_array($decodedLock)) {
-            $lockData = array_merge($lockData, $decodedLock);
-        }
+    $flashedLock = session('login_client_lock_state');
+    if (is_array($flashedLock)) {
+        $lockData = array_merge($defaultClientLock, $flashedLock);
+    } elseif (isset($allLocks['clients'][$clientKey]) && is_array($allLocks['clients'][$clientKey])) {
+        $lockData = array_merge($defaultClientLock, $allLocks['clients'][$clientKey]);
+    } else {
+        $lockData = $defaultClientLock;
     }
+
+    $sinkronkanGlobalLock = function (array &$locksArr): void {
+        $anyBlocked = false;
+        $maxFailed = 0;
+        $lastEmail = '';
+        $blockedAt = null;
+        foreach ($locksArr['clients'] ?? [] as $cData) {
+            if (!is_array($cData)) {
+                continue;
+            }
+            $fc = (int) ($cData['failed_count'] ?? 0);
+            if ($fc > $maxFailed) {
+                $maxFailed = $fc;
+            }
+            if (!empty($cData['is_blocked']) || $fc >= 3) {
+                $anyBlocked = true;
+                if (!empty($cData['last_email'])) {
+                    $lastEmail = (string) $cData['last_email'];
+                }
+                if (!empty($cData['blocked_at'])) {
+                    $blockedAt = (string) $cData['blocked_at'];
+                }
+            } elseif ($lastEmail === '' && !empty($cData['last_email'])) {
+                $lastEmail = (string) $cData['last_email'];
+            }
+        }
+        $locksArr['failed_count'] = $maxFailed;
+        $locksArr['is_blocked'] = $anyBlocked;
+        $locksArr['last_email'] = $lastEmail;
+        $locksArr['blocked_at'] = $anyBlocked ? $blockedAt : null;
+        $locksArr['updated_at'] = round(microtime(true) * 1000);
+    };
 
     if (request()->has('_login_lock_action')) {
         while (ob_get_level() > 0) {
@@ -32,7 +101,7 @@
         }
 
         if ($act === 'record_fail') {
-            $emailGagal = trim((string) request('email', ''));
+            $emailGagal = substr(strip_tags(trim((string) request('email', ''))), 0, 150);
             $lockData['failed_count'] = ((int) ($lockData['failed_count'] ?? 0)) + 1;
             if ($emailGagal !== '') {
                 $lockData['last_email'] = $emailGagal;
@@ -47,8 +116,11 @@
             }
             $lockData['updated_at'] = round(microtime(true) * 1000);
 
+            $allLocks['clients'][$clientKey] = $lockData;
+            $sinkronkanGlobalLock($allLocks);
+
             try {
-                file_put_contents($lockFilePath, json_encode($lockData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                file_put_contents($lockFilePath, json_encode($allLocks, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
             } catch (\Throwable $e) {
             }
 
@@ -62,7 +134,7 @@
                     }
                     if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'aktivitas')) {
                         $infoEmail = $emailGagal !== '' ? (' (' . $emailGagal . ')') : '';
-                        $dataLog['aktivitas'] = 'Peringatan Keamanan: Akses login Admin terblokir setelah 5 kali salah memasukkan kata sandi' . $infoEmail . '.';
+                        $dataLog['aktivitas'] = 'Peringatan Keamanan: Akses login Admin terblokir setelah 3 kali berturut-turut salah memasukkan username/password' . $infoEmail . '.';
                     }
                     if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'modul')) {
                         $dataLog['modul'] = 'Autentikasi Sistem';
@@ -80,24 +152,37 @@
         }
 
         if ($act === 'request_password_reset') {
-            $emailReq = trim((string) request('email', ''));
-            $catatanReq = trim((string) request('catatan', ''));
+            $resetThrottleKey = 'pwd_reset_req|' . request()->ip();
+            if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($resetThrottleKey, 5)) {
+                echo json_encode(['success' => false, 'message' => 'Terlalu banyak permintaan reset. Silakan tunggu beberapa menit sebelum mengirim ulang.']);
+                exit;
+            }
+            \Illuminate\Support\Facades\RateLimiter::hit($resetThrottleKey, 600);
+
+            $emailReq = substr(strip_tags(trim((string) request('email', ''))), 0, 150);
+            $catatanReq = substr(strip_tags(trim((string) request('catatan', ''))), 0, 500);
 
             if ($emailReq === '') {
-                echo json_encode(['success' => false, 'message' => 'Alamat email Admin wajib diisi.']);
+                echo json_encode(['success' => false, 'message' => 'Email atau username Admin wajib diisi.']);
                 exit;
             }
 
             $namaUserTerdaftar = 'Admin';
             $idUserTerdaftar = null;
+            $emailTerdaftar = $emailReq;
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
-                    $uRow = \Illuminate\Support\Facades\DB::table('users')
-                        ->where('email', $emailReq)
-                        ->first();
+                    $qUser = \Illuminate\Support\Facades\DB::table('users')->where('email', $emailReq);
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'nama_lengkap')) {
+                        $qUser->orWhere('nama_lengkap', $emailReq);
+                    }
+                    $uRow = $qUser->first();
                     if ($uRow) {
                         $namaUserTerdaftar = $uRow->nama_lengkap ?? ($uRow->name ?? 'Admin');
-                        $idUserTerdaftar = $uRow->id ?? null;
+                        $idUserTerdaftar = $uRow->users_id ?? ($uRow->id ?? null);
+                        if (!empty($uRow->email)) {
+                            $emailTerdaftar = $uRow->email;
+                        }
                     }
                 }
             } catch (\Throwable $e) {
@@ -116,8 +201,8 @@
                 'id'         => $idBaru,
                 'user_id'    => $idUserTerdaftar,
                 'nama'       => $namaUserTerdaftar,
-                'email'      => $emailReq,
-                'catatan'    => $catatanReq !== '' ? $catatanReq : 'Meminta peresetan kata sandi & pembukaan blokir akun Admin.',
+                'email'      => $emailTerdaftar,
+                'catatan'    => $catatanReq !== '' ? $catatanReq : 'Meminta peresetan password/username & pembukaan blokir akun Admin.',
                 'is_blocked' => !empty($lockData['is_blocked']),
                 'gagal_ke'   => (int) ($lockData['failed_count'] ?? 0),
                 'status'     => 'pending',
@@ -127,7 +212,7 @@
 
             array_unshift($daftarReq, $itemReqBaru);
             try {
-                file_put_contents($resetReqFilePath, json_encode($daftarReq, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                file_put_contents($resetReqFilePath, json_encode($daftarReq, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
             } catch (\Throwable $e) {
             }
 
@@ -162,15 +247,22 @@
         }
 
         if ($act === 'reset_lock') {
-            $lockData = [
-                'failed_count' => 0,
-                'is_blocked'   => false,
-                'last_email'   => '',
-                'blocked_at'   => null,
-                'updated_at'   => round(microtime(true) * 1000),
-            ];
+            $isAuthMaster = \Illuminate\Support\Facades\Auth::check() && in_array(
+                strtolower(str_replace([' ', '-'], '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? '')))),
+                ['master_admin', 'masteradmin'],
+                true
+            );
+            if (!$isAuthMaster) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Hanya Master Admin yang berwenang membuka blokir.']);
+                exit;
+            }
+            $lockData = $defaultClientLock;
+            $lockData['updated_at'] = round(microtime(true) * 1000);
+            unset($allLocks['clients'][$clientKey]);
+            $sinkronkanGlobalLock($allLocks);
             try {
-                file_put_contents($lockFilePath, json_encode($lockData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                file_put_contents($lockFilePath, json_encode($allLocks, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
             } catch (\Throwable $e) {
             }
             echo json_encode(['success' => true, 'lock' => $lockData]);
@@ -183,6 +275,7 @@
 
     $adaErrorLoginServer = $errors->any();
     $oldRoleLogin = old('login_as', '');
+    $sudahDicatatMiddleware = (bool) session('login_attempt_recorded', false);
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -203,8 +296,8 @@
             background-color: #0d2642;
             color: #fff;
             width: 100vw;
-            height: 100vh; /* Kunci tinggi layar tepat 100% */
-            overflow: hidden; /* Hilangkan scrollbar pada desktop */
+            height: 100vh;
+            overflow: hidden;
         }
 
         .login-master-admin {
@@ -213,7 +306,6 @@
             height: 100%;
         }
 
-        /* Panel Kiri (Informasi) */
         .info-panel {
             flex: 1;
             padding: 4% 6%;
@@ -293,7 +385,6 @@
             font-weight: 500;
         }
 
-        /* Panel Kanan (Form Login) */
         .login-panel {
             flex: 1;
             background-color: #fff;
@@ -430,7 +521,7 @@
         .toast-notification {
     position: fixed;
     top: 25px;
-    right: -100%; /* Mulai dari luar layar sebelah kanan */
+    right: -100%;
     background-color: #fee2e2;
     color: #dc2626;
     padding: 15px 25px;
@@ -442,14 +533,13 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Efek memantul sedikit saat muncul */
+    transition: right 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 .toast-notification.show {
-    right: 25px; /* Posisi saat muncul di layar */
+    right: 25px;
 }
 
-/* --- ANIMASI LOADING BUTTON --- */
 .spinner {
     display: inline-block;
     width: 18px;
@@ -469,7 +559,7 @@
 }
 
 .password-wrapper .form-input {
-    padding-right: 40px; /* Memberi ruang di sebelah kanan agar teks tidak tertimpa ikon */
+    padding-right: 40px;
 }
 
 .toggle-password-btn {
@@ -507,15 +597,14 @@
             line-height: 1.4;
         }
 
-        /* Mode Mobile (Menyembunyikan panel kiri, hanya tampilkan login) */
         @media screen and (max-width: 968px) {
             body {
                 background-color: #fff;
-                overflow-y: auto; /* Aktifkan scroll di mobile jika ukuran layar ponsel terlalu kecil untuk form */
+                overflow-y: auto;
             }
 
             .info-panel {
-                display: none; /* Sembunyikan informasi kargo sepenuhnya */
+                display: none;
             }
 
             .login-panel {
@@ -529,10 +618,10 @@
 
             .login-card {
                 padding: 1.5rem;
-                box-shadow: none; /* Tampilan bersih tanpa bayangan berlebih di layar kecil */
+                box-shadow: none;
             }
         }
-            /* --- LABEL SISA KESEMPATAN PASSWORD & BLOKIR ADMIN --- */
+
         .password-attempt-label {
             display: flex;
             align-items: center;
@@ -632,7 +721,6 @@
             40%, 80% { transform: translateX(5px); }
         }
 
-        /* --- MODAL POP-UP LUPA PASSWORD (MINTA RESET KE MASTER ADMIN) --- */
         .reset-modal-backdrop {
             position: fixed;
             top: 0;
@@ -770,8 +858,7 @@
         .reset-success-alert.show {
             display: block;
         }
-    
-        /* --- POP-UP ANIMASI LOADING PROSES LOGIN (MENGECEK KREDENSIAL SESUAI JARINGAN & ANTI-SPAM KLIK) --- */
+
         .login-auth-overlay {
             position: fixed;
             inset: 0;
@@ -929,7 +1016,7 @@
 </head>
 <body>
     <div class="login-master-admin">
-        <!-- Bagian Kiri: Informasi Kargo (Hidden on Mobile) -->
+
         <div class="info-panel">
             <div class="brand-header">
                 <div class="brand-text">
@@ -937,7 +1024,7 @@
                     <span class="logistics-solutions">LOGISTICS SOLUTIONS</span>
                 </div>
             </div>
-            
+
             <div class="hero-section">
                 <div class="trust-badge">
                     <span class="platfrom-terpercaya">Platform Terpercaya</span>
@@ -962,7 +1049,6 @@
             </div>
         </div>
 
-        <!-- Bagian Kanan: Form Login (Selalu Tampil) -->
         <div class="login-panel">
             <div class="login-card">
                 <div class="login-header">
@@ -970,21 +1056,23 @@
                     <p class="masuk-ke-akun-desc">Masuk ke akun Anda untuk mengelola pengiriman kargo</p>
                 </div>
 
-                <!-- Tombol Role -->
                 <div class="role-toggle">
                     <button type="button" class="role-btn" id="btn-admin">Admin</button>
                     <button type="button" class="role-btn active" id="btn-master">Master Admin</button>
                 </div>
 
-                <!-- Form Login -->
-                <form class="login-form" action="{{ route('login.proses') }}" method="POST" id="form-login">
+                <form class="login-form" action="{{ route('login.proses') }}" method="POST" id="form-login" autocomplete="on">
                     @csrf
                     <input type="hidden" name="login_as" id="login_as" value="master_admin">
+                    <input type="hidden" name="client_lock_id" id="client_lock_id" value="">
+                    <div style="position:absolute; left:-9999px; top:-9999px; opacity:0; height:0; width:0; overflow:hidden;" aria-hidden="true">
+                        <label for="website_trap">Security Verification</label>
+                        <input type="text" name="website_trap" id="website_trap" value="" tabindex="-1" autocomplete="off">
+                    </div>
 
-                    <!-- AREA NOTIFIKASI MENGAMBANG -->
                     @if ($errors->any())
                         <div id="error-toast" class="toast-notification">
-                            <!-- Ikon Peringatan -->
+
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="10"></circle>
                                 <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -994,7 +1082,6 @@
                         </div>
                     @endif
 
-                    <!-- KOTAK PERINGATAN TERBLOKIR SETELAH 3X GAGAL (KHUSUS ADMIN) -->
                     <div id="admin-blocked-box" class="admin-blocked-box">
                         <div class="admin-blocked-header">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1004,27 +1091,26 @@
                             <span>Akses Login Admin Terblokir (3/3 Gagal)</span>
                         </div>
                         <div class="admin-blocked-desc">
-                            Anda telah salah memasukkan kata sandi atau data login sebanyak <strong>3 kali</strong>. Akses login Admin dikunci sementara demi keamanan.
+                            Anda telah salah memasukkan username/email atau kata sandi sebanyak <strong>3 kali berturut-turut</strong>. Akses login Admin dikunci sementara demi keamanan.
                         </div>
                         <div class="admin-blocked-contact">
-                            <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><span>Silakan hubungi <strong>Developer</strong></span></span>
+                            <span style="display:inline-flex; align-items:center; gap:5px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg><span>Hubungi <strong>Master Admin</strong> untuk reset password/username</span></span>
                             <button type="button" onclick="bukaModalLupaPassword()" style="background:#dc2626; color:#fff; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">
-                                Ajukan Reset ke Developer
+                                Ajukan Reset ke Master Admin
                             </button>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" name="email" id="email-input" class="form-input" placeholder="nama@perusahaan.com" value="{{ old('email') }}" required>
+                        <label class="form-label">Email / Username</label>
+                        <input type="text" name="email" id="email-input" class="form-input" placeholder="nama@perusahaan.com atau username" value="{{ old('email') }}" maxlength="150" autocomplete="username" required>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Password</label>
                         <div class="password-wrapper">
-                            <input type="password" name="password" id="password-input" class="form-input" placeholder="••••••••" required>
-                            
-                            <!-- Tombol Ikon Mata -->
+                            <input type="password" name="password" id="password-input" class="form-input" placeholder="••••••••" maxlength="100" autocomplete="current-password" required>
+
                             <button type="button" class="toggle-password-btn" id="toggle-password" tabindex="-1">
                                 <svg id="eye-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -1044,17 +1130,11 @@
                             </span>
                             <span id="badge-sisa-password" class="attempt-badge-pill">Sisa 3 / 3</span>
                         </div>
-
-                        <!-- LABEL INFORMASI SISA KESEMPATAN MEMASUKKAN PASSWORD UNTUK ADMIN -->
-                        <div id="label-sisa-password-admin" class="password-attempt-label attempt-safe">
-                            <span id="teks-sisa-password" style="display:inline-flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg><span>Sisa kesempatan memasukkan password: <strong>3 kali</strong></span></span>
-                            <span id="badge-sisa-password" class="attempt-badge-pill">Sisa 3 / 3</span>
-                        </div>
                     </div>
 
                     <div class="form-options">
                         <label class="ingat-saya">
-                            <input type="checkbox" name="remember" {{ old('remember') ? 'checked' : '' }}> Ingat saya
+                            <input type="checkbox" name="remember" id="remember-checkbox" value="1" {{ old('remember') ? 'checked' : '' }}> Ingat saya
                         </label>
                         <div class="right-options">
                             <a href="javascript:void(0)" onclick="bukaModalLupaPassword()" class="lupa-password" id="btn-lupa-password">Lupa password?</a>
@@ -1073,7 +1153,6 @@
         </div>
     </div>
 
-    <!-- POP-UP ANIMASI LOADING PROSES VERIFIKASI LOGIN (SESUAI KECEPATAN JARINGAN & ANTI-SPAM KLIK) -->
     <div id="login-auth-loader" class="login-auth-overlay" aria-live="polite" aria-busy="true">
         <div class="login-top-progress-track">
             <div id="login-top-progress-bar" class="login-top-progress-bar"></div>
@@ -1102,29 +1181,35 @@
         </div>
     </div>
 
-    <!-- POP-UP MODAL PERMINTAAN RESET PASSWORD KE MASTER ADMIN -->
     <div class="reset-modal-backdrop" id="modalLupaPassword">
         <div class="reset-modal-card">
             <div class="reset-modal-header">
                 <div class="reset-modal-title">
-                    <span style="display:inline-flex; align-items:center; gap:7px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#008ce2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg><span>Permintaan Reset Password</span></span>
+                    <span style="display:inline-flex; align-items:center; gap:7px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#008ce2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg><span id="judul-modal-reset">Permintaan Reset Password / Username</span></span>
                 </div>
                 <button type="button" class="reset-modal-close" onclick="tutupModalLupaPassword()" title="Tutup">&times;</button>
             </div>
-            <p class="reset-modal-desc">
-                Permintaan peresetan kata sandi dan pembukaan blokir akun Admin akan dikirimkan langsung ke menu <strong>Notifikasi Master Admin</strong>.
+            <p class="reset-modal-desc" id="desc-modal-reset">
+                Permintaan peresetan password/username dan pembukaan blokir akun Admin akan dikirimkan langsung ke menu <strong>Notifikasi Master Admin</strong>.
             </p>
 
             <div id="reset-success-alert" class="reset-success-alert"></div>
 
+            <div id="info-reset-developer-master" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; color: #92400e; padding: 12px 14px; border-radius: 10px; font-size: 12.5px; line-height: 1.5; margin-bottom: 14px;">
+                Untuk akun <strong>Master Admin</strong>, peresetan password dilakukan dengan menghubungi pihak <strong>Developer</strong>. <em>(Fitur integrasi sisi Developer saat ini sedang dalam tahap perancangan)</em>.
+                <div class="reset-modal-actions" style="margin-top: 12px;">
+                    <button type="button" class="btn-batal-reset" onclick="tutupModalLupaPassword()">Tutup</button>
+                </div>
+            </div>
+
             <form id="form-request-reset" onsubmit="kirimPermintaanResetKeMasterAdmin(event)">
                 <div class="form-group" style="margin-bottom: 12px;">
-                    <label class="form-label">Email Akun Admin <span style="color: #dc2626;">*</span></label>
-                    <input type="email" id="reset_email_input" class="form-input" placeholder="Masukkan email akun Admin Anda..." required>
+                    <label class="form-label">Email / Username Akun Admin <span style="color: #dc2626;">*</span></label>
+                    <input type="text" id="reset_email_input" class="form-input" placeholder="Masukkan email atau username akun Admin Anda..." required>
                 </div>
                 <div class="form-group" style="margin-bottom: 6px;">
                     <label class="form-label">Pesan / Keterangan untuk Master Admin <span style="font-weight: 400; color: #64748b; font-size: 11px;">(Opsional)</span></label>
-                    <textarea id="reset_catatan_input" class="reset-modal-textarea" placeholder="Contoh: Mohon bantuannya untuk mereset password akun Admin saya karena lupa sandi / terblokir."></textarea>
+                    <textarea id="reset_catatan_input" class="reset-modal-textarea" placeholder="Contoh: Mohon bantuannya untuk mereset password/username akun Admin saya karena lupa sandi / terblokir 3 kali."></textarea>
                 </div>
                 <div class="reset-modal-actions">
                     <button type="button" class="btn-batal-reset" onclick="tutupModalLupaPassword()">Tutup</button>
@@ -1136,22 +1221,52 @@
         </div>
     </div>
 
+    <input type="hidden" id="json-server-lock-init" value="{{ json_encode($lockData) }}">
+    <input type="hidden" id="json-ada-error-login-server" value="{{ json_encode($adaErrorLoginServer) }}">
+    <input type="hidden" id="json-old-role-server" value="{{ json_encode($oldRoleLogin) }}">
+    <input type="hidden" id="json-attempt-recorded-middleware" value="{{ json_encode($sudahDicatatMiddleware) }}">
+
     <script>
         const MAX_ADMIN_ATTEMPTS = 3;
+        const STORAGE_KEY_CLIENT_ID = 'admin_login_client_id';
         const STORAGE_KEY_COUNT = 'admin_login_failed_count';
         const STORAGE_KEY_BLOCKED = 'admin_login_is_blocked';
+        const STORAGE_KEY_REMEMBER = 'login_remember_checked';
+        const STORAGE_KEY_REMEMBER_EMAIL = 'login_remembered_email';
+        const STORAGE_KEY_REMEMBER_ROLE = 'login_remembered_role';
         const SESSION_KEY_LAST_ROLE = 'login_last_selected_role';
         const SESSION_KEY_PENDING_ADMIN = 'login_pending_admin_attempt';
 
-        const SERVER_LOCK_INIT = @json($lockData);
-        const ADA_ERROR_LOGIN_SERVER = @json($adaErrorLoginServer);
-        const OLD_ROLE_SERVER = @json($oldRoleLogin);
+        function ensureClientLockId() {
+            let cid = '';
+            try {
+                cid = localStorage.getItem(STORAGE_KEY_CLIENT_ID) || '';
+                if (!cid) {
+                    cid = 'cid_' + Math.random().toString(36).slice(2, 12) + '_' + Date.now();
+                    localStorage.setItem(STORAGE_KEY_CLIENT_ID, cid);
+                }
+                document.cookie = 'admin_login_client_id=' + encodeURIComponent(cid) + '; path=/; max-age=31536000; SameSite=Lax';
+            } catch (e) {
+                cid = 'cid_fallback';
+            }
+            const hiddenCid = document.getElementById('client_lock_id');
+            if (hiddenCid) hiddenCid.value = cid;
+            return cid;
+        }
+
+        const CURRENT_CLIENT_LOCK_ID = ensureClientLockId();
+
+        const SERVER_LOCK_INIT = JSON.parse(document.getElementById('json-server-lock-init').value || 'null');
+        const ADA_ERROR_LOGIN_SERVER = JSON.parse(document.getElementById('json-ada-error-login-server').value || 'false');
+        const OLD_ROLE_SERVER = JSON.parse(document.getElementById('json-old-role-server').value || '"admin"');
+        const SUDAH_DICATAT_MIDDLEWARE = JSON.parse(document.getElementById('json-attempt-recorded-middleware').value || 'false');
 
         const btnAdmin = document.getElementById('btn-admin');
         const btnMaster = document.getElementById('btn-master');
         const hiddenRole = document.getElementById('login_as');
         const emailInput = document.getElementById('email-input');
         const passwordInput = document.getElementById('password-input');
+        const rememberCheckbox = document.getElementById('remember-checkbox');
         const formLogin = document.getElementById('form-login');
         const btnSubmit = document.getElementById('btn-submit');
         const btnText = document.getElementById('btn-text');
@@ -1282,24 +1397,44 @@
             pilihTabRole('master_admin');
         });
 
-        // --- FUNGSI POP-UP LUPA PASSWORD (MINTA RESET KE MASTER ADMIN) ---
         function bukaModalLupaPassword() {
             const modal = document.getElementById('modalLupaPassword');
             const resetEmail = document.getElementById('reset_email_input');
             const resetCatatan = document.getElementById('reset_catatan_input');
             const alertBox = document.getElementById('reset-success-alert');
+            const formReqReset = document.getElementById('form-request-reset');
+            const infoDevMaster = document.getElementById('info-reset-developer-master');
+            const descModalReset = document.getElementById('desc-modal-reset');
+            const isRoleAdmin = (hiddenRole.value === 'admin');
 
             if (alertBox) {
                 alertBox.classList.remove('show');
                 alertBox.innerHTML = '';
             }
+
+            if (!isRoleAdmin) {
+                if (formReqReset) formReqReset.style.display = 'none';
+                if (infoDevMaster) infoDevMaster.style.display = 'block';
+                if (descModalReset) {
+                    descModalReset.innerHTML = 'Jika lupa password atau salah memasukkan kredensial akun <strong>Master Admin</strong>, silakan hubungi pihak <strong>Developer</strong> untuk peresetan password.';
+                }
+                modal.classList.add('show');
+                return;
+            }
+
+            if (formReqReset) formReqReset.style.display = 'block';
+            if (infoDevMaster) infoDevMaster.style.display = 'none';
+            if (descModalReset) {
+                descModalReset.innerHTML = 'Permintaan peresetan password/username dan pembukaan blokir akun Admin akan dikirimkan langsung ke menu <strong>Notifikasi Master Admin</strong>.';
+            }
+
             if (resetEmail && emailInput && emailInput.value.trim() !== '') {
                 resetEmail.value = emailInput.value.trim();
             } else if (resetEmail && !resetEmail.value && serverLockState.last_email) {
                 resetEmail.value = serverLockState.last_email;
             }
             if (resetCatatan && isBlockedAdmin() && !resetCatatan.value.trim()) {
-                resetCatatan.value = 'Akun Admin saya terblokir karena salah memasukkan kata sandi  3. Mohon bantuan Developer untuk mereset password dan membuka blokir.';
+                resetCatatan.value = 'Akun Admin saya terblokir karena salah memasukkan username/password 3 kali berturut-turut. Mohon bantuan Master Admin untuk mereset password/username dan membuka blokir.';
             }
 
             modal.classList.add('show');
@@ -1332,6 +1467,7 @@
             try {
                 const params = new URLSearchParams({
                     _login_lock_action: 'request_password_reset',
+                    client_lock_id: CURRENT_CLIENT_LOCK_ID,
                     email: emailVal,
                     catatan: (resetCatatan.value || '').trim()
                 });
@@ -1359,8 +1495,32 @@
             }
         }
 
-        // Cek apakah halaman baru saja reload karena gagal login pada tab Admin
         document.addEventListener('DOMContentLoaded', async function() {
+            ensureClientLockId();
+
+            const savedRemember = localStorage.getItem(STORAGE_KEY_REMEMBER) === '1';
+            const savedEmail = localStorage.getItem(STORAGE_KEY_REMEMBER_EMAIL) || '';
+            const savedRememberRole = localStorage.getItem(STORAGE_KEY_REMEMBER_ROLE) || '';
+
+            if (savedRemember) {
+                if (rememberCheckbox && !ADA_ERROR_LOGIN_SERVER) {
+                    rememberCheckbox.checked = true;
+                }
+                if (emailInput && !emailInput.value.trim() && savedEmail) {
+                    emailInput.value = savedEmail;
+                }
+            }
+
+            if (rememberCheckbox) {
+                rememberCheckbox.addEventListener('change', function() {
+                    if (!rememberCheckbox.checked) {
+                        localStorage.removeItem(STORAGE_KEY_REMEMBER);
+                        localStorage.removeItem(STORAGE_KEY_REMEMBER_EMAIL);
+                        localStorage.removeItem(STORAGE_KEY_REMEMBER_ROLE);
+                    }
+                });
+            }
+
             if (!SERVER_LOCK_INIT.is_blocked && (SERVER_LOCK_INIT.failed_count || 0) === 0) {
                 localStorage.removeItem(STORAGE_KEY_COUNT);
                 localStorage.removeItem(STORAGE_KEY_BLOCKED);
@@ -1369,33 +1529,38 @@
             }
 
             const pendingAdminAttempt = sessionStorage.getItem(SESSION_KEY_PENDING_ADMIN) === '1';
-            const savedRole = OLD_ROLE_SERVER || sessionStorage.getItem(SESSION_KEY_LAST_ROLE) || 'admin';
+            const savedRole = OLD_ROLE_SERVER || sessionStorage.getItem(SESSION_KEY_LAST_ROLE) || savedRememberRole || 'admin';
 
             if (ADA_ERROR_LOGIN_SERVER && (pendingAdminAttempt || savedRole === 'admin')) {
                 sessionStorage.removeItem(SESSION_KEY_PENDING_ADMIN);
 
-                const nextCount = getFailedCount() + 1;
-                localStorage.setItem(STORAGE_KEY_COUNT, String(nextCount));
-                if (nextCount >= MAX_ADMIN_ATTEMPTS) {
-                    localStorage.setItem(STORAGE_KEY_BLOCKED, '1');
-                }
-
-                try {
-                    const params = new URLSearchParams({
-                        _login_lock_action: 'record_fail',
-                        email: emailInput ? emailInput.value : ''
-                    });
-                    const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
-                        method: 'GET',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.lock) {
-                            syncLockStateFromServerObj(data.lock);
-                        }
+                if (SUDAH_DICATAT_MIDDLEWARE) {
+                    syncLockStateFromServerObj(SERVER_LOCK_INIT);
+                } else {
+                    const nextCount = getFailedCount() + 1;
+                    localStorage.setItem(STORAGE_KEY_COUNT, String(nextCount));
+                    if (nextCount >= MAX_ADMIN_ATTEMPTS) {
+                        localStorage.setItem(STORAGE_KEY_BLOCKED, '1');
                     }
-                } catch (e) {}
+
+                    try {
+                        const params = new URLSearchParams({
+                            _login_lock_action: 'record_fail',
+                            client_lock_id: CURRENT_CLIENT_LOCK_ID,
+                            email: emailInput ? emailInput.value : ''
+                        });
+                        const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                            method: 'GET',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data && data.lock) {
+                                syncLockStateFromServerObj(data.lock);
+                            }
+                        }
+                    } catch (e) {}
+                }
 
                 pilihTabRole('admin');
             } else {
@@ -1403,12 +1568,24 @@
                 pilihTabRole(savedRole);
             }
 
-            // Polling setiap 3 detik: jika Master Admin mereset / membuka blokir dari halaman Notifikasi atau Roles,
-            // form login Admin otomatis terbuka kembali secara real-time!
+            try {
+                const initRes = await fetch(`{{ url()->current() }}?_login_lock_action=status&client_lock_id=${encodeURIComponent(CURRENT_CLIENT_LOCK_ID)}&_t=${Date.now()}`, {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                });
+                if (initRes.ok) {
+                    const initData = await initRes.json();
+                    if (initData && initData.lock) {
+                        syncLockStateFromServerObj(initData.lock);
+                        perbaruiTampilanFormBerdasarkanRole();
+                    }
+                }
+            } catch (e) {}
+
             setInterval(async () => {
                 if (document.hidden) return;
                 try {
-                    const res = await fetch(`{{ url()->current() }}?_login_lock_action=status&_t=${Date.now()}`, {
+                    const res = await fetch(`{{ url()->current() }}?_login_lock_action=status&client_lock_id=${encodeURIComponent(CURRENT_CLIENT_LOCK_ID)}&_t=${Date.now()}`, {
                         method: 'GET',
                         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
                     });
@@ -1438,7 +1615,6 @@
             }, 3500);
         }
 
-        // --- LOGIKA POP-UP ANIMASI LOADING PROSES LOGIN (DINAMIS SESUAI JARINGAN & ANTI-SPAM KLIK) ---
         let sedangProsesLogin = false;
         let timerProgresLogin = null;
         let waktuMulaiLogin = 0;
@@ -1514,7 +1690,6 @@
             document.body.style.cursor = '';
         }
 
-        // Blokir segala bentuk spam klik atau tekan Enter/Space saat proses pengecekan login sedang berjalan
         ['click', 'dblclick', 'submit'].forEach(function (evtName) {
             window.addEventListener(evtName, function (e) {
                 if (sedangProsesLogin) {
@@ -1552,6 +1727,20 @@
                 return false;
             }
 
+            ensureClientLockId();
+
+            if (rememberCheckbox && rememberCheckbox.checked) {
+                localStorage.setItem(STORAGE_KEY_REMEMBER, '1');
+                if (emailInput && emailInput.value.trim() !== '') {
+                    localStorage.setItem(STORAGE_KEY_REMEMBER_EMAIL, emailInput.value.trim());
+                }
+                localStorage.setItem(STORAGE_KEY_REMEMBER_ROLE, hiddenRole.value);
+            } else {
+                localStorage.removeItem(STORAGE_KEY_REMEMBER);
+                localStorage.removeItem(STORAGE_KEY_REMEMBER_EMAIL);
+                localStorage.removeItem(STORAGE_KEY_REMEMBER_ROLE);
+            }
+
             if (hiddenRole.value === 'admin') {
                 sessionStorage.setItem(SESSION_KEY_PENDING_ADMIN, '1');
                 sessionStorage.setItem(SESSION_KEY_LAST_ROLE, 'admin');
@@ -1563,7 +1752,6 @@
             btnSubmit.disabled = true;
             btnText.innerHTML = '<span class="spinner"></span> Memproses...';
 
-            // Tampilkan Pop-Up Animasi Loading Verifikasi Login sesuai kecepatan jaringan
             tampilkanLoadingProsesLogin(hiddenRole.value);
         });
 

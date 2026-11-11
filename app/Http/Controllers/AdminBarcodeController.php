@@ -25,7 +25,7 @@ class AdminBarcodeController extends Controller
         $detailAsets = $query->paginate(50)->withQueryString();
         $statuses = AdminStatusAset::all();
 
-        return view('barcode', compact('detailAsets', 'statuses'));
+        return view('admin.barcode', compact('detailAsets', 'statuses'));
     }
 
     public function generateSingleQr($id)

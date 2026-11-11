@@ -10,7 +10,7 @@ class AdminCabangController extends Controller
     public function index()
     {
         $cabangs = AdminCabang::withCount('asets')->get();
-        return view('cabang', compact('cabangs'));
+        return view('admin.cabang', compact('cabangs'));
     }
 
     public function store(Request $request)

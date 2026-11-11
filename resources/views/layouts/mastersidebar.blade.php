@@ -1,13 +1,11 @@
 @php
-    /* AUTO_ADMIN_SIDEBAR_GUARD */
+
     $__roleLoginSaatIni = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
     $__isAkunMasterAdmin = ($__roleLoginSaatIni === 'master_admin' || $__roleLoginSaatIni === 'masteradmin');
     $__uriSekarang = strtolower(trim((string) request()->path(), '/'));
 
-    // 1. Jika user adalah ADMIN tetapi mengetik URL khusus Master Admin (/roles, /kelola-akun, atau dashboard /masteradmin),
-    //    catat pelanggaran ke RiwayatAktivitas dan paksa redirect ke /admin-dashboard!
     $__isHalamanKhususMaster = ($__uriSekarang === 'masteradmin' || str_starts_with($__uriSekarang, 'masteradmin/dashboard') || str_starts_with($__uriSekarang, 'roles') || str_starts_with($__uriSekarang, 'kelola-akun') || request()->routeIs('masteradmin.dashboard', 'roles.*', 'kelola_akun.*'));
 
     if (!$__isAkunMasterAdmin && $__isHalamanKhususMaster) {
@@ -40,8 +38,6 @@
         exit;
     }
 
-    // 2. Jika user adalah MASTER ADMIN tetapi mengetik URL khusus Admin (/admin-dashboard atau ?panel=admin),
-    //    paksa redirect kembali ke Dashboard Master Admin!
     $__isHalamanKhususAdmin = (str_starts_with($__uriSekarang, 'admin-dashboard') || str_starts_with($__uriSekarang, 'admin/dashboard') || request()->routeIs('admin.dashboard'));
     if ($__isAkunMasterAdmin && $__isHalamanKhususAdmin) {
         $urlDashMaster = \Illuminate\Support\Facades\Route::has('masteradmin.dashboard') ? route('masteradmin.dashboard') : url('/masteradmin');
@@ -49,7 +45,6 @@
         exit;
     }
 
-    // 3. Tentukan sidebar sesuai role akun yang sedang login (Master Admin -> mastersidebar, Admin -> adminsidebar)
     $__pakaiAdminSidebar = !$__isAkunMasterAdmin;
 @endphp
 @if($__pakaiAdminSidebar)
@@ -67,7 +62,6 @@
         --sidebar-width: 270px;
     }
 
-    /* Sidebar Layout */
     sidebar {
         width: var(--sidebar-width);
         background-color: #ffffff;
@@ -157,7 +151,6 @@
         color: #fff;
     }
 
-    /* Badge & Titik Merah Notifikasi Sidebar */
     .notif-badge {
         margin-left: auto;
         background-color: #ef4444;
@@ -242,7 +235,6 @@
         }
     }
 
-    /* ================= OVERLAY LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) ================= */
     .nav-loading-overlay {
         position: fixed;
         inset: 0;
@@ -269,7 +261,6 @@
         pointer-events: all !important;
     }
 
-    /* Bar Progres Jaringan di Bagian Paling Atas Layar */
     .nav-top-progress-track {
         position: fixed;
         top: 0;
@@ -289,7 +280,6 @@
         transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
-    /* Kartu Pop-up Animasi Loading */
     .nav-loading-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
@@ -400,7 +390,7 @@
 </style>
 
 @php
-    // 1. Hitung otomatis jumlah aset yang rusak / menuju rusak atau sedang / mendekati jadwal servis (<= 30 hari)
+
     $hariIniNotif = \Carbon\Carbon::today();
     $batasMendekatiNotif = $hariIniNotif->copy()->addDays(30)->toDateString();
 
@@ -412,7 +402,6 @@
         })->orWhere('status_aset', 'like', '%Rusak%');
     })->count();
 
-    // Tambahkan jumlah permintaan reset password Admin yang masih pending ke badge Notifikasi Master Admin
     try {
         $resetReqFileSb = storage_path('app/password_reset_requests.json');
         if (is_file($resetReqFileSb)) {
@@ -425,7 +414,6 @@
     } catch (\Throwable $e) {
     }
 
-    // 2. Ambil daftar ID seluruh Riwayat Aktivitas (diurutkan dari terbaru) untuk mendeteksi riwayat baru
     $daftarIdRiwayat = [];
     try {
         if (isset($riwayats) && method_exists($riwayats, 'count') && $riwayats->count() > 0) {
@@ -474,12 +462,12 @@
     		<div class="sidebar-menu">
       			<div class="menu-section-title">MENU UTAMA</div>
       			<a href="{{ route('masteradmin.dashboard') }}" class="menu-item {{ Request::is('masteradmin') ? 'active' : '' }}">
-        				<!-- Ikon Dashboard -->
+
         				<svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
         				Dashboard
       			</a>
       			<a href="{{ route('notifikasi.index') }}" class="menu-item {{ Request::is('notifikasi*') || request()->routeIs('notifikasi.*') ? 'active' : '' }}">
-        				<!-- Ikon Notifikasi -->
+
         				<svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
         				<span>Notifikasi</span>
         				@if($jumlahNotifSidebar > 0)
@@ -489,74 +477,69 @@
 
       			<div class="menu-section-title">MANAJEMEN ASET</div>
       			<a href="{{ route('aset.index') }}" class="menu-item {{ request()->routeIs('aset.index') ? 'active' : '' }}">
-    <!-- Ikon Data Aset -->
+
     <svg viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM10 4h4v2h-4V4zm10 15H4V8h16v11z"/></svg>
     Data Aset
 </a>
       			<a href="{{ route('barcode_aset.index') }}" class="menu-item {{ Request::is('barcode-aset') ? 'active' : '' }}">
-    <!-- Ikon Barcode Aset -->
+
     <svg viewBox="0 0 24 24"><path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h3v14H9V5zm4 0h2v14h-2V5zm3 0h1v14h-1V5zm3 0h2v14h-2V5z"/></svg>
     Barcode Aset
 </a>
 
       			<div class="menu-section-title">MASTER DATA</div>
       			<a href="{{ route('kategori_aset.index') }}" class="menu-item {{ Request::is('kategori-aset') ? 'active' : '' }}">
-        				<!-- Ikon Kategori Aset -->
+
         				<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
         				Kategori Aset
       			</a>
-      		
+
       		<a href="{{ route('cabang.index') }}" class="menu-item {{ Request::is('cabang') ? 'active' : '' }}">
-        			<!-- Ikon Cabang -->
+
         			<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
         			Cabang
       		</a>
-      			
-      			
 
       			<div class="menu-section-title">AKSES & KEAMANAN</div>
       			<a href="{{ route('kelola_akun.index') }}" class="menu-item {{ Request::is('kelola-akun') ? 'active' : '' }}">
-        				<!-- Ikon Kelola Akun -->
+
         				<svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
         				Kelola Akun
       			</a>
       			<a href="{{ route('roles.index') }}" class="menu-item {{ Request::is('roles') ? 'active' : '' }}">
-        				<!-- Ikon Roles & Permission -->
+
         				<svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
         				Roles & Permission
       			</a>
 
       			<div class="menu-section-title">LAPORAN & PEMANTAUAN</div>
-      			<a href="{{ route('laporan.index') }}" class="menu-item {{ Request::is('laporan') ? 'active' : '' }}">
-        				<!-- Ikon Laporan -->
-        				<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h２v7zm4 0h-２V7h２v１０zm4 0h-２v-４h２v４z"/></svg>
+      			<a href="{{ route('laporan.index') }}" class="menu-item {{ Request::is('laporan*') || request()->routeIs('laporan.*') ? 'active' : '' }}">
+        				<svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
         				Laporan
       			</a>
       			<a href="{{ route('riwayat_aktivitas.index') }}" class="menu-item {{ Request::is('riwayat-aktivitas*') || request()->routeIs('riwayat_aktivitas.*') ? 'active' : '' }}">
-        				<!-- Ikon Riwayat Aktivitas -->
+
         				<svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
         				<span>Riwayat Aktivitas</span>
         				<span id="badge-riwayat-sidebar" class="notif-badge" style="display: none;" title="Riwayat aktivitas baru belum dibaca">0</span>
       			</a>
-                
+
     		</div>
 
     		<div class="sidebar-user">
-    <!-- 1. Avatar -->
+
     <div class="user-avatar">{{ substr(Auth::user()->nama_lengkap, 0, 1) }}</div>
-    
-    <!-- 2. Info Profil -->
+
     <div class="user-info">
         <div class="user-name">{{ Auth::user()->nama_lengkap }}</div>
         <div class="user-role">{{ str_replace('_', ' ', Str::title(Auth::user()->role)) }}</div>
     </div>
 
-    <!-- 3. Tombol Logout (Di sebelah kanan) -->
     <div style="margin-left: auto;">
         <form action="{{ route('logout') }}" method="POST" style="margin: 0; display: flex;">
             @csrf
             <button type="submit" title="Logout" style="border: none; background: none; cursor: pointer; color: #dc2626; padding: 5px; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s;">
-                <!-- Ikon Logout Saja -->
+
                 <svg viewBox="0 0 24 24" fill="currentColor" style="width: 22px; height: 22px;">
                     <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
                 </svg>
@@ -566,7 +549,6 @@
 </div>
 </sidebar>
 
-<!-- POP-UP ANIMASI LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & MENGIKUTI KECEPATAN JARINGAN) -->
 <div id="global-page-nav-loader" class="nav-loading-overlay" aria-live="polite" aria-busy="true">
     <div class="nav-top-progress-track">
         <div id="nav-top-progress-bar" class="nav-top-progress-bar"></div>
@@ -582,9 +564,9 @@
             </div>
         </div>
         <div>
-            <div id="nav-loading-title" class="nav-loading-title">Memuat Halaman...</div>
+            <div id="nav-loading-title" class="nav-loading-title">Memuat Data Halaman...</div>
             <div id="nav-loading-subtitle" class="nav-loading-subtitle" style="margin-top: 4px;">
-                Menghubungkan ke server, mohon tunggu dan jangan klik berulang.
+                Sedang menyiapkan dan memuat data dari server, mohon tunggu...
             </div>
         </div>
         <div class="nav-network-pill">
@@ -594,19 +576,20 @@
     </div>
 </div>
 
+<input type="hidden" id="json-daftar-id-riwayat-master" value="{{ json_encode($daftarIdRiwayat) }}">
+<input type="hidden" id="json-ada-aksi-baru-master" value="{{ json_encode($adaAksiBaru) }}">
 
 <script>
     (function () {
         const STORAGE_KEY_RIWAYAT = 'riwayat_terbaca_auto_user_{{ Auth::id() ?? "guest" }}';
-        const semuaIdRiwayatServer = @json($daftarIdRiwayat).map(String);
-        const adaAksiBaruServer = @json($adaAksiBaru);
+        const semuaIdRiwayatServer = JSON.parse(document.getElementById('json-daftar-id-riwayat-master').value || '[]').map(String);
+        const adaAksiBaruServer = JSON.parse(document.getElementById('json-ada-aksi-baru-master').value || 'false');
 
         function inisialisasiJikaBelumAda() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY_RIWAYAT);
                 if (raw === null) {
-                    // Saat pertama kali dijalankan, tandai riwayat lama sebagai sudah dibaca
-                    // agar hanya aktivitas baru yang memunculkan angka 1, 2, dst.
+
                     const idAwal = adaAksiBaruServer && semuaIdRiwayatServer.length > 0
                         ? semuaIdRiwayatServer.slice(1)
                         : semuaIdRiwayatServer;
@@ -635,6 +618,11 @@
 
         function ambilSemuaIdRiwayatAktif() {
             const setIds = new Set(semuaIdRiwayatServer);
+            if (Array.isArray(window.__extraScopedRiwayatIds)) {
+                window.__extraScopedRiwayatIds.forEach(function (id) {
+                    if (id) setIds.add(String(id));
+                });
+            }
             document.querySelectorAll('tr[data-riwayat-id]').forEach(function (tr) {
                 const id = tr.getAttribute('data-riwayat-id');
                 if (id) setIds.add(String(id));
@@ -665,6 +653,17 @@
                 }
             }
 
+            const badgeBtnBaca = document.getElementById('badge-btn-baca-semua');
+            if (badgeBtnBaca) {
+                if (belumDibaca > 0) {
+                    badgeBtnBaca.textContent = String(belumDibaca);
+                    badgeBtnBaca.style.display = 'inline-block';
+                } else {
+                    badgeBtnBaca.textContent = '0';
+                    badgeBtnBaca.style.display = 'none';
+                }
+            }
+
             return belumDibaca;
         };
 
@@ -684,15 +683,19 @@
             window.hitungRiwayatBelumDibaca();
         };
 
-        window.tandaiSemuaRiwayatDibaca = function () {
+        window.tandaiSemuaRiwayatDibaca = function (extraIds) {
+            if (Array.isArray(extraIds)) {
+                window.__extraScopedRiwayatIds = extraIds.map(String);
+            }
             const semuaId = ambilSemuaIdRiwayatAktif();
             const sudahDibaca = ambilIdRiwayatDibaca();
             simpanIdRiwayatDibaca(sudahDibaca.concat(semuaId));
             window.hitungRiwayatBelumDibaca();
         };
 
-        // ================= LOGIKA POP-UP LOADING PINDAH HALAMAN MASTER ADMIN (ANTI-SPAM KLIK & DINAMIS SESUAI JARINGAN) =================
         let sedangPindahHalaman = false;
+        let sedangUnloadHalaman = false;
+        let jumlahRequestDataAktif = 0;
         let timerProgresJaringan = null;
         let waktuMulaiNavigasi = 0;
 
@@ -708,6 +711,34 @@
             return 'Menunggu respons jaringan server...';
         }
 
+        function apakahRequestHarusTampilkanLoader(urlInput, methodInput) {
+            const strUrl = String(urlInput || '');
+            const method = String(methodInput || 'GET').toUpperCase();
+
+            if (
+                strUrl.includes('_check_permissions_rt') ||
+                strUrl.includes('_perm_sync=') ||
+                strUrl.includes('_poll_riwayat_realtime') ||
+                strUrl.includes('_riwayat_realtime=') ||
+                strUrl.includes('poll_requests') ||
+                strUrl.includes('_notif_reset_action') ||
+                strUrl.includes('_login_lock_action') ||
+                strUrl.includes('_cache_lampiran_info') ||
+                strUrl.includes('_sync_lampiran_meta') ||
+                strUrl.includes('view-lampiran') ||
+                strUrl.includes('_log_cetak_laporan') ||
+                strUrl.includes('_roles_action=save_permissions')
+            ) {
+                return false;
+            }
+
+            if (method !== 'GET') {
+                return true;
+            }
+
+            return strUrl.includes('_bulk_delete_aset') || strUrl.includes('_clear_riwayat_scoped');
+        }
+
         window.tampilkanLoadingPindahHalaman = function (judulKustom, subjudulKustom) {
             const overlay = document.getElementById('global-page-nav-loader');
             if (!overlay) return;
@@ -721,15 +752,15 @@
             const netDotEl = document.getElementById('nav-network-dot');
             const barEl = document.getElementById('nav-top-progress-bar');
 
-            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Halaman...';
-            if (subEl) subEl.textContent = subjudulKustom || 'Menghubungkan ke server, mohon tunggu dan jangan klik berulang.';
+            if (titleEl) titleEl.textContent = judulKustom || 'Memuat Data Halaman...';
+            if (subEl) subEl.textContent = subjudulKustom || 'Sedang menyiapkan dan memuat data dari server, mohon tunggu...';
             if (netStatusEl) netStatusEl.textContent = deteksiInfoKoneksiJaringan();
             if (netDotEl) netDotEl.style.background = '#10b981';
 
             overlay.classList.add('active');
             document.body.style.cursor = 'wait';
 
-            let progresSaatIni = 12;
+            let progresSaatIni = 18;
             if (barEl) barEl.style.width = progresSaatIni + '%';
 
             if (timerProgresJaringan) clearInterval(timerProgresJaringan);
@@ -754,6 +785,7 @@
         };
 
         window.sembunyikanLoadingPindahHalaman = function () {
+            sedangUnloadHalaman = false;
             sedangPindahHalaman = false;
             if (timerProgresJaringan) {
                 clearInterval(timerProgresJaringan);
@@ -769,7 +801,67 @@
             document.body.style.cursor = '';
         };
 
-        // Cegah segala bentuk spam klik atau tekan tombol Enter/Space saat proses pindah halaman sedang berlangsung
+        if (document.readyState === 'loading') {
+            window.tampilkanLoadingPindahHalaman('Memuat Data Halaman...', 'Sedang menyiapkan dan memuat data dari server, mohon tunggu...');
+        }
+
+        if (typeof window.fetch === 'function') {
+            const fetchAsli = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                const urlTarget = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+                const methodTarget = (init && init.method) ? init.method : (input && input.method ? input.method : 'GET');
+                const gunakanLoader = apakahRequestHarusTampilkanLoader(urlTarget, methodTarget);
+
+                if (gunakanLoader) {
+                    jumlahRequestDataAktif++;
+                    if (!sedangPindahHalaman) {
+                        window.tampilkanLoadingPindahHalaman('Memuat Data...', 'Sedang memproses dan memuat data dari server, mohon tunggu...');
+                    }
+                }
+
+                return fetchAsli(input, init).finally(function () {
+                    if (gunakanLoader) {
+                        jumlahRequestDataAktif = Math.max(0, jumlahRequestDataAktif - 1);
+                        setTimeout(function () {
+                            if (jumlahRequestDataAktif === 0 && !sedangUnloadHalaman) {
+                                window.sembunyikanLoadingPindahHalaman();
+                            }
+                        }, 80);
+                    }
+                });
+            };
+        }
+
+        if (typeof window.XMLHttpRequest === 'function') {
+            const openAsli = XMLHttpRequest.prototype.open;
+            const sendAsli = XMLHttpRequest.prototype.send;
+
+            XMLHttpRequest.prototype.open = function (method, url) {
+                this._methodTargetLoader = String(method || 'GET');
+                this._urlTargetLoader = String(url || '');
+                return openAsli.apply(this, arguments);
+            };
+
+            XMLHttpRequest.prototype.send = function () {
+                const gunakanLoader = apakahRequestHarusTampilkanLoader(this._urlTargetLoader, this._methodTargetLoader);
+                if (gunakanLoader) {
+                    jumlahRequestDataAktif++;
+                    if (!sedangPindahHalaman) {
+                        window.tampilkanLoadingPindahHalaman('Memuat Data...', 'Sedang memproses dan memuat data dari server, mohon tunggu...');
+                    }
+                    this.addEventListener('loadend', function () {
+                        jumlahRequestDataAktif = Math.max(0, jumlahRequestDataAktif - 1);
+                        setTimeout(function () {
+                            if (jumlahRequestDataAktif === 0 && !sedangUnloadHalaman) {
+                                window.sembunyikanLoadingPindahHalaman();
+                            }
+                        }, 80);
+                    }, { once: true });
+                }
+                return sendAsli.apply(this, arguments);
+            };
+        }
+
         ['click', 'dblclick', 'submit'].forEach(function (evtName) {
             window.addEventListener(evtName, function (e) {
                 if (sedangPindahHalaman) {
@@ -791,7 +883,6 @@
             }
         }, true);
 
-        // Deteksi klik pada seluruh link navigasi (<a>) untuk langsung mengunci layar & menampilkan animasi loading
         document.addEventListener('click', function (e) {
             if (sedangPindahHalaman || e.defaultPrevented) return;
             if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
@@ -822,10 +913,10 @@
                 ? `Membuka ${teksMenu}...`
                 : 'Memuat Halaman...';
 
+            sedangUnloadHalaman = true;
             window.tampilkanLoadingPindahHalaman(judulLoad);
         }, false);
 
-        // Deteksi submit form yang melakukan pindah/reload halaman
         document.addEventListener('submit', function (e) {
             if (sedangPindahHalaman || e.defaultPrevented) return;
             const formEl = e.target;
@@ -837,14 +928,16 @@
 
             setTimeout(function () {
                 if (!e.defaultPrevented && !sedangPindahHalaman) {
-                    window.tampilkanLoadingPindahHalaman('Memproses Data...', 'Mohon tunggu, permintaan sedang dikirim ke server.');
+                    sedangUnloadHalaman = true;
+                    window.tampilkanLoadingPindahHalaman('Memproses & Memuat Data...', 'Mohon tunggu, permintaan sedang diproses oleh server.');
                 }
             }, 0);
         }, false);
 
         window.addEventListener('beforeunload', function () {
+            sedangUnloadHalaman = true;
             if (!sedangPindahHalaman) {
-                window.tampilkanLoadingPindahHalaman('Memuat Halaman...');
+                window.tampilkanLoadingPindahHalaman('Memuat Data Halaman...', 'Sedang memuat data dari server, mohon tunggu...');
             }
         });
 

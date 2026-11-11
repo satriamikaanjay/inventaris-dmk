@@ -475,7 +475,6 @@
             height: 16px !important;
         }
 
-        
     </style>
 </head>
 
@@ -491,7 +490,6 @@
             </div>
         </header>
 
-
         @if(session('success'))
         <div id="toast-success" class="toast-popup toast-success show">
             <span>{{ session('success') }}</span>
@@ -504,9 +502,6 @@
         </div>
         @endif
 
-        <!-- ========================================== -->
-        <!-- BAGIAN 1: MANAJEMEN KATEGORI -->
-        <!-- ========================================== -->
         <div class="layout-grid">
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Kategori Baru</h2>
@@ -565,12 +560,8 @@
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- BAGIAN 2: MANAJEMEN MASTER ASET -->
-        <!-- ========================================== -->
         <div class="layout-grid">
 
-            <!-- Kotak Kiri: Form Tambah Master Aset -->
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--secondary-color);">
                 <h2 class="section-title">Tambah Master Aset Baru</h2>
                 <form action="{{ route('items.store') }}" method="POST" id="form-aset">
@@ -613,13 +604,12 @@
                             <span style="font-size: 11px; color: var(--text-muted);">Pilih warna identitas seri ini.</span>
                         </div>
 
-                        <!-- DAFTAR WARNA CEPAT (CURRENT & RECENT COLORS) -->
                         <div style="display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap;">
                             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">Pilihan Cepat:</span>
                             @foreach($items->unique('warna_seri') as $existingItem)
                             @if(!empty($existingItem->warna_seri))
                             <div onclick="document.getElementById('input_warna_seri').value='{{ $existingItem->warna_seri }}'"
-                                {!! 'style="width: 22px; height: 22px; border-radius: 50%; background: ' . $existingItem->warna_seri . '; cursor: pointer; border: 2px solid #cbd5e1; transition: transform 0.1s;"' !!}
+                                data-bg="{{ $existingItem->warna_seri }}" style="width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid #cbd5e1; transition: transform 0.1s;"
                                 title="Gunakan warna ini: {{ $existingItem->warna_seri }}"
                                 onmouseover="this.style.transform='scale(1.15)'"
                                 onmouseout="this.style.transform='scale(1)'">
@@ -635,13 +625,11 @@
                 </form>
             </div>
 
-            <!-- Kotak Kanan: Daftar Master Aset -->
             <div class="card-box">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">
                     <h2 class="section-title" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">Daftar Master Aset Tersimpan</h2>
                 </div>
 
-                <!-- SEARCH BAR KHUSUS MASTER ASET (Dimasukkan ke sini) -->
                 <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 15px; display: flex; gap: 8px; align-items: center;">
                     <div style="position: relative; flex: 1;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #94a3b8;">
@@ -659,7 +647,6 @@
                     @forelse($items as $item)
                     <div class="chip-wrapper" id="chip-wrapper-aset-{{ $item->id }}" onclick="toggleChipActions(this)">
 
-                        <!-- Mode View -->
                         <div class="chip-content">
                             <span class="chip-name">
                                 <strong style="color: var(--primary-color); border-right: 2px solid #cbd5e1; padding-right: 10px; margin-right: 10px;">
@@ -685,7 +672,6 @@
                             })();
                         </script>
 
-                        <!-- Mode Edit Inline -->
                         <form action="{{ route('items.update', $item->id) }}" method="POST" class="chip-edit-form" id="form-edit-aset-{{ $item->id }}" onsubmit="setLoadingUpdate(event, 'aset-{{ $item->id }}')" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
@@ -723,7 +709,7 @@
 
                         <div class="chip-actions" onclick="event.stopPropagation()">
                             <button type="button" class="btn-edit-sm" onclick="enableInlineEdit('aset-{{ $item->id }}')">Edit</button>
-                            <form action="{{ url('/adminadmin/items/'.$item->id) }}" method="POST" class="form-delete-kategori" style="display:inline;" onclick="event.stopPropagation()">
+                            <form action="{{ url('/admin/items/'.$item->id) }}" method="POST" class="form-delete-kategori" style="display:inline;" onclick="event.stopPropagation()">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-delete-sm">Hapus</button>
@@ -773,12 +759,11 @@
                     <div class="chip-wrapper" id="chip-wrapper-status-{{ $st->id }}" onclick="toggleChipActions(this)" style="width: auto;">
                         <div class="chip-content">
                             <span class="chip-name" style="gap: 8px; display: flex; align-items: center;">
-                                <span style="width: 12px; height: 12px; border-radius: 50%; background: {{ $st->warna_status ?? '#10b981' }}; display: inline-block;"></span>
+                                <span data-bg="{{ $st->warna_status ?? '#10b981' }}" style="width: 12px; height: 12px; border-radius: 50%; display: inline-block;"></span>
                                 {{ $st->nama_status }}
                             </span>
                         </div>
 
-                        <!-- Form Edit Inline Status -->
                         <form action="{{ url('/admin/status-aset/'.$st->id) }}" method="POST" class="chip-edit-form" id="form-edit-status-{{ $st->id }}" onsubmit="setLoadingUpdate(event, 'status-{{ $st->id }}')" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
@@ -808,6 +793,12 @@
             </div>
         </div>
     </main>
+    @php
+    $maxUrutanData = $kategoris->mapWithKeys(function($kat) use ($items) {
+        return [$kat->id => (int) $items->where('kategori_id', $kat->id)->max('urutan')];
+    });
+    @endphp
+    <input type="hidden" id="json-max-urutan-kat" value="{{ json_encode($maxUrutanData) }}">
 
     @php
     $maxUrutanData = $kategoris->mapWithKeys(function($kat) use ($items) {
@@ -815,9 +806,9 @@
     });
     @endphp
 
-    <!-- Script Fungsional -->
     <script>
-        const maxUrutanPerKategori = JSON.parse('{!! json_encode($maxUrutanData) !!}');
+        document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.background = el.getAttribute('data-bg'); });
+        const maxUrutanPerKategori = JSON.parse(document.getElementById('json-max-urutan-kat').value || '{}');
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
@@ -842,17 +833,13 @@
             }, 2500);
         }
 
-        // Generator B.01
-
-
-        // 2. Fungsi saat dropdown kategori dipilih
         function kategoriBerubah() {
             const select = document.getElementById('input_kategori_aset');
             const katId = select.value;
             const urutInput = document.getElementById('input_urutan_aset');
 
             if (katId && maxUrutanPerKategori[katId] !== undefined) {
-                // Pastikan dibaca sebagai angka matematika
+
                 let nilaiMaksimal = parseInt(maxUrutanPerKategori[katId]);
                 if (isNaN(nilaiMaksimal)) nilaiMaksimal = 0;
                 urutInput.value = nilaiMaksimal + 1;
@@ -863,7 +850,6 @@
             updatePreviewMaster();
         }
 
-        // 3. Fungsi untuk memperbarui teks kode (B.01, B.02, dst)
         function updatePreviewMaster() {
             const select = document.getElementById('input_kategori_aset');
             let kodeKat = select.options[select.selectedIndex]?.getAttribute('data-kode') || '';
@@ -876,7 +862,7 @@
                 previewInput.value = '';
                 previewText.innerText = '[PILIH KATEGORI]';
             } else {
-                // Bersihkan titik di akhir kode jika ada (misal "B." menjadi "B")
+
                 kodeKat = kodeKat.replace(/\.$/, "");
 
                 previewInput.value = kodeKat;
@@ -885,7 +871,6 @@
             }
         }
 
-        // Interaksi Form Kategori (Buka Kode)
         const inputNamaKat = document.getElementById('nama_kategori');
         const inputKodeKat = document.getElementById('kode_kategori');
         if (inputNamaKat && inputKodeKat) {
@@ -905,7 +890,6 @@
             });
         }
 
-        // Interaksi Form Aset (Buka Kode Serial)
         const inputNamaAset = document.getElementById('input_nama_aset');
         const inputAwalSerial = document.getElementById('input_awal_serial');
         if (inputNamaAset && inputAwalSerial) {
@@ -1042,15 +1026,15 @@
                     body: data
                 })))
                 .then(res => {
-                    // JIKA BERHASIL
+
                     if (res.status === 200 && res.body.success) {
                         showCustomToast(res.body.message, 'success');
                         setTimeout(() => location.reload(), 800);
                     }
-                    // JIKA KENA VALIDASI LARAVEL (Error 422)
+
                     else if (res.status === 422) {
                         let errorMsg = 'Data tidak valid.';
-                        // Ambil pesan error spesifik dari Laravel (misal: "Nama aset ini sudah terdaftar...")
+
                         if (res.body.errors) {
                             let firstErrorKey = Object.keys(res.body.errors)[0];
                             errorMsg = res.body.errors[firstErrorKey][0];
@@ -1058,7 +1042,7 @@
                         showCustomToast(errorMsg, 'error');
                         resetBtn(btnSubmit, 'Simpan Master Aset');
                     }
-                    // JIKA ERROR LAINNYA
+
                     else {
                         showCustomToast(res.body.message || 'Gagal menyimpan aset.', 'error');
                         resetBtn(btnSubmit, 'Simpan Master Aset');

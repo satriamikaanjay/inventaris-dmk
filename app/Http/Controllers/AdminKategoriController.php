@@ -23,7 +23,7 @@ class AdminKategoriController extends Controller
         $items = $itemsQuery->paginate(20)->withQueryString();
         $statuses = AdminStatusAset::all();
 
-        return view('kategori', compact('kategoris', 'items', 'statuses'));
+        return view('admin.kategori', compact('kategoris', 'items', 'statuses'));
     }
 
     public function storeKategori(Request $request)

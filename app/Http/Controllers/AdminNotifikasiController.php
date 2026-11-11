@@ -12,48 +12,97 @@ class AdminNotifikasiController extends Controller
 {
     public function index(Request $request)
     {
-        $hariIni = Carbon::now()->startOfDay();
+        $hariIni = Carbon::today();
         $batasWaktunya = 7;
         $batasMendekati = 30;
 
-        $query = AdminDetailAset::with(['item', 'kategori', 'cabang']);
+        $tipe = in_array($request->query('tipe'), ['terlewat', 'waktunya', 'mendekati', 'rusak'], true)
+            ? $request->query('tipe')
+            : 'semua';
+
+        $dasar = $this->queryDasar($request);
+
+        $hitung = [];
+        foreach (['semua', 'terlewat', 'waktunya', 'mendekati', 'rusak'] as $jenis) {
+            $hitung[$jenis] = $this->rentang($dasar, $jenis, $hariIni, $batasWaktunya, $batasMendekati)->count();
+        }
+
+        $notifs = $this->rentang($dasar, $tipe, $hariIni, $batasWaktunya, $batasMendekati)
+            ->with(['item', 'kategori', 'cabang'])
+            ->orderBy('servis_berikutnya')
+            ->orderBy('aset_id')
+            ->paginate(20)
+            ->withQueryString();
+
+        $notifs->getCollection()->transform(function ($aset) use ($hariIni, $batasWaktunya, $batasMendekati) {
+            $selisih = null;
+            $jenis_servis = null;
+
+            if ($aset->servis_berikutnya) {
+                $tanggal = Carbon::parse($aset->servis_berikutnya)->startOfDay();
+                $selisih = (int) $hariIni->diffInDays($tanggal, false);
+
+                if ($selisih <= $batasMendekati) {
+                    $jenis_servis = $selisih < 0
+                        ? 'terlewat'
+                        : ($selisih <= $batasWaktunya ? 'waktunya' : 'mendekati');
+                }
+            }
+
+            $aset->selisih = $selisih;
+            $aset->jenis_servis = $jenis_servis;
+            $aset->is_rusak = stripos((string) $aset->status_aset, 'Rusak') !== false;
+
+            return $aset;
+        });
+
+        $cabangs = AdminCabang::orderBy('nama_cabang')->get();
+        $statuses = AdminStatusAset::all();
+        $batas = ['waktunya' => $batasWaktunya, 'mendekati' => $batasMendekati];
+
+        return view('admin.notifikasi', compact('notifs', 'cabangs', 'statuses', 'hitung', 'batas', 'hariIni', 'tipe'));
+    }
+
+    private function queryDasar(Request $request)
+    {
+        $query = AdminDetailAset::query();
+
+        if ($request->filled('cabang')) {
+            $query->where('cabang_id', $request->query('cabang'));
+        }
 
         if ($request->filled('q')) {
-            $keyword = $request->q;
-            $query->where(function($q) use ($keyword) {
-                $q->where('kode_aset', 'like', "%{$keyword}%")
-                  ->orWhere('merk', 'like', "%{$keyword}%")
-                  ->orWhere('Ruangan', 'like', "%{$keyword}%")
-                  ->orWhereHas('item', function($i) use ($keyword) {
-                      $i->where('nama_aset', 'like', "%{$keyword}%");
-                  });
+            $kata = trim((string) $request->query('q'));
+            $query->where(function ($w) use ($kata) {
+                $w->where('kode_aset', 'like', "%{$kata}%")
+                  ->orWhere('merk', 'like', "%{$kata}%")
+                  ->orWhere('Ruangan', 'like', "%{$kata}%")
+                  ->orWhereHas('item', fn ($i) => $i->where('nama_aset', 'like', "%{$kata}%"))
+                  ->orWhereHas('cabang', fn ($c) => $c->where('nama_cabang', 'like', "%{$kata}%"));
             });
         }
 
-        if ($request->filled('cabang')) {
-            $query->where('cabang_id', $request->cabang);
-        }
+        return $query;
+    }
 
-        $tipe = $request->get('tipe', 'semua');
-        if ($tipe === 'rusak') {
-            $query->where('status_aset', '!=', 'Tersedia');
-        } elseif ($tipe === 'terlewat') {
-            $query->whereNotNull('servis_berikutnya')->where('servis_berikutnya', '<', $hariIni);
-        } elseif ($tipe === 'waktunya') {
-            $query->whereNotNull('servis_berikutnya')
-                  ->whereBetween('servis_berikutnya', [$hariIni, $hariIni->copy()->addDays($batasWaktunya)]);
-        } elseif ($tipe === 'mendekati') {
-            $query->whereNotNull('servis_berikutnya')
-                  ->whereBetween('servis_berikutnya', [$hariIni->copy()->addDays($batasWaktunya + 1), $hariIni->copy()->addDays($batasMendekati)]);
-        }
+    private function rentang($query, string $jenis, Carbon $hariIni, int $batasWaktunya, int $batasMendekati)
+    {
+        $q = clone $query;
+        $hari = $hariIni->toDateString();
+        $waktunya = $hariIni->copy()->addDays($batasWaktunya)->toDateString();
+        $mendekati = $hariIni->copy()->addDays($batasMendekati)->toDateString();
 
-        $notifs = $query->paginate(20)->withQueryString();
-        $cabangs = AdminCabang::all();
-        $statuses = AdminStatusAset::all();
-
-        $hitung = ['semua' => 0, 'rusak' => 0, 'terlewat' => 0, 'waktunya' => 0, 'mendekati' => 0];
-        $batas = ['waktunya' => $batasWaktunya, 'mendekati' => $batasMendekati];
-
-        return view('notifikasi', compact('notifs', 'cabangs', 'statuses', 'hitung', 'batas', 'hariIni', 'tipe'));
+        return match ($jenis) {
+            'terlewat'  => $q->whereNotNull('servis_berikutnya')->where('servis_berikutnya', '<', $hari),
+            'waktunya'  => $q->whereNotNull('servis_berikutnya')->where('servis_berikutnya', '>=', $hari)->where('servis_berikutnya', '<=', $waktunya),
+            'mendekati' => $q->whereNotNull('servis_berikutnya')->where('servis_berikutnya', '>', $waktunya)->where('servis_berikutnya', '<=', $mendekati),
+            'rusak'     => $q->where('status_aset', 'like', '%Rusak%'),
+            default     => $q->where(function ($sub) use ($mendekati) {
+                $sub->where(function ($s1) use ($mendekati) {
+                    $s1->whereNotNull('servis_berikutnya')
+                       ->where('servis_berikutnya', '<=', $mendekati);
+                })->orWhere('status_aset', 'like', '%Rusak%');
+            }),
+        };
     }
 }

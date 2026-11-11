@@ -9,7 +9,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('detail_aset', function (Blueprint $table) {
-            // Menambahkan kolom status_berjalan
             $table->string('status_berjalan')->nullable()->default('Tidak Ada')->after('status_aset'); 
         });
     }

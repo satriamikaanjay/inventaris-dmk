@@ -11,14 +11,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * Contoh pemakaian di routes/web.php:
-     * ->middleware('role:master_admin')
-     * ->middleware('role:admin')
-     * ->middleware('role:master_admin,admin')
-     */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
         if (!Auth::check()) {
@@ -33,7 +25,6 @@ class RoleMiddleware
             $userRole = 'master_admin';
         }
 
-        // Normalisasi daftar role yang diizinkan pada route ini
         $allowedRoles = [];
         foreach ($roles as $r) {
             foreach (explode(',', $r) as $part) {
@@ -47,21 +38,17 @@ class RoleMiddleware
             }
         }
 
-        // Jika role user saat ini sesuai dengan yang diizinkan pada route, lanjutkan request
         if (empty($allowedRoles) || in_array($userRole, $allowedRoles, true)) {
             return $next($request);
         }
 
-        // Catat percobaan akses tanpa izin ke RiwayatAktivitas
         $this->catatPelanggaranAkses($request, $user);
 
-        // Jika Admin mencoba mengakses halaman khusus Master Admin -> kembalikan ke Dashboard Admin
         if ($userRole === 'admin') {
             return redirect()->route('admin.dashboard')
                 ->with('error', 'Akses ditolak! Anda tidak memiliki izin untuk mengakses halaman Master Admin.');
         }
 
-        // Jika Master Admin mencoba mengakses halaman khusus Admin -> kembalikan ke Dashboard Master Admin
         if ($userRole === 'master_admin') {
             return redirect()->route('masteradmin.dashboard')
                 ->with('error', 'Akses ditolak! Halaman tersebut dikhususkan untuk operasional Admin.');

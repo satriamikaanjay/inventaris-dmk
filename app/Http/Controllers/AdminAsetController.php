@@ -2,29 +2,42 @@
 
 namespace App\Http\Controllers;
 
-
 use Illuminate\Http\Request;
-use App\Models\AdminCabang;
-use App\Models\AdminKategori;
-use App\Models\AdminItem;
-use App\Models\AdminDetailAset;
-use App\Models\AdminStatusAset;
+use App\Models\Cabang;
+use App\Models\Kategori;
+use App\Models\Item;
+use App\Models\DetailAset;
+use App\Models\StatusAset;
 
 class AdminAsetController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AdminDetailAset::with(['item', 'kategori', 'cabang']);
+        $kategoris = Kategori::paginate(50, ['*'], 'kategori_page');
+        $items = Item::paginate(50, ['*'], 'item_page');
+        $statuses = StatusAset::all();
+        $cabangs = Cabang::withCount('asets')->get();
+
+        $query = DetailAset::with(['item', 'kategori', 'cabang'])->latest('aset_id');
 
         if ($request->filled('search')) {
-            $keyword = $request->search;
-            $query->where(function($q) use ($keyword) {
-                $q->where('kode_aset', 'like', "%{$keyword}%")
-                  ->orWhere('nomor_seri', 'like', "%{$keyword}%")
-                  ->orWhere('merk', 'like', "%{$keyword}%")
-                  ->orWhere('Ruangan', 'like', "%{$keyword}%")
-                  ->orWhereHas('item', function($i) use ($keyword) {
-                      $i->where('nama_aset', 'like', "%{$keyword}%");
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('kode_aset', 'like', "%{$search}%")
+                  ->orWhere('merk', 'like', "%{$search}%")
+                  ->orWhere('nomor_seri', 'like', "%{$search}%")
+                  ->orWhere('Ruangan', 'like', "%{$search}%")
+                  ->orWhere('lokasi_saat_ini', 'like', "%{$search}%")
+                  ->orWhere('penanggung_jawab', 'like', "%{$search}%")
+                  ->orWhere('status_aset', 'like', "%{$search}%")
+                  ->orWhereHas('item', function ($qItem) use ($search) {
+                      $qItem->where('nama_aset', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('kategori', function ($qKat) use ($search) {
+                      $qKat->where('nama_kategori', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('cabang', function ($qCab) use ($search) {
+                      $qCab->where('nama_cabang', 'like', "%{$search}%");
                   });
             });
         }
@@ -33,35 +46,38 @@ class AdminAsetController extends Controller
             $query->where('status_berjalan', $request->filter_tipe);
         }
 
-        $detailAsets = $query->paginate(50)->withQueryString();
-        $kategoris = AdminKategori::all();
-        $items = AdminItem::all();
-        $cabangs = AdminCabang::withCount('asets')->get();
-        $statuses = AdminStatusAset::all();
+        $detailAsets = $query->paginate(100)->withQueryString();
 
-        return view('data_aset', compact('detailAsets', 'kategoris', 'items', 'cabangs', 'statuses'));
+        return view('admin.data_aset', compact('detailAsets', 'kategoris', 'items', 'cabangs', 'statuses'));
     }
 
     public function store(Request $request)
     {
-        return back()->with('success', 'Data aset fisik berhasil disimpan.');
+        return app(ItemController::class)->storeDetail($request);
     }
 
     public function update(Request $request, $id)
     {
-        $aset = AdminDetailAset::findOrFail($id);
-        return back()->with('success', 'Perubahan data aset berhasil disimpan.');
+        return app(ItemController::class)->updateDetail($request, $id);
     }
 
     public function destroy($id)
     {
-        $aset = AdminDetailAset::findOrFail($id);
-        $aset->delete();
-        return back()->with('success', 'Data aset berhasil dihapus.');
+        return app(ItemController::class)->destroyDetail($id);
     }
 
     public function importExcel(Request $request)
     {
-        return back()->with('success', 'Data aset berhasil diimport.');
+        return app(ItemController::class)->importExcel($request);
+    }
+
+    public function viewLampiran($filename)
+    {
+        return app(ItemController::class)->viewLampiran($filename);
+    }
+
+    public function downloadLampiran($filename)
+    {
+        return app(ItemController::class)->downloadLampiran($filename);
     }
 }

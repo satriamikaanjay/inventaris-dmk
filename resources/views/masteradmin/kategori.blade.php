@@ -514,9 +514,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             height: 16px !important;
         }
 
-        
-    
-        /* ===== HEADER / NAVBAR HALAMAN FIXED (TIDAK TENGGELAM SAAT SCROLL KE BAWAH / ATAS) ===== */
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -578,7 +575,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             </div>
         </header>
 
-
         @if(session('success'))
         <div id="toast-success" class="toast-popup toast-success show">
             <span>{{ session('success') }}</span>
@@ -591,9 +587,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
         </div>
         @endif
 
-        <!-- ========================================== -->
-        <!-- BAGIAN 1: MANAJEMEN KATEGORI -->
-        <!-- ========================================== -->
         <div class="layout-grid">
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Kategori Baru</h2>
@@ -652,12 +645,8 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- BAGIAN 2: MANAJEMEN MASTER ASET -->
-        <!-- ========================================== -->
         <div class="layout-grid">
 
-            <!-- Kotak Kiri: Form Tambah Master Aset -->
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--secondary-color);">
                 <h2 class="section-title">Tambah Master Aset Baru</h2>
                 <form action="{{ route('items.store') }}" method="POST" id="form-aset">
@@ -755,12 +744,10 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                             $usedUrutanData[$kId] = $usedList;
                         }
 
-                        // Dukungan pencarian berdasarkan kode penuh (misal: C.01), kode kategori saja (misal: C), maupun nama/seri/kategori
                         if (request()->filled('search') && $itemModelClass) {
                             $rawSearch = trim((string) request('search'));
                             $cleanSearchUpper = strtoupper(rtrim($rawSearch, '.'));
 
-                            // Peta kode kategori -> daftar ID kategori
                             $kodeToKatIds = [];
                             foreach ($kategoris as $kat) {
                                 $kodeBersih = strtoupper(rtrim(trim((string) $kat->kode_kategori), '.'));
@@ -771,7 +758,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
 
                             $searchQuery = $itemModelClass::query();
 
-                            // 1. Jika formatnya KODE.URUTAN (contoh: C.01, c.01, C.1, B.40) atau KODE-URUTAN / KODE URUTAN
                             if (preg_match('/^([a-zA-Z0-9_-]+)[.\s-]+0*(\d+)$/', $rawSearch, $matches) && isset($kodeToKatIds[strtoupper($matches[1])])) {
                                 $targetKatIds = $kodeToKatIds[strtoupper($matches[1])];
                                 $targetUrut = (int) $matches[2];
@@ -782,13 +768,13 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                                           ->orWhere('urutan', $matches[2]);
                                     });
                             }
-                            // 2. Jika hanya mengetik kode kategori saja (contoh: "C" atau "c" atau "C.") -> tampilkan khusus kategori itu saja
+
                             elseif (isset($kodeToKatIds[$cleanSearchUpper])) {
                                 $targetKatIds = $kodeToKatIds[$cleanSearchUpper];
                                 $searchQuery->whereIn('kategori_id', $targetKatIds)
                                     ->orderByRaw('CAST(urutan AS UNSIGNED) ASC');
                             }
-                            // 3. Pencarian umum (nama aset, awalan serial, atau nama kategori)
+
                             else {
                                 $matchedKatIdsByName = $kategoris->filter(function ($kat) use ($rawSearch) {
                                     return stripos((string) $kat->nama_kategori, $rawSearch) !== false
@@ -865,13 +851,12 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                             <span style="font-size: 11px; color: var(--text-muted);">Pilih warna identitas seri ini.</span>
                         </div>
 
-                        <!-- DAFTAR WARNA CEPAT (CURRENT & RECENT COLORS) -->
                         <div style="display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap;">
                             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">Pilihan Cepat:</span>
                             @foreach($items->unique('warna_seri') as $existingItem)
                             @if(!empty($existingItem->warna_seri))
                             <div onclick="document.getElementById('input_warna_seri').value='{{ $existingItem->warna_seri }}'"
-                                {!! 'style="width: 22px; height: 22px; border-radius: 50%; background: ' . $existingItem->warna_seri . '; cursor: pointer; border: 2px solid #cbd5e1; transition: transform 0.1s;"' !!}
+                                data-bg="{{ $existingItem->warna_seri }}" style="width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid #cbd5e1; transition: transform 0.1s;"
                                 title="Gunakan warna ini: {{ $existingItem->warna_seri }}"
                                 onmouseover="this.style.transform='scale(1.15)'"
                                 onmouseout="this.style.transform='scale(1)'">
@@ -887,13 +872,11 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                 </form>
             </div>
 
-            <!-- Kotak Kanan: Daftar Master Aset -->
             <div class="card-box">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">
                     <h2 class="section-title" style="border-bottom: none; margin-bottom: 0; padding-bottom: 0;">Daftar Master Aset Tersimpan</h2>
                 </div>
 
-                <!-- SEARCH BAR KHUSUS MASTER ASET (Dimasukkan ke sini) -->
                 <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 15px; display: flex; gap: 8px; align-items: center;">
                     <div style="position: relative; flex: 1;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #94a3b8;">
@@ -911,7 +894,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                     @forelse($items as $item)
                     <div class="chip-wrapper" id="chip-wrapper-aset-{{ $item->id }}" onclick="toggleChipActions(this)">
 
-                        <!-- Mode View -->
                         <div class="chip-content">
                             <span class="chip-name">
                                 <strong style="color: var(--primary-color); border-right: 2px solid #cbd5e1; padding-right: 10px; margin-right: 10px;">
@@ -937,7 +919,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                             })();
                         </script>
 
-                        <!-- Mode Edit Inline -->
                         <form action="{{ route('items.update', $item->id) }}" method="POST" class="chip-edit-form" id="form-edit-aset-{{ $item->id }}" onsubmit="setLoadingUpdate(event, 'aset-{{ $item->id }}')" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
@@ -1025,12 +1006,11 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                     <div class="chip-wrapper" id="chip-wrapper-status-{{ $st->id }}" onclick="toggleChipActions(this)" style="width: auto;">
                         <div class="chip-content">
                             <span class="chip-name" style="gap: 8px; display: flex; align-items: center;">
-                                <span style="width: 12px; height: 12px; border-radius: 50%; background: {{ $st->warna_status ?? '#10b981' }}; display: inline-block;"></span>
+                                <span data-bg="{{ $st->warna_status ?? '#10b981' }}" style="width: 12px; height: 12px; border-radius: 50%; display: inline-block;"></span>
                                 {{ $st->nama_status }}
                             </span>
                         </div>
 
-                        <!-- Form Edit Inline Status -->
                         <form action="{{ url('/masteradmin/status-aset/'.$st->id) }}" method="POST" class="chip-edit-form" id="form-edit-status-{{ $st->id }}" onsubmit="setLoadingUpdate(event, 'status-{{ $st->id }}')" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
@@ -1060,11 +1040,13 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             </div>
         </div>
     </main>
+    <input type="hidden" id="json-max-urutan-kat" value="{{ json_encode($maxUrutanData) }}">
+    <input type="hidden" id="json-used-urutan-kat" value="{{ json_encode($usedUrutanData) }}">
 
-    <!-- Script Fungsional -->
     <script>
-        const maxUrutanPerKategori = @json($maxUrutanData);
-        const usedUrutanPerKategori = @json($usedUrutanData);
+        document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.background = el.getAttribute('data-bg'); });
+        const maxUrutanPerKategori = JSON.parse(document.getElementById('json-max-urutan-kat').value || '{}');
+        const usedUrutanPerKategori = JSON.parse(document.getElementById('json-used-urutan-kat').value || '{}');
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
@@ -1089,7 +1071,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             }, 2500);
         }
 
-        // 2. Fungsi saat dropdown kategori dipilih
         function kategoriBerubah() {
             const select = document.getElementById('input_kategori_aset');
             const selectedOption = select.options[select.selectedIndex];
@@ -1119,7 +1100,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             updatePreviewMaster();
         }
 
-        // 3. Fungsi untuk memperbarui teks kode (C.01, C.02, C.03, dst)
         function updatePreviewMaster() {
             const select = document.getElementById('input_kategori_aset');
             const katId = String(select.value || '');
@@ -1134,7 +1114,7 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                 previewText.innerText = '[PILIH KATEGORI]';
                 previewText.style.color = 'var(--primary-color)';
             } else {
-                // Bersihkan titik di akhir kode jika ada (misal "C." menjadi "C")
+
                 kodeKat = kodeKat.replace(/\.$/, '').trim().toUpperCase();
 
                 previewInput.value = kodeKat;
@@ -1151,7 +1131,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             }
         }
 
-        // Interaksi Form Kategori (Buka Kode)
         const inputNamaKat = document.getElementById('nama_kategori');
         const inputKodeKat = document.getElementById('kode_kategori');
         if (inputNamaKat && inputKodeKat) {
@@ -1171,7 +1150,6 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
             });
         }
 
-        // Interaksi Form Aset (Buka Kode Serial)
         const inputNamaAset = document.getElementById('input_nama_aset');
         const inputAwalSerial = document.getElementById('input_awal_serial');
         if (inputNamaAset && inputAwalSerial) {
@@ -1343,7 +1321,7 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                     body: data
                 })))
                 .then(async res => {
-                    // JIKA BERHASIL
+
                     if (res.status === 200 && res.body.success) {
                         await catatRiwayatJS(
                             `Menambah master aset baru: ${kodeMasterPreview} - ${namaAset}`,
@@ -1353,7 +1331,7 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                         showCustomToast(res.body.message, 'success');
                         setTimeout(() => location.reload(), 600);
                     }
-                    // JIKA KENA VALIDASI LARAVEL (Error 422)
+
                     else if (res.status === 422) {
                         let errorMsg = 'Data tidak valid.';
                         if (res.body.errors) {
@@ -1363,7 +1341,7 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                         showCustomToast(errorMsg, 'error');
                         resetBtn(btnSubmit, 'Simpan Master Aset');
                     }
-                    // JIKA ERROR LAINNYA
+
                     else {
                         showCustomToast(res.body.message || 'Gagal menyimpan aset.', 'error');
                         resetBtn(btnSubmit, 'Simpan Master Aset');
@@ -1401,7 +1379,7 @@ if (request()->has('_log_riwayat') && class_exists(\App\Models\RiwayatAktivitas:
                             if (data && data.message) msg = data.message;
                             if (data && data.success === false) isSuccess = false;
                         } catch (err) {
-                            // Jika controller mereturn redirect HTML biasa, res.ok tetap true
+
                         }
 
                         if (isSuccess) {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Master Lokasi - Master Admin</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
-    
+
     <style>
         body.is-updating-global { cursor: wait !important; }
         body.is-updating-global .chip-wrapper { pointer-events: none !important; opacity: 0.7; }
@@ -25,11 +25,11 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg-light); display: flex; min-height: 100vh; overflow-x: hidden; }
         main { margin-left: var(--sidebar-width); padding: 25px; width: calc(100% - var(--sidebar-width)); display: flex; flex-direction: column; gap: 20px; }
-        
+
         .main-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; }
         .header-title h1 { font-size: 24px; font-weight: 700; color: var(--primary-color); }
         .header-title p { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-top: 5px; }
-        
+
         .btn { padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--border-color); background: #fff; display: inline-flex; justify-content: center; align-items: center;}
         .btn-primary { background: var(--primary-color); color: #fff; border: none; }
         .btn:hover { opacity: 0.9; }
@@ -45,7 +45,7 @@
         .form-group input { padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; }
 
         .category-chips { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
-        
+
         .chip-wrapper {
             display: flex; flex-direction: column;
             background: #f1f5f9; border: 1px solid #cbd5e1;
@@ -55,14 +55,14 @@
         }
         .chip-wrapper:hover { background: #e2e8f0; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .chip-wrapper.active { background: #fff; border-color: var(--primary-color); transform: translateY(0); box-shadow: 0 0 0 2px rgba(26, 79, 145, 0.2); }
-        
+
         .chip-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
         .chip-name { color: #1e293b; font-size: 14px; font-weight: 700; }
         .chip-code { background: var(--primary-color); color: #fff; font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 6px; letter-spacing: 0.5px; }
 
         .chip-wrapper.is-editing .chip-content { display: none; }
         .chip-wrapper.is-editing .chip-actions { display: none !important; }
-        
+
         .chip-edit-form { display: none; flex-direction: column; gap: 8px; width: 100%; }
         .chip-wrapper.is-editing .chip-edit-form { display: flex; }
         .chip-edit-form .edit-input-group { display: flex; align-items: center; gap: 8px; width: 100%; }
@@ -109,7 +109,7 @@
         @endif
 
         <div class="layout-grid">
-            <!-- Form Tambah Lokasi -->
+
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Lokasi Baru</h2>
                 <form action="{{ route('lokasi.store') }}" method="POST" id="form-lokasi">
@@ -128,7 +128,6 @@
                 </form>
             </div>
 
-            <!-- Daftar Lokasi Tersimpan -->
             <div class="card-box">
                 <h2 class="section-title">Daftar Lokasi Tersimpan</h2>
                 <div class="category-chips">
@@ -138,8 +137,7 @@
                                 <span class="chip-name">{{ $lok->nama_lokasi }}</span>
                                 <span class="chip-code">{{ $lok->kode_lokasi }}</span>
                             </div>
-                            
-                            <!-- Form Edit Inline -->
+
                             <form action="{{ url('/masteradmin/lokasi/'.$lok->id) }}" method="POST" class="chip-edit-form" id="form-edit-lok-{{ $lok->id }}" onsubmit="setLoadingUpdate(event, 'lok-{{ $lok->id }}')" onclick="event.stopPropagation()">
                                 @csrf
                                 @method('PUT')
@@ -214,7 +212,6 @@
             btnUpdate.innerHTML = '<span class="spinner-sm"></span>...';
         }
 
-        // AJAX Tambah Lokasi
         document.getElementById('form-lokasi').addEventListener('submit', function(e) {
             e.preventDefault();
             let btnSubmit = document.getElementById('btn-simpan-lokasi');
@@ -236,11 +233,10 @@
             }).catch(err => { showCustomToast('Terjadi kesalahan.', 'error'); });
         });
 
-        // AJAX Update Lokasi
         document.querySelectorAll('.chip-edit-form').forEach(form => {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                let fullId = this.id.replace('form-edit-', ''); 
+                let fullId = this.id.replace('form-edit-', '');
                 fetch(this.action, {
                     method: 'POST', body: new FormData(this),
                     headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
@@ -255,7 +251,6 @@
             });
         });
 
-        // AJAX Delete Lokasi
         document.querySelectorAll('.form-delete-lokasi').forEach(form => {
             form.addEventListener('submit', function(e) {
                 e.preventDefault();

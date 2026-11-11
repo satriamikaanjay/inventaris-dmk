@@ -8,6 +8,6 @@ class AdminLaporanController extends Controller
 {
     public function index()
     {
-        return view('laporan');
+        return view('admin.laporan');
     }
 }

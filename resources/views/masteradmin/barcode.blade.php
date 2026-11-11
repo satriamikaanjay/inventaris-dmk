@@ -89,7 +89,6 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.15);
         }
 
-        /* GRID CARD GALLERY */
         .asset-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -128,7 +127,6 @@
         .card-footer { display: flex; gap: 10px; margin-top: auto; }
         .card-footer .btn-qr { flex: 1; text-align: center; }
 
-        /* MODAL */
         .modal-backdrop {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6);
             display: flex; justify-content: center; align-items: center; z-index: 9999;
@@ -159,8 +157,7 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
-    
-        /* ===== HEADER / NAVBAR HALAMAN FIXED DENGAN FITUR SEARCH & FILTER DI DALAMNYA ===== */
+
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -279,7 +276,7 @@
     @include('layouts.mastersidebar')
 
     <main>
-        <!-- NAVBAR FIXED (BERISI JUDUL, TOMBOL AKSI QR, SERTA FITUR SEARCH & FILTER) -->
+
         <header class="main-header" id="navbar-barcode-fixed">
             <div class="navbar-top-row">
                 <div class="header-title">
@@ -295,7 +292,6 @@
                     <p>Pusat pembuatan dan cetak label QR Code aset fisik.</p>
                 </div>
 
-                <!-- TOMBOL CETAK SEMUA QR -->
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
                     <button type="button" class="btn-qr btn-generate-semua-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
@@ -314,14 +310,12 @@
                 </div>
             </div>
 
-            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
             <div class="navbar-search-row">
                 <form action="{{ url()->current() }}" method="GET" class="navbar-search-form" id="form-filter-barcode">
                     @if(request('panel'))
                         <input type="hidden" name="panel" value="{{ request('panel') }}">
                     @endif
 
-                    <!-- Kiri: Kotak Pencarian -->
                     <div style="display: flex; gap: 10px; flex: 1; min-width: 260px; align-items: center;">
                         <div class="navbar-search-box">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: #64748b; flex-shrink: 0;">
@@ -348,7 +342,6 @@
                         @endif
                     </div>
 
-                    <!-- Kanan: Dropdown Filter Tipe -->
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap;">Filter Tipe:</label>
                         <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" class="navbar-filter-select">
@@ -370,16 +363,16 @@
             <div class="asset-grid">
                 @forelse($detailAsets ?? [] as $detail)
                @php
-                    $warnaBg = '#94a3b8'; 
+                    $warnaBg = '#94a3b8';
                     if(isset($statuses)) {
                         $match = $statuses->where('nama_status', $detail->status_aset)->first();
                         if($match && !empty($match->warna_status)) {
                             $warnaBg = $match->warna_status;
                         }
                     }
-                    
+
                     $hex = ltrim($warnaBg, '#');
-                    $cardBg = 'rgba(148, 163, 184, 0.08)'; 
+                    $cardBg = 'rgba(148, 163, 184, 0.08)';
                     if (strlen($hex) == 6) {
                         $r = hexdec(substr($hex, 0, 2)); $g = hexdec(substr($hex, 2, 2)); $b = hexdec(substr($hex, 4, 2));
                         $cardBg = "rgba($r, $g, $b, 0.08)";
@@ -388,18 +381,18 @@
                         $cardBg = "rgba($r, $g, $b, 0.08)";
                     }
                 @endphp
-                
-                <div class="asset-card baris-qr-aset" style="background-color: {{ $cardBg }}; border-top: 5px solid {{$warnaBg }};">
+
+                <div class="asset-card baris-qr-aset" data-bg="{{ $cardBg }}" data-border-top="{{ $warnaBg }}">
                     <div class="card-header">
                         <div>
                             <div class="card-title">{{ $detail->item->nama_aset ?? 'Tanpa Nama' }}</div>
                             <div class="card-subtitle">{{ $detail->kategori->nama_kategori ?? $detail->kategori ?? '-' }}</div>
                         </div>
-                        <span class="badge" style="background-color: {{ $warnaBg }}; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <span class="badge" data-bg="{{ $warnaBg }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                             {{ $detail->status_aset ?? 'N/A' }}
                         </span>
                     </div>
-                    
+
                     <div class="card-body">
                         <div class="info-row">
                             <span class="info-label">Kode Aset</span>
@@ -424,10 +417,10 @@
                             </span>
                         </div>
                     </div>
-                    
+
                     <div class="card-footer">
                         @php
-                        // Isi QR = KODE ASET saja (harus sama dengan generateAndSaveQr di ItemController)
+
                         $isiQr = $detail->kode_aset;
                         $hash = md5($isiQr);
 
@@ -441,7 +434,7 @@
                         @endphp
 
                         @if($hasAnyQr)
-                            <!-- Tombol ini ditambahkan class 'btn-lihat-qr' dan data attribute untuk diproses massal oleh JS -->
+
                             <button type="button" class="btn-qr btn-lihat-qr" style="background: var(--secondary-color);"
                                 data-url="{{ asset('storage/qrcodes/' . $fileToShow) }}"
                                 data-kode="{{ $detail->kode_aset }}"
@@ -483,7 +476,6 @@
         </div>
     </main>
 
-    <!-- MODAL QR CODE -->
     <div class="modal-backdrop" id="modalQR">
         <div class="modal-container">
             <h3 style="color: var(--primary-color); font-size: 18px; margin-bottom: 5px;">Generate QR Code</h3>
@@ -500,7 +492,7 @@
 
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button type="button" class="btn-close" onclick="tutupModalQR()" style="margin-top: 0; flex: 1;">Tutup</button>
-                <!-- DIGANTI MENJADI BUTTON UNTUK CONVERT KE JPG -->
+
                 <button type="button" id="btn-download-qr-single" onclick="downloadQRSingleAsJPG()" class="btn-qr" style="margin-top: 0; flex: 1; padding: 10px; font-size: 14px;">
                     Download JPG
                 </button>
@@ -516,13 +508,12 @@
         </div>
     </div>
 
-    <!-- SCRIPT FUNGSI -->
     <script>
-        // Variabel global untuk menyimpan data modal aktif
+
+        document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.backgroundColor = el.getAttribute('data-bg'); });
+        document.querySelectorAll('[data-border-top]').forEach(function(el) { el.style.borderTop = '5px solid ' + el.getAttribute('data-border-top'); });
         let currentQrUrl = '';
         let currentQrFilename = '';
-
-        
 
         function prosesBuatQR(idAset, btnElement) {
             let originalText = btnElement.innerText;
@@ -535,7 +526,7 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success) { location.reload(); } 
+                    if (data.success) { location.reload(); }
                     else { alert(data.message); btnElement.innerText = originalText; btnElement.disabled = false; }
                 })
                 .catch(err => {
@@ -565,9 +556,6 @@
             document.getElementById('qr-image').src = '';
         }
 
-        // =========================================================================
-        // FUNGSI KONVERSI SVG KE JPG (SATUAN)
-        // =========================================================================
         function downloadQRSingleAsJPG() {
             let btn = document.getElementById('btn-download-qr-single');
             let originalText = btn.innerText;
@@ -580,28 +568,23 @@
                 let canvas = document.createElement("canvas");
                 let pad = 30;
                 canvas.width = img.width + (pad * 2);
-                canvas.height = img.height + (pad * 2) + 60; // Ruang ekstra untuk teks
+                canvas.height = img.height + (pad * 2) + 60;
                 let ctx = canvas.getContext("2d");
 
-                // Latar Belakang Putih
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // Gambar QR
                 ctx.drawImage(img, pad, pad);
 
-                // Tambahkan Teks Kode Aset
                 ctx.fillStyle = "#1a4f91";
                 ctx.font = "bold 20px Arial";
                 ctx.textAlign = "center";
                 ctx.fillText(document.getElementById('qr-teks-kode').innerText, canvas.width/2, img.height + pad + 30);
 
-                // Tambahkan Teks Seri
                 ctx.fillStyle = "#475569";
                 ctx.font = "16px Arial";
                 ctx.fillText(document.getElementById('qr-teks-seri').innerText, canvas.width/2, img.height + pad + 55);
 
-                // Eksekusi Download
                 let link = document.createElement("a");
                 link.download = currentQrFilename.replace('.svg', '.jpg');
                 link.href = canvas.toDataURL("image/jpeg", 1.0);
@@ -613,13 +596,9 @@
             img.src = currentQrUrl;
         }
 
-        // =========================================================================
-        // FUNGSI KONVERSI SVG KE JPG (MASAL / GABUNG JADI 1 HALAMAN)
-        // =========================================================================
         function downloadSemuaQRAsJPG() {
             let qrElements = document.querySelectorAll('.btn-lihat-qr');
-            
-            // Filter hanya yang tampil di layar (jika sedang pakai dropdown filter)
+
             let visibleQrs = Array.from(qrElements).filter(el => el.closest('.asset-card').style.display !== 'none');
 
             if (visibleQrs.length === 0) {
@@ -632,24 +611,22 @@
             btn.innerText = "Menyusun Gambar JPG...";
             btn.disabled = true;
 
-            // Atur Layout Grid untuk Kertas Besar
-            let cols = 4; // 4 Kolom QR per baris
+            let cols = 4;
             let itemWidth = 260;
             let itemHeight = 320;
             let padding = 40;
             let rows = Math.ceil(visibleQrs.length / cols);
 
             let canvas = document.createElement("canvas");
-            // Hitung ukuran total kanvas
+
             canvas.width = (cols * itemWidth) + (padding * (cols + 1));
-            // Tambah margin atas 100px untuk Judul
-            canvas.height = (rows * itemHeight) + (padding * (rows + 1)) + 100; 
-            
+
+            canvas.height = (rows * itemHeight) + (padding * (rows + 1)) + 100;
+
             let ctx = canvas.getContext("2d");
-            ctx.fillStyle = "#ffffff"; // Background Putih Full
+            ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Tulis Judul Dokumen di atas
             ctx.fillStyle = "#1a4f91";
             ctx.font = "bold 35px Arial";
             ctx.textAlign = "center";
@@ -660,30 +637,25 @@
             visibleQrs.forEach((el, index) => {
                 let img = new Image();
                 img.crossOrigin = "Anonymous";
-                
+
                 img.onload = function() {
                     let col = index % cols;
                     let row = Math.floor(index / cols);
 
-                    // Hitung koordinat X dan Y untuk tiap kotak QR
                     let x = padding + (col * (itemWidth + padding));
                     let y = 100 + padding + (row * (itemHeight + padding));
 
-                    // Gambar Border/Kotak Tipis Pembatas
                     ctx.strokeStyle = "#cbd5e1";
                     ctx.lineWidth = 2;
                     ctx.strokeRect(x, y, itemWidth, itemHeight);
 
-                    // Gambar QR Code di tengah kotak
                     ctx.drawImage(img, x + 30, y + 20, 200, 200);
 
-                    // Gambar Teks Kode Aset
                     ctx.fillStyle = "#1a4f91";
                     ctx.textAlign = "center";
                     ctx.font = "bold 16px Arial";
                     ctx.fillText(el.getAttribute('data-kode'), x + (itemWidth / 2), y + 255);
 
-                    // Gambar Teks Nama Aset & Seri
                     ctx.fillStyle = "#475569";
                     ctx.font = "14px Arial";
                     ctx.fillText(el.getAttribute('data-nama'), x + (itemWidth / 2), y + 280);
@@ -691,20 +663,18 @@
                     ctx.fillText(el.getAttribute('data-seri'), x + (itemWidth / 2), y + 300);
 
                     loadedCount++;
-                    
-                    // Jika semua gambar sudah masuk kanvas, langsung download!
+
                     if (loadedCount === visibleQrs.length) {
                         let link = document.createElement("a");
                         link.download = "Semua_Katalog_QR_Aset.jpg";
-                        link.href = canvas.toDataURL("image/jpeg", 1.0); // Kualitas Maksimal 1.0
+                        link.href = canvas.toDataURL("image/jpeg", 1.0);
                         link.click();
 
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                     }
                 };
-                
-                // Trigger load gambar
+
                 img.src = el.getAttribute('data-url');
             });
         }
@@ -712,7 +682,6 @@
         function prosesGenerateSemua() {
             if(!confirm('Apakah Anda yakin ingin memproses/update seluruh QR Code yang belum terbuat? Ini mungkin memakan waktu beberapa detik.')) return;
 
-            // Tampilkan Layar Loading
             document.getElementById('modalLoadingGenerate').classList.add('show');
 
             fetch(`/generate-qr-all`, {
@@ -722,11 +691,11 @@
             .then(res => res.json())
             .then(data => {
                 document.getElementById('modalLoadingGenerate').classList.remove('show');
-                if (data.success) { 
+                if (data.success) {
                     alert(data.message);
-                    location.reload(); 
-                } else { 
-                    alert('Gagal: ' + data.message); 
+                    location.reload();
+                } else {
+                    alert('Gagal: ' + data.message);
                 }
             })
             .catch(err => {
@@ -738,7 +707,6 @@
         function prosesUpdateSemua() {
             if(!confirm('Apakah Anda yakin ingin mengecek dan memperbarui seluruh QR Code yang usang/berubah? Ini mungkin memakan waktu.')) return;
 
-            // Tampilkan Layar Loading dan ubah teksnya agar sesuai dengan konteks "Update"
             let loadingModal = document.getElementById('modalLoadingGenerate');
             loadingModal.querySelector('h3').innerText = 'Memperbarui QR Code...';
             loadingModal.querySelector('p').innerText = 'Sistem sedang memindai aset yang berubah dan memperbarui QR Code.';
@@ -751,11 +719,11 @@
             .then(res => res.json())
             .then(data => {
                 loadingModal.classList.remove('show');
-                if (data.success) { 
+                if (data.success) {
                     alert('Proses Update Selesai! ' + data.message);
-                    location.reload(); 
-                } else { 
-                    alert('Gagal: ' + data.message); 
+                    location.reload();
+                } else {
+                    alert('Gagal: ' + data.message);
                 }
             })
             .catch(err => {
@@ -787,7 +755,6 @@
                 });
             }
 
-            // Live instant filter pada kartu QR di halaman saat mengetik di kolom pencarian navbar
             document.addEventListener('DOMContentLoaded', function () {
                 const inputSearch = document.getElementById('input-search-barcode');
                 const gridEl = document.querySelector('.asset-grid');

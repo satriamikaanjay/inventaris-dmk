@@ -1,5 +1,5 @@
 @php
-    // Endpoint Hapus Banyak Aset Sekaligus (Checklist Bulk Delete)
+
     if (request()->has('_bulk_delete_aset')) {
         $__rawIds = (string) request('ids', '');
         $__idsHapus = array_values(array_filter(array_map('trim', explode(',', $__rawIds)), fn($v) => $v !== ''));
@@ -94,7 +94,6 @@
         }
     }
 
-    /* LAMPIRAN_SYNC_V2 */
     $__lampiranMetaPath = storage_path('app/lampiran_aset_meta.json');
     $__lampiranMetaData = [
         'files'          => [],
@@ -137,7 +136,6 @@
         return $d . ' ' . $m . ' ' . $y;
     };
 
-    // Indeks cepat seluruh file fisik di folder storage/app dan public untuk membaca ukuran & waktu asli file
     $__fileDiskIndex = [];
     try {
         $__scanRoots = array_filter([
@@ -169,7 +167,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Endpoint ringan: Simpan hasil deteksi ukuran file dari browser ke lampiran_aset_meta.json
     if (request()->has('_cache_lampiran_info')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -196,7 +193,6 @@
         exit;
     }
 
-    // Endpoint pra-submit: Tangani penghapusan lampiran & pencatatan tanggal device + ukuran file sebelum form disubmit
     if (request()->has('_sync_lampiran_meta')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -237,7 +233,6 @@
                         }
                     }
 
-                    // Hapus file yang ditandai dihapus dari daftar lampiran di database sekarang juga
                     if (!empty($__hapusList)) {
                         $__hapusNorm = array_map(fn($v) => strtolower(trim((string) $v)), $__hapusList);
                         $__hapusBase = array_map(fn($v) => strtolower(basename(trim((string) $v))), $__hapusList);
@@ -276,7 +271,6 @@
             ];
         }
 
-        // Simpan juga berdasarkan nama asli file baru agar langsung terhubung jika nama file mengandung nama asli
         foreach ($__newFiles as $__nf) {
             $__origName = trim((string) ($__nf['name'] ?? ''));
             if ($__origName !== '') {
@@ -294,14 +288,12 @@
         exit;
     }
 
-    // Rekonsiliasi pasca-submit (setelah Controller redirect kembali ke halaman Data Aset)
     $__metaDirty = false;
     try {
         $__modelInst = new \App\Models\DetailAset();
         $__tblAset = $__modelInst->getTable();
         $__pkAset = $__modelInst->getKeyName();
 
-        // 1. Proses antrean pending_edits (pastikan lampiran yang dihapus benar-benar hilang dari DB & ikat tanggal/ukuran file baru)
         if (!empty($__lampiranMetaData['pending_edits'])) {
             foreach ($__lampiranMetaData['pending_edits'] as $__editAsetId => $__editData) {
                 if ((time() - (int) ($__editData['timestamp'] ?? 0)) > 300) {
@@ -345,13 +337,11 @@
                                 ]);
                         }
 
-                        // Hapus metadata lama dari file yang dihapus
                         foreach ($__hapusBase as $__hb) {
                             unset($__lampiranMetaData['files'][$__hb]);
                         }
                     }
 
-                    // Tandai file yang baru saja diunggah pada sesi Edit ini dengan tanggal device & ukuran file
                     $__beforeFiles = is_array($__editData['before_files'] ?? null) ? $__editData['before_files'] : [];
                     $__newFilesMeta = array_values(is_array($__editData['new_files'] ?? null) ? $__editData['new_files'] : []);
                     $__devDateEdit = (string) ($__editData['device_date'] ?? $__formatTglIndoPhp(time()));
@@ -385,7 +375,6 @@
                         }
                     }
 
-                    // Sinkronkan juga koleksi $detailAsets yang sedang dirender di halaman ini
                     if (isset($detailAsets)) {
                         foreach ($detailAsets as $__itemAset) {
                             $__idItem = (string) ($__itemAset->aset_id ?? $__itemAset->id ?? '');
@@ -401,7 +390,6 @@
             }
         }
 
-        // 2. Proses antrean pending_tambah untuk aset yang baru ditambahkan
         if (!empty($__lampiranMetaData['pending_tambah'])) {
             foreach ($__lampiranMetaData['pending_tambah'] as $__idxT => $__tambahData) {
                 if ((time() - (int) ($__tambahData['timestamp'] ?? 0)) > 300) {
@@ -450,7 +438,6 @@
             $__lampiranMetaData['pending_tambah'] = array_values($__lampiranMetaData['pending_tambah']);
         }
 
-        // 3. Lengkapi metadata tanggal upload & ukuran file untuk seluruh lampiran yang tampil pada halaman ini
         if (isset($detailAsets)) {
             foreach ($detailAsets as $__dItem) {
                 if (empty($__dItem->lampiran) || $__dItem->lampiran === 'null') {
@@ -464,14 +451,12 @@
                     $__bName = basename((string) $__fPath);
                     $__curMeta = $__lampiranMetaData['files'][$__bName] ?? [];
 
-                    // Ambil ukuran file dari disk jika belum tercatat
                     if (empty($__curMeta['size']) && isset($__fileDiskIndex[$__bName]) && $__fileDiskIndex[$__bName]['size'] > 0) {
                         $__curMeta['size_bytes'] = $__fileDiskIndex[$__bName]['size'];
                         $__curMeta['size'] = $__formatBytesPhp($__fileDiskIndex[$__bName]['size']);
                         $__metaDirty = true;
                     }
 
-                    // Ambil tanggal upload asli file (bukan created_at aset!)
                     if (empty($__curMeta['tgl'])) {
                         if (preg_match('/^(\d{10})[_\-]/', $__bName, $__mTs)) {
                             $__curMeta['tgl'] = $__formatTglIndoPhp((int) $__mTs[1]);
@@ -498,29 +483,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Sinkronkan otomatis ke file data_aset.blade.php milik Admin / Master Admin lainnya jika project memisahkan file view
-    try {
-        $__currentBladeFile = __FILE__;
-        $__kandidatBladeAset = [
-            resource_path('views/data_aset.blade.php'),
-            resource_path('views/admin/data_aset.blade.php'),
-            resource_path('views/masteradmin/data_aset.blade.php'),
-        ];
-        if (is_file($__currentBladeFile)) {
-            $__isiBladeIni = (string) file_get_contents($__currentBladeFile);
-            if (str_contains($__isiBladeIni, '/* LAMPIRAN_SYNC_V2 */')) {
-                foreach ($__kandidatBladeAset as $__targetBlade) {
-                    if (is_file($__targetBlade) && is_writable($__targetBlade) && realpath($__targetBlade) !== realpath($__currentBladeFile)) {
-                        $__isiTarget = (string) file_get_contents($__targetBlade);
-                        if (!str_contains($__isiTarget, '/* LAMPIRAN_SYNC_V2 */')) {
-                            file_put_contents($__targetBlade, $__isiBladeIni);
-                        }
-                    }
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-    }
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -577,7 +539,6 @@
             color: #ffffff !important;
         }
 
-        /* Styling Checkbox Hapus Aset & Highlight Baris Terpilih */
         .aset-checkbox {
             width: 18px;
             height: 18px;
@@ -605,10 +566,9 @@
         .form-group label { font-size: 12px; font-weight: 600; color: #1e293b; }
         .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; background: #fff; transition: 0.2s; color: var(--text-color); }
         .form-group input:focus, .form-group select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.1); }
-        
+
         .form-group input:disabled, .form-group select:disabled { background-color: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: #e2e8f0; opacity: 1; -webkit-text-fill-color: #334155; }
 
-        /* MODAL DETAIL & EDIT */
         .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 9999; opacity: 0; visibility: hidden; transition: all 0.3s ease-in-out; backdrop-filter: blur(2px); }
         .modal-backdrop.show { opacity: 1; visibility: visible; }
         .modal-container { background: #f8fafc; width: 95%; max-width: 950px; max-height: 92vh; border-radius: 16px; display: flex; flex-direction: column; transform: scale(0.95); transition: 0.3s; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); overflow: hidden; }
@@ -620,7 +580,6 @@
         .modal-body { padding: 25px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 20px; }
         .modal-footer { padding: 15px 25px; background: #fff; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
 
-        /* SIDEBAR TAMBAH ASET */
         .sidebar-form-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 10000; opacity: 0; visibility: hidden; transition: all 0.3s ease; backdrop-filter: blur(2px); }
         .sidebar-form-backdrop.show { opacity: 1; visibility: visible; }
         .sidebar-form-panel { position: fixed; top: 0; right: -550px; width: 100%; max-width: 500px; height: 100vh; background: #f8fafc; display: flex; flex-direction: column; transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 10001; box-shadow: -5px 0 30px rgba(0,0,0,0.15); }
@@ -630,7 +589,6 @@
         .sidebar-body { padding: 20px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 20px; }
         .sidebar-footer { padding: 15px 25px; background: #fff; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
 
-        /* KOTAK LANGKAH (STEP SECTION) */
         .step-box { background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
         .step-header { display: flex; align-items: center; gap: 10px; border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 15px; }
         .step-number { background: var(--primary-color); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
@@ -639,20 +597,18 @@
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
-        /* BANNER PREVIEW KODE */
         .preview-banner { background: linear-gradient(135deg, #1e3a8a, #1a4f91); color: #fff; padding: 15px 20px; border-radius: 12px; display: grid; grid-template-columns: 1fr; gap: 15px; border: 2px solid #3b82f6; }
         .preview-banner label { color: #93c5fd !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
         .preview-banner input { background: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.4) !important; color: #fff !important; font-size: 16px !important; font-weight: 800 !important; }
 
-        /* TABEL */
         .table-container { width: 100%; overflow-x: auto; max-height: 65vh; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 10px; position: relative; }
         .data-table { width: 100%; border-collapse: collapse; min-width: 3300px; }
-        .data-table th { 
-            position: sticky; top: 0; z-index: 10; 
-            font-size: 12px; color: var(--text-muted); text-align: left; padding: 12px 15px; 
-            background: #f8fafc; /* Wajib ada background agar data tidak tembus */
-            white-space: nowrap; border-bottom: 1px solid var(--border-color); 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        .data-table th {
+            position: sticky; top: 0; z-index: 10;
+            font-size: 12px; color: var(--text-muted); text-align: left; padding: 12px 15px;
+            background: #f8fafc;
+            white-space: nowrap; border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         .data-table th.aksi-col { position: sticky; top: 0; right: 0; z-index: 20; background: #f8fafc; }
         .data-table td { font-size: 13px; padding: 12px 15px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); white-space: nowrap; }
@@ -668,8 +624,7 @@
         .click-tooltip-text { visibility: hidden; opacity: 0; width: max-content; background-color: #1e293b; color: #fff; text-align: center; border-radius: 6px; padding: 6px 12px; position: absolute; z-index: 999; bottom: 135%; left: 50%; transform: translateX(-50%); transition: all 0.2s ease-in-out; font-size: 11px; font-weight: 600; box-shadow: 0 4px 10px rgba(0,0,0,0.15); pointer-events: none; }
         .click-tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent; }
         .click-tooltip-container:focus .click-tooltip-text { visibility: visible; opacity: 1; bottom: 150%; }
-    
-        /* ===== PENCARIAN ASET ===== */
+
         .aset-toolbar { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         .aset-search-wrap { position: relative; flex: 1 1 320px; max-width: 480px; }
         .aset-search-wrap input { width: 100%; padding: 9px 14px 9px 36px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; font-family: inherit; }
@@ -704,7 +659,6 @@
             display: none !important;
         }
 
-        /* 2. Tampilkan baris desktop utama (Teks Info & Tombol Angka) */
         .custom-pagination-wrap nav > div:last-child {
             display: flex !important;
             justify-content: space-between;
@@ -714,7 +668,6 @@
             width: 100%;
         }
 
-        /* 3. Styling Teks "Showing 1 to 100 of X results" */
         .custom-pagination-wrap nav p {
             font-size: 13px !important;
             color: var(--text-muted) !important;
@@ -725,7 +678,6 @@
             color: var(--primary-color) !important;
         }
 
-        /* 4. Kotak pembungkus deretan angka */
         .custom-pagination-wrap nav > div:last-child > div:last-child > span {
             display: inline-flex !important;
             border-radius: 8px !important;
@@ -735,7 +687,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
         }
 
-        /* 5. Bentuk tiap kotak angka dan panah */
         .custom-pagination-wrap nav span > a,
         .custom-pagination-wrap nav span > span {
             display: inline-flex !important;
@@ -756,39 +707,33 @@
             border-bottom: none !important;
             border-left: none !important;
         }
-        
+
         .custom-pagination-wrap nav span > *:last-child {
             border-right: none !important;
         }
 
-        /* 6. Efek Hover */
         .custom-pagination-wrap nav span > a:hover {
             background: #f1f5f9 !important;
             color: var(--primary-color) !important;
         }
 
-        /* 7. Halaman Aktif saat ini (Berwarna Biru) */
         .custom-pagination-wrap nav span[aria-current="page"] > span {
             background: var(--primary-color) !important;
             color: #fff !important;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important;
         }
 
-        /* 8. Tombol mati (Disabled - contoh panah Prev di halaman 1) */
         .custom-pagination-wrap nav span[aria-disabled="true"] > span {
             color: #cbd5e1 !important;
             background: #f8fafc !important;
             cursor: not-allowed !important;
         }
 
-        /* 9. Ukuran icon panah SVG */
         .custom-pagination-wrap nav svg {
             width: 16px !important;
             height: 16px !important;
-        }   
-        
+        }
 
-        /* ===== HEADER / NAVBAR HALAMAN FIXED (TIDAK TENGGELAM SAAT SCROLL KE BAWAH / ATAS) ===== */
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -827,7 +772,7 @@
 <body>
 
     @php
-    // Pastikan $items memuat SELURUH data master aset dari database (tidak terpotong pagination/limit controller)
+
     $itemModelClass = null;
     if (isset($items) && $items->isNotEmpty() && is_object($items->first())) {
         $itemModelClass = get_class($items->first());
@@ -860,7 +805,6 @@
         }
     }
 
-    // Jika baru saja ada aksi Tambah / Edit / Hapus / Import pada Data Aset (session success), pastikan tercatat ke RiwayatAktivitas
     if (session()->has('success') && class_exists(\App\Models\RiwayatAktivitas::class)) {
         try {
             $pesanSuksesAset = trim((string) session('success'));
@@ -917,7 +861,6 @@
         }
     }
 
-    // Pastikan kolom status_berjalan mendukung nilai "Aset Tidak Dipakai" (jika di migrasi awal masih ENUM lama)
     try {
         $__instTipe = new \App\Models\DetailAset();
         $__tblTipe = $__instTipe->getTable();
@@ -933,7 +876,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Pastikan Filter Tipe Aset "Aset Tidak Dipakai" tetap bekerja meskipun Controller belum menambahkan whitelist baru
     if (request()->filled('filter_tipe') && strtolower(trim((string) request('filter_tipe'))) === 'aset tidak dipakai') {
         try {
             $__perluFilterUlang = false;
@@ -973,7 +915,6 @@
         }
     }
 
-    // Urutan kode dihitung PER CABANG: angka paling kanan pada kode_aset (mis. .../25062023/17 -> 17)
     $urutanPerCabang = [];
     foreach (\App\Models\DetailAset::select('cabang_id', 'kode_aset')->get() as $barisAset) {
         $akhir = str_contains((string) $barisAset->kode_aset, '/') ? (int) substr(strrchr($barisAset->kode_aset, '/'), 1) : 0;
@@ -984,6 +925,7 @@
     <input type="hidden" id="json-total-aset" value="{{ $totalAset }}">
     <input type="hidden" id="json-urutan-cabang" value="{{ json_encode($urutanPerCabang) }}">
     <input type="hidden" id="json-seri-item" value="{{ json_encode($seriItemData) }}">
+    <input type="hidden" id="json-meta-lampiran" value="{{ json_encode($__lampiranMetaData['files'] ?? []) }}">
 
     @php
     if (request('panel') === 'admin') {
@@ -1028,8 +970,6 @@
         <div id="toast-error" class="toast-popup toast-error show"><span>{{ $errors->first() }}</span></div>
         @endif
 
-
-        <!-- ================= SIDEBAR TAMBAH ASET ================= -->
         <div class="sidebar-form-backdrop" id="sidebarTambahAset">
             <div class="sidebar-form-panel" id="sidebarPanel">
                 <div class="sidebar-header">
@@ -1159,7 +1099,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <!-- Ruangan (Diisi - untuk default dari form jika di web opsional) -->
+
                             <div class="form-group" style="margin-top: 12px;">
                                 <label>Keterangan Ruangan <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
                                 <input type="text" name="Ruangan" value="-" placeholder="-">
@@ -1178,7 +1118,7 @@
                                 <div class="form-group"><label>Servis Berikutnya <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="date" name="servis_berikutnya"></div>
                             </div>
                         </div>
-                        
+
                         <div class="step-box" style="margin-bottom: 20px;">
                             <div class="step-header">
                                 <div class="step-number">6</div>
@@ -1205,35 +1145,30 @@
             </div>
         </div>
 
-        <!-- ================= FORM HAPUS (HIDDEN) ================= -->
         <form id="form-delete-fisik" method="POST" style="display: none;">
             @csrf
             @method('DELETE')
         </form>
 
-       
-        <!-- ================= MODAL DETAIL & EDIT ================= -->
         <div class="modal-backdrop" id="modalDetailAset">
             <div class="modal-container">
                 <div class="modal-header">
                     <h3 id="modal-title-text">Detail Informasi Aset</h3>
                     <button type="button" class="btn-close-modal" onclick="closeModalDetail()">&times;</button>
                 </div>
-                
+
                 <form id="form-edit-fisik" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; overflow: hidden; max-height: calc(92vh - 65px);">
                     @csrf
                     @method('PUT')
-                    
-                    <!-- AREA PENAMPUNG FILE YANG DIHAPUS SAAT EDIT -->
+
                     <div id="hidden-hapus-lampiran"></div>
 
                     <div class="modal-body">
-                        <!-- PERINGATAN UPDATE BARCODE -->
+
                         <div id="edit-barcode-warning" style="display: none; background: #fef3c7; border: 1px solid #f59e0b; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #b45309; font-weight: 600; line-height: 1.5; margin-bottom: 5px;">
                             <span style="display:inline-flex; align-items:center; gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg><strong>Peringatan:</strong></span> Jika Anda mengubah <strong>Kode Aset</strong>, Anda wajib melakukan pembaruan (Update QR) pada menu <strong>Barcode Aset</strong> setelah menyimpan perubahan ini agar QR Code tetap sinkron.
                         </div>
 
-                        <!-- PREVIEW -->
                         <div class="preview-banner" style="grid-template-columns: 1fr 1fr;">
                             <div class="form-group"><label>Kode Aset Final</label><input type="text" id="edit_kode_aset" name="kode_aset" readonly></div>
                             <div class="form-group"><label>Nomor Seri Final</label><input type="text" id="edit_nomor_seri" name="nomor_seri" readonly></div>
@@ -1338,10 +1273,10 @@
                             <div class="grid-1">
                                 <div class="form-group">
                                     <div id="daftar_lampiran_terpasang" style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; background: #e2e8f0; border-radius: 8px; min-height: 40px;">
-                                        <!-- Card lampiran akan diisi otomatis oleh JS -->
+
                                     </div>
                                 </div>
-                                <!-- Kolom Tambah Baru (Hanya Muncul Saat Mode Edit) -->
+
                                 <div class="form-group" id="upload-baru-section" style="margin-top: 10px; display: none;">
                                     <label>Tambahkan File Baru <span style="color: var(--text-muted); font-size: 11px;">(Opsional — Maks. 5 MB / file)</span></label>
                                     <input type="file" id="input_lampiran_edit" name="lampiran[]" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" onchange="validasiUkuranLampiran(this, 'info_ukuran_lampiran_edit')" style="background: #fff; border: 1px dashed #cbd5e1; cursor: pointer; padding: 12px;">
@@ -1354,7 +1289,6 @@
                         </div>
                     </div>
 
-                    <!-- FOOTER KETIKA MODE VIEW (READ-ONLY) -->
                     <div class="modal-footer" id="footer-view-mode">
                         <button type="button" class="btn btn-secondary" onclick="closeModalDetail()">Tutup</button>
                         <button type="button" class="btn btn-primary" onclick="enableEditMode()">
@@ -1363,7 +1297,6 @@
                         </button>
                     </div>
 
-                    <!-- FOOTER KETIKA MODE EDIT -->
                     <div class="modal-footer" id="footer-edit-mode" style="display: none;">
                         <div>
                             <button type="button" class="btn btn-danger" onclick="submitHapusAset()">
@@ -1380,14 +1313,13 @@
             </div>
         </div>
 
-        <!-- ================= MODAL IMPORT EXCEL ================= -->
         <div class="modal-backdrop" id="modalImportExcel">
             <div class="modal-container" style="max-width: 450px;">
                 <div class="modal-header">
                     <h3>Import Data Aset</h3>
                     <button type="button" class="btn-close-modal" onclick="closeModalImport()">&times;</button>
                 </div>
-                
+
                 <form action="{{ route('aset.import') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-body">
@@ -1405,29 +1337,26 @@
             </div>
         </div>
 
-        <!-- TABEL DATA -->
         <div class="card-box">
             <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px;">Daftar Aset Terdaftar</h3>
             <form action="{{ url()->current() }}" method="GET" class="aset-toolbar" style="margin-bottom: 15px;">
                 <div class="aset-search-wrap" style="display: flex; gap: 10px; align-items: center;">
                     <div style="position: relative; flex: 1; min-width: 300px;">
                         <svg class="aset-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                        
-                        <!-- Input Search -->
+
                         <input type="text" name="search" value="{{ request('search') }}" id="searchAset" placeholder="Cari kode, nama, cabang, merk, lokasi..." autocomplete="off">
                     </div>
-                    
+
                     <button type="submit" class="btn btn-primary" style="padding: 9px 18px;">Cari Data</button>
-                    
-                    <!-- Tombol Reset Muncul jika sedang mencari sesuatu -->
+
                     @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
                         <a href="{{ url()->current() }}" class="btn btn-danger" style="text-decoration: none; padding: 9px 18px;">Reset</a>
                     @endif
                 </div>
-                
+
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe Aset:</label>
-                    <!-- Dropdown Filter -->
+
                     <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; cursor: pointer;">
                         <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
                         <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan</option>
@@ -1446,12 +1375,12 @@
                             <th class="col-checkbox-hapus" style="width: 44px; text-align: center; position: sticky; left: 0; z-index: 21; background: #f8fafc;">
                                 <input type="checkbox" id="checkAllAset" class="aset-checkbox" title="Pilih semua aset di halaman ini" onchange="togglePilihSemuaAset(this)">
                             </th>
-                            <!-- URUTAN KOLOM YANG DIPERBARUI -->
+
                             <th>KODE ASET</th>
                             <th>NAMA ASET</th>
                             <th>KATEGORI</th>
                             <th>CABANG</th>
-                            <th>RUANGAN</th> 
+                            <th>RUANGAN</th>
                             <th>MERK</th>
                             <th>NOMOR SERI</th>
                             <th>UNIT</th>
@@ -1480,14 +1409,14 @@
                     <tbody>
                         @forelse($detailAsets ?? [] as $detail)
                         @php
-                            $warnaBg = '#f59e0b'; 
+                            $warnaBg = '#f59e0b';
                             if(isset($statuses)) {
                                 $match = $statuses->where('nama_status', $detail->status_aset)->first();
                                 if($match && !empty($match->warna_status)) $warnaBg = $match->warna_status;
                             }
-                            
+
                             $hex = ltrim($warnaBg, '#');
-                            $rowBg = 'rgba(245, 158, 11, 0.08)'; 
+                            $rowBg = 'rgba(245, 158, 11, 0.08)';
                             if (strlen($hex) == 6) {
                                 $r = hexdec(substr($hex, 0, 2)); $g = hexdec(substr($hex, 2, 2)); $b = hexdec(substr($hex, 4, 2));
                                 $rowBg = "rgba($r, $g, $b, 0.08)";
@@ -1496,21 +1425,21 @@
                                 $rowBg = "rgba($r, $g, $b, 0.08)";
                             }
                         @endphp
-                        <tr id="baris-aset-{{ $detail->aset_id ?? $detail->id }}" style="background-color: {{ $rowBg }};">
+                        <tr id="baris-aset-{{ $detail->aset_id ?? $detail->id }}" data-bg="{{ $rowBg }}">
                             <td class="col-checkbox-hapus" style="text-align: center; position: sticky; left: 0; background: inherit; z-index: 2;" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="aset-checkbox check-item-aset" name="aset_ids[]" value="{{ $detail->aset_id ?? $detail->id }}" data-kode="{{ $detail->kode_aset ?? '-' }}" onchange="perbaruiStatusChecklistAset()">
                             </td>
                             <td style="font-weight: 700; color: var(--primary-color);">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->kode_aset ?? '-' }}</span>
-                                    
+
                                     @if(!empty($detail->servis_berikutnya) && $detail->servis_berikutnya !== '-')
                                         @php
                                             $tglServisKode = \Carbon\Carbon::parse($detail->servis_berikutnya)->startOfDay();
                                             $hariIniKode = \Carbon\Carbon::now()->startOfDay();
-                                            $selisihKode = $hariIniKode->diffInDays($tglServisKode, false); 
+                                            $selisihKode = $hariIniKode->diffInDays($tglServisKode, false);
                                         @endphp
-                                        
+
                                         @if($selisihKode <= 30 && $selisihKode > 7)
                                             <div class="click-tooltip-container" tabindex="0">
                                                 <div style="background: #f59e0b; color: #fff; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 11px; font-weight: 900; box-shadow: 0 0 6px rgba(245,158,11,0.6);">!</div>
@@ -1533,22 +1462,20 @@
                             <td>{{ $detail->item->nama_aset ?? '-' }}</td>
                             <td>{{ $detail->kategori->nama_kategori ?? '-' }}</td>
                             <td style="font-weight: 600; color: #1e293b;">{{ $detail->cabang->nama_cabang ?? '-' }}</td>
-                            
-                            <!-- DATA RUANGAN LAMA TAMPIL DI SINI -->
+
                             <td style="color: #475569;">{{ $detail->Ruangan ?? '-' }}</td>
-                            
+
                             <td>{{ $detail->merk ?? '-' }}</td>
                             <td>{{ $detail->nomor_seri ?? '-' }}</td>
                             <td>{{ $detail->unit ?? '-' }}</td>
                             <td>{{ $detail->tanggal_pengadaan ?? '-' }}</td>
                             <td>{{ $detail->harga_beli ? 'Rp ' . number_format($detail->harga_beli, 0, ',', '.') : '-' }}</td>
-                            
-                            <!-- LOKASI SPESIFIK (KOSONG DEFAULT DARI IMPORT) -->
+
                             <td>{{ $detail->lokasi_saat_ini ?? '-' }}</td>
-                            
+
                             <td>{{ $detail->penanggung_jawab ?? '-' }}</td>
                             <td>
-                                <span class="badge" style="background-color: {{ $warnaBg }}; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{ $detail->status_aset ?? 'N/A' }}</span>
+                                <span class="badge" data-bg="{{ $warnaBg }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">{{ $detail->status_aset ?? 'N/A' }}</span>
                             </td>
                             <td>
                                 <span class="status-berjalan-label badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);">{{ $detail->status_berjalan ?? 'Tidak Ada' }}</span>
@@ -1560,14 +1487,14 @@
                             <td>
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->servis_berikutnya ?? '-' }}</span>
-                                    
+
                                     @if(!empty($detail->servis_berikutnya) && $detail->servis_berikutnya !== '-')
                                         @php
                                             $tglServis = \Carbon\Carbon::parse($detail->servis_berikutnya)->startOfDay();
                                             $hariIni = \Carbon\Carbon::now()->startOfDay();
-                                            $selisih = $hariIni->diffInDays($tglServis, false); 
+                                            $selisih = $hariIni->diffInDays($tglServis, false);
                                         @endphp
-                                        
+
                                         @if($selisih <= 30 && $selisih > 7)
                                             <div class="click-tooltip-container" tabindex="0">
                                                 <div style="background: #f59e0b; color: #fff; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; font-size: 11px; font-weight: 900; box-shadow: 0 0 6px rgba(245,158,11,0.6);">!</div>
@@ -1596,7 +1523,7 @@
                             <td>{{ $detail->no_berita_acara ?? '-' }}</td>
                             <td>{{ $detail->vendor_pengadaan ?? '-' }}</td>
                             <td style="text-align: center; position: sticky; right: 0; background: inherit; z-index: 1;">
-                                <button type="button" class="btn" style="background: var(--primary-color); color: #fff; padding: 6px 12px; font-size: 12px; border-radius: 6px;" onclick="openModalDetail({{ json_encode($detail) }})">
+                                <button type="button" class="btn" style="background: var(--primary-color); color: #fff; padding: 6px 12px; font-size: 12px; border-radius: 6px;" data-detail="{{ json_encode($detail) }}" onclick="openModalDetail(JSON.parse(this.getAttribute('data-detail')))">
                                     Lihat Detail
                                 </button>
                             </td>
@@ -1613,16 +1540,19 @@
         </div>
     </main>
 
-    <!-- Script Utama -->
     <script>
         const TOTAL_ASET_GLOBAL = parseInt(document.getElementById('json-total-aset').value) || 0;
         const DATA_SERI_ITEM = JSON.parse(document.getElementById('json-seri-item').value || '{}');
         const URUTAN_CABANG = JSON.parse(document.getElementById('json-urutan-cabang').value || '{}');
-        
-        let currentAsetData = null; 
 
-        // SIDEBAR TAMBAH
+        let currentAsetData = null;
+
         function openSidebarTambah() {
+            const inputTambahLamp = document.getElementById('input_lampiran_tambah');
+            if (inputTambahLamp) {
+                inputTambahLamp.value = '';
+                validasiUkuranLampiran(inputTambahLamp, 'info_ukuran_lampiran_tambah', true);
+            }
             document.getElementById('sidebarTambahAset').classList.add('show');
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
@@ -1632,13 +1562,10 @@
             document.getElementById('sidebarTambahAset').classList.remove('show');
         }
 
-        // ================= MODAL DETAIL & EDIT LOGIC =================
-        // Isi pilihan select dari data baris. Kalau daftar pilihan dari controller tidak memuat
-        // nilainya (mis. daftar dibatasi/pagination), buat pilihan sementara memakai nama dari relasi.
         function setSelectDenganCadangan(selectId, nilai, teks) {
             const sel = document.getElementById(selectId);
             if (!sel) return;
-            sel.querySelectorAll('option[data-sementara]').forEach(o => o.remove());   // bersihkan sisa baris sebelumnya
+            sel.querySelectorAll('option[data-sementara]').forEach(o => o.remove());
             if (nilai === null || nilai === undefined || nilai === '') { sel.value = ''; return; }
             const ada = Array.from(sel.options).some(o => String(o.value) === String(nilai));
             if (!ada) {
@@ -1652,9 +1579,9 @@
         }
 
         function openModalDetail(data) {
-            currentAsetData = data; 
+            currentAsetData = data;
             let id = data.aset_id || data.id;
-            
+
             document.getElementById('form-edit-fisik').action = `/masteradmin/data-aset/${id}`;
             document.getElementById('form-delete-fisik').action = `/masteradmin/data-aset/${id}`;
 
@@ -1687,17 +1614,16 @@
             document.getElementById('edit_tgl_peleburan').value = data.tanggal_peleburan || '';
             document.getElementById('edit_nilai_jual').value = data.nilai_jual || '';
 
-            // Render Lampiran (Beserta Tanggal Upload per File & Ukuran File)
             let kotakLampiran = document.getElementById('daftar_lampiran_terpasang');
-            kotakLampiran.innerHTML = ''; 
-            document.getElementById('hidden-hapus-lampiran').innerHTML = ''; // Reset file terhapus
+            kotakLampiran.innerHTML = '';
+            document.getElementById('hidden-hapus-lampiran').innerHTML = '';
             window.daftarHapusLampiranSementara = [];
             const inputEditLamp = document.getElementById('input_lampiran_edit');
             if (inputEditLamp) {
                 inputEditLamp.value = '';
-                validasiUkuranLampiran(inputEditLamp, 'info_ukuran_lampiran_edit');
+                validasiUkuranLampiran(inputEditLamp, 'info_ukuran_lampiran_edit', true);
             }
-            
+
             if (data.lampiran && data.lampiran !== "null" && data.lampiran !== "") {
                 let files = [];
                 try { files = typeof data.lampiran === 'string' ? JSON.parse(data.lampiran) : data.lampiran; } catch(e) { files = []; }
@@ -1717,12 +1643,10 @@
                         let ext = filename.split('.').pop().toLowerCase();
                         let isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
 
-                        // Ambil Tanggal Upload spesifik file & Ukuran File dari metadata
                         let metaFile = (window.DATA_META_LAMPIRAN && window.DATA_META_LAMPIRAN[filename]) ? window.DATA_META_LAMPIRAN[filename] : null;
                         let tglUpload = (metaFile && metaFile.tgl) ? metaFile.tgl : fallbackDateStr;
                         let ukuranFile = (metaFile && metaFile.size) ? metaFile.size : 'Memuat...';
 
-                        // Jika nama file diawali Unix timestamp (misal 1761700000_namafile.pdf), gunakan tanggal dari timestamp tersebut
                         let matchTs = filename.match(/^(\d{10})[_\-]/);
                         if ((!metaFile || !metaFile.tgl) && matchTs) {
                             let dTs = new Date(parseInt(matchTs[1], 10) * 1000);
@@ -1730,8 +1654,8 @@
                                 tglUpload = dTs.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
                             }
                         }
-                        
-                        let previewElement = isImage 
+
+                        let previewElement = isImage
                             ? `<img src="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
                             : `<div style="width: 100%; height: 75px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; font-weight: 800; color: #64748b; font-size: 16px;">${ext.toUpperCase()}</div>`;
 
@@ -1742,16 +1666,15 @@
                         kotakLampiran.innerHTML += `
                             <div id="${elementId}" class="kartu-lampiran-item" style="background: #fff; border: 1px solid #cbd5e1; padding: 8px; border-radius: 8px; width: 156px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); position: relative;">
                                 <button type="button" class="btn-hapus-lampiran" onclick="tandaiHapusLampiran('${safePath}', '${safeName}', '${elementId}')" style="position: absolute; top: -8px; right: -8px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; align-items: center; justify-content: center; z-index: 10; box-shadow: 0 2px 4px rgba(239,68,68,0.4);">&times;</button>
-                                
+
                                 ${previewElement}
                                 <span style="font-size: 10px; font-weight: 600; color: #1e293b; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; text-align: center;" title="${filename}">${filename}</span>
-                                
-                                <!-- Menampilkan Tanggal Upload (Sesuai Waktu Upload/Device) & Ukuran File -->
+
                                 <div style="width: 100%; display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; background: #f1f5f9; padding: 4px 6px; border-radius: 6px; border: 1px solid #e2e8f0;">
                                     <span id="tgl-lampiran-${index}" style="font-size: 9px; color: #475569; font-weight: 600; text-align: center; display: block;">Diunggah: ${tglUpload}</span>
                                     <span id="ukuran-lampiran-${index}" style="font-size: 9px; color: #0f766e; font-weight: 700; text-align: center; display: block;">Ukuran: ${ukuranFile}</span>
                                 </div>
-                                
+
                                 <div style="display: flex; gap: 4px; width: 100%;">
                                     <a href="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
                                     <a href="/masteradmin/download-lampiran/${encodeURIComponent(filename)}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
@@ -1759,7 +1682,6 @@
                             </div>
                         `;
 
-                        // Jika ukuran file belum tercatat di server, baca otomatis dari file lampiran dan simpan ke cache
                         if (!metaFile || !metaFile.size) {
                             setTimeout(function() {
                                 muatUkuranLampiranOtomatis(filename, `ukuran-lampiran-${index}`, `tgl-lampiran-${index}`, !metaFile || !metaFile.tgl);
@@ -1783,23 +1705,23 @@
             document.getElementById('edit_kode_aset').readOnly = true;
             document.getElementById('edit_nomor_seri').readOnly = true;
             document.getElementById('edit-barcode-warning').style.display = 'none';
-            
+
             document.getElementById('upload-baru-section').style.display = 'none';
             document.getElementById('footer-view-mode').style.display = 'flex';
             document.getElementById('footer-edit-mode').style.display = 'none';
-            
+
             document.querySelectorAll('.btn-hapus-lampiran').forEach(el => el.style.display = 'none');
         }
 
         function enableEditMode() {
             document.getElementById('modal-title-text').innerText = "Edit Data Aset";
-            document.querySelectorAll('#form-edit-fisik input:not([type="hidden"]), #form-edit-fisik select').forEach(el => { 
-                el.disabled = false; 
+            document.querySelectorAll('#form-edit-fisik input:not([type="hidden"]), #form-edit-fisik select').forEach(el => {
+                el.disabled = false;
             });
             document.getElementById('edit_kode_aset').readOnly = false;
             document.getElementById('edit_nomor_seri').readOnly = false;
             document.getElementById('edit-barcode-warning').style.display = 'block';
-            
+
             document.getElementById('upload-baru-section').style.display = 'block';
             document.getElementById('footer-view-mode').style.display = 'none';
             document.getElementById('footer-edit-mode').style.display = 'flex';
@@ -1848,7 +1770,6 @@
                     }
                 }
 
-                // Jika semua kartu lampiran sudah ditandai hapus, tampilkan keterangan
                 const sisaKartu = document.querySelectorAll('#daftar_lampiran_terpasang .kartu-lampiran-item:not(.ditandai-hapus)');
                 let infoKosong = document.getElementById('info-semua-lampiran-dihapus');
                 if (sisaKartu.length === 0) {
@@ -1867,8 +1788,6 @@
             document.getElementById('modalDetailAset').classList.remove('show');
         }
 
-
-        // ================= LOGIKA CHECKLIST HAPUS ASET & NOTIFIKASI "PILIH ASET YANG MAU DIHAPUS" =================
         function togglePilihSemuaAset(masterChk) {
             const isChecked = !!masterChk.checked;
             document.querySelectorAll('.check-item-aset').forEach(chk => {
@@ -1906,7 +1825,6 @@
         async function prosesHapusAsetChecklist() {
             const terpilih = Array.from(document.querySelectorAll('.check-item-aset:checked'));
 
-            // Jika belum ada satupun aset yang di-checklist, munculkan notifikasi "Pilih aset yang mau dihapus"
             if (terpilih.length === 0) {
                 tampilkanToastPeringatan('Pilih aset yang mau dihapus');
                 document.querySelectorAll('.aset-checkbox').forEach(chk => {
@@ -1951,7 +1869,6 @@
             } catch (err) {
             }
 
-            // Fallback navigasi langsung jika fetch terputus
             const fallbackUrl = new URL(window.location.href);
             fallbackUrl.searchParams.set('_bulk_delete_aset', '1');
             fallbackUrl.searchParams.set('ids', ids.join(','));
@@ -1970,9 +1887,9 @@
             if (event.target === sidebarTambah) closeSidebarTambah();
             if (event.target === modalDetail) closeModalDetail();
         }
-        
+
         function kalkulasiUrutanOtomatis() {
-            // Urut kode per cabang: nomor terakhir cabang yang dipilih + 1 (cabang belum dipilih -> 1)
+
             let cabangId = document.getElementById('pilih_cabang').value;
             document.getElementById('input_urut_kode').value = (cabangId ? (URUTAN_CABANG[cabangId] || 0) : 0) + 1;
             let itemId = document.getElementById('pilih_aset').value;
@@ -1986,16 +1903,16 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => { document.querySelectorAll('.toast-popup').forEach(el => el.classList.remove('show')); }, 2500);
-            
+
             let today = new Date();
             let yyyy = today.getFullYear();
             let mm = String(today.getMonth() + 1).padStart(2, '0');
             let dd = String(today.getDate()).padStart(2, '0');
             let todayFormat = `${yyyy}-${mm}-${dd}`;
-            
+
             let inputTglPengadaan = document.getElementById('input_tanggal_pengadaan');
-            if (inputTglPengadaan && !inputTglPengadaan.value) { 
-                inputTglPengadaan.value = todayFormat; 
+            if (inputTglPengadaan && !inputTglPengadaan.value) {
+                inputTglPengadaan.value = todayFormat;
             }
 
             let inputTanggalKode = document.getElementById('input_tanggal_kode');
@@ -2003,11 +1920,11 @@
                 inputTanggalKode.value = todayFormat;
             }
 
-            document.querySelectorAll('#form-tambah-fisik input, #form-tambah-fisik select').forEach(element => {
+            document.querySelectorAll('#form-tambah-fisik input:not([type="file"]), #form-tambah-fisik select').forEach(element => {
                 element.addEventListener('input', updateAutoGenerate);
                 element.addEventListener('change', updateAutoGenerate);
             });
-            
+
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
         });
@@ -2029,7 +1946,7 @@
             if(tanggalKodeVal) {
                 let parts = tanggalKodeVal.split('-');
                 if(parts.length === 3) {
-                    formatHariBulanTahun = parts[2] + parts[1] + parts[0]; 
+                    formatHariBulanTahun = parts[2] + parts[1] + parts[0];
                 }
             }
 
@@ -2094,17 +2011,72 @@
         function closeModalImport() {
             document.getElementById('modalImportExcel').classList.remove('show');
         }
-        
+
         let originalWindowClick = window.onclick;
         window.onclick = function(event) {
             if(originalWindowClick) originalWindowClick(event);
-            
+
             let modalImport = document.getElementById('modalImportExcel');
             if (event.target === modalImport) closeModalImport();
         }
 
-        // ================= VALIDASI MAKSIMAL 5 MB FILE LAMPIRAN =================
-        const BATAS_MAKS_LAMPIRAN_BYTES = 5 * 1024 * 1024; // 5 MB
+        const BATAS_MAKS_LAMPIRAN_BYTES = 5 * 1024 * 1024;
+        const EKSTENSI_LAMPIRAN_DIIZINKAN = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
+        const MIME_LAMPIRAN_DIIZINKAN = [
+            'image/jpeg',
+            'image/jpg',
+            'image/pjpeg',
+            'image/png',
+            'image/x-png',
+            'application/pdf',
+            'application/x-pdf',
+            'application/msword',
+            'application/vnd.ms-word',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-word.document.macroenabled.12',
+            'application/vnd.ms-excel',
+            'application/msexcel',
+            'application/x-msexcel',
+            'application/x-ms-excel',
+            'application/x-excel',
+            'application/x-dos_ms_excel',
+            'application/xls',
+            'application/x-xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel.sheet.macroenabled.12',
+            'application/octet-stream'
+        ];
+
+        function ambilEkstensiLampiran(namaFile) {
+            const nama = String(namaFile || '').trim();
+            const idx = nama.lastIndexOf('.');
+            if (idx <= 0 || idx === nama.length - 1) return '';
+            return nama.slice(idx + 1).toLowerCase();
+        }
+
+        function apakahFormatLampiranValid(file) {
+            if (!file || !file.name) return false;
+            const ext = ambilEkstensiLampiran(file.name);
+            if (!EKSTENSI_LAMPIRAN_DIIZINKAN.includes(ext)) {
+                return false;
+            }
+            const mime = String(file.type || '').toLowerCase().trim();
+            if (mime !== '') {
+                if (['jpg', 'jpeg'].includes(ext) && !['image/jpeg', 'image/jpg', 'image/pjpeg'].includes(mime)) {
+                    return false;
+                }
+                if (ext === 'png' && !['image/png', 'image/x-png'].includes(mime)) {
+                    return false;
+                }
+                if (ext === 'pdf' && !['application/pdf', 'application/x-pdf'].includes(mime)) {
+                    return false;
+                }
+                if (!MIME_LAMPIRAN_DIIZINKAN.includes(mime)) {
+                    return false;
+                }
+            }
+            return true;
+        }
 
         function tampilkanToastPeringatan(pesan) {
             let existing = document.getElementById('toast-lampiran-error');
@@ -2122,7 +2094,8 @@
             }, 3500);
         }
 
-        window.DATA_META_LAMPIRAN = @json($__lampiranMetaData['files'] ?? []);
+        document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.backgroundColor = el.getAttribute('data-bg'); });
+        window.DATA_META_LAMPIRAN = JSON.parse(document.getElementById('json-meta-lampiran').value || '{}');
 
         function formatUkuranFileJS(bytes) {
             const b = Number(bytes) || 0;
@@ -2210,25 +2183,34 @@
             return false;
         }
 
-        function validasiUkuranLampiran(inputEl, infoId) {
+        function validasiUkuranLampiran(inputEl, infoId, resetPaksa) {
             if (!inputEl || !inputEl.files) return true;
             const infoEl = infoId ? document.getElementById(infoId) : null;
             const files = Array.from(inputEl.files);
 
             if (files.length === 0) {
+                if (!resetPaksa && inputEl.dataset.statusLampiranError === '1') {
+                    return false;
+                }
+                inputEl.dataset.statusLampiranError = '0';
                 if (infoEl) {
                     infoEl.style.color = 'var(--text-muted)';
+                    infoEl.style.fontWeight = '400';
                     infoEl.innerText = 'Format: JPG, PNG, PDF, DOC, XLS (Maksimal ukuran 5 MB per file).';
                 }
                 inputEl.style.borderColor = '#cbd5e1';
                 return true;
             }
 
+            const fileFormatSalah = [];
             const fileMelebihi = [];
             const fileValid = [];
 
             files.forEach(file => {
-                if (file.size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                if (!apakahFormatLampiranValid(file)) {
+                    const ext = ambilEkstensiLampiran(file.name);
+                    fileFormatSalah.push(ext ? `${file.name} (.${ext.toUpperCase()})` : file.name);
+                } else if (file.size > BATAS_MAKS_LAMPIRAN_BYTES) {
                     const ukuranMB = (file.size / (1024 * 1024)).toFixed(2);
                     fileMelebihi.push(`${file.name} (${ukuranMB} MB)`);
                 } else {
@@ -2236,28 +2218,42 @@
                 }
             });
 
-            if (fileMelebihi.length > 0) {
-                // Pertahankan hanya file yang <= 5 MB (atau kosongkan jika semuanya > 5 MB)
+            if (fileFormatSalah.length > 0 || fileMelebihi.length > 0) {
+                inputEl.dataset.statusLampiranError = '1';
+                inputEl.value = '';
                 if (typeof DataTransfer !== 'undefined') {
-                    const dt = new DataTransfer();
-                    fileValid.forEach(f => dt.items.add(f));
-                    inputEl.files = dt.files;
-                } else {
-                    inputEl.value = '';
+                    try {
+                        inputEl.files = (new DataTransfer()).files;
+                    } catch (err) {}
                 }
 
-                const pesanError = `Ukuran file melebihi batas maksimal 5 MB: ${fileMelebihi.join(', ')}`;
-                tampilkanToastPeringatan(pesanError);
+                const pesanList = [];
+                if (fileFormatSalah.length > 0) {
+                    pesanList.push(`Format file tidak sesuai! Hanya diizinkan JPG, PNG, PDF, DOC, dan XLS. Ditolak: ${fileFormatSalah.join(', ')}`);
+                }
+                if (fileMelebihi.length > 0) {
+                    pesanList.push(`Ukuran file melebihi batas maksimal 5 MB: ${fileMelebihi.join(', ')}`);
+                }
+
+                const pesanErrorGabungan = pesanList.join(' | ');
+                tampilkanToastPeringatan(pesanErrorGabungan);
 
                 if (infoEl) {
                     infoEl.style.color = 'var(--danger-color)';
-                    infoEl.style.fontWeight = '600';
-                    infoEl.innerText = `Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
+                    infoEl.style.fontWeight = '700';
+                    if (fileFormatSalah.length > 0 && fileMelebihi.length > 0) {
+                        infoEl.innerText = `Ditolak (Format salah: ${fileFormatSalah.join(', ')} & Ukuran > 5 MB: ${fileMelebihi.join(', ')})`;
+                    } else if (fileFormatSalah.length > 0) {
+                        infoEl.innerText = `Format tidak sesuai (Wajib JPG, PNG, PDF, DOC, XLS): ${fileFormatSalah.join(', ')} gagal diunggah.`;
+                    } else {
+                        infoEl.innerText = `Ditolak (> 5 MB): ${fileMelebihi.join(', ')}`;
+                    }
                 }
                 inputEl.style.borderColor = 'var(--danger-color)';
                 return false;
             }
 
+            inputEl.dataset.statusLampiranError = '0';
             if (infoEl) {
                 const tglDevice = ambilTanggalDeviceIndo();
                 const rincianFile = fileValid.map(f => `${f.name} (${formatUkuranFileJS(f.size)})`).join(', ');
@@ -2270,10 +2266,24 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Perbarui label Penanda Waktu Lampiran agar selalu mengikuti tanggal device pengguna saat ini
+
             const tglDevicePenuh = ambilTanggalDeviceIndo(true);
             document.querySelectorAll('.label-tanggal-device').forEach(el => {
                 el.textContent = tglDevicePenuh;
+            });
+
+            ['input_lampiran_tambah', 'input_lampiran_edit'].forEach(function(idInput) {
+                const elInput = document.getElementById(idInput);
+                const idInfo = idInput === 'input_lampiran_tambah' ? 'info_ukuran_lampiran_tambah' : 'info_ukuran_lampiran_edit';
+                if (elInput) {
+                    elInput.addEventListener('click', function() {
+                        elInput.dataset.statusLampiranError = '0';
+                    });
+                    elInput.addEventListener('drop', function() {
+                        elInput.dataset.statusLampiranError = '0';
+                        setTimeout(() => validasiUkuranLampiran(elInput, idInfo), 10);
+                    });
+                }
             });
 
             const formTambahFisik = document.getElementById('form-tambah-fisik');
@@ -2286,7 +2296,7 @@
                     const filesBaru = (inputTambah && inputTambah.files) ? Array.from(inputTambah.files) : [];
                     if (filesBaru.length > 0) {
                         for (let i = 0; i < filesBaru.length; i++) {
-                            if (filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                            if (!apakahFormatLampiranValid(filesBaru[i]) || filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
                                 e.preventDefault();
                                 validasiUkuranLampiran(inputTambah, 'info_ukuran_lampiran_tambah');
                                 return false;
@@ -2322,7 +2332,7 @@
                     const filesBaru = (inputEdit && inputEdit.files) ? Array.from(inputEdit.files) : [];
                     if (filesBaru.length > 0) {
                         for (let i = 0; i < filesBaru.length; i++) {
-                            if (filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
+                            if (!apakahFormatLampiranValid(filesBaru[i]) || filesBaru[i].size > BATAS_MAKS_LAMPIRAN_BYTES) {
                                 e.preventDefault();
                                 validasiUkuranLampiran(inputEdit, 'info_ukuran_lampiran_edit');
                                 return false;
@@ -2356,7 +2366,6 @@
             }
         });
     </script>
-
 
     <script>
         (function () {

@@ -30,17 +30,16 @@
         .btn-primary { background: var(--primary-color); color: #fff; border: none; }
         .btn:hover { opacity: 0.9; }
 
-        /* ===== NOTIFIKASI KARTU (Hanya Informasi) ===== */
         .notif-ringkas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
         @media (max-width: 1200px) { .notif-ringkas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         @media (max-width: 800px) { .notif-ringkas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 500px) { .notif-ringkas { grid-template-columns: 1fr; } }
-        
+
         .notif-kartu { --warna: #1a4f91; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--border-color); border-top: 4px solid var(--warna); border-radius: 14px; padding: 16px 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
         .notif-kartu .angka { font-size: 30px; font-weight: 800; color: var(--warna); line-height: 1.1; }
         .notif-kartu .judul { font-size: 14px; font-weight: 700; margin-top: 4px; color: var(--text-color); }
         .notif-kartu .ket { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-        
+
         .kartu-semua { --warna: #1a4f91; }
         .kartu-rusak { --warna: #e11d48; }
         .kartu-terlewat { --warna: #dc2626; }
@@ -58,7 +57,7 @@
         .notif-item { display: flex; gap: 16px; align-items: flex-start; background: #fff; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px 18px; transition: 0.2s; }
         .notif-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .notif-badge { text-align: center; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; display: inline-block; white-space: nowrap; }
-        
+
         .notif-isi { flex: 1; min-width: 0; }
         .notif-nama { font-size: 15px; font-weight: 700; }
         .notif-kode { font-size: 12px; color: var(--text-muted); margin-top: 4px; word-break: break-all; }
@@ -67,12 +66,11 @@
         .notif-aksi { flex-shrink: 0; align-self: center; }
         .btn-lihat { display: inline-block; padding: 8px 14px; border-radius: 8px; background: rgba(26, 79, 145, 0.1); color: var(--primary-color); font-size: 12.5px; font-weight: 700; text-decoration: none; }
         .btn-lihat:hover { background: var(--primary-color); color: #fff; }
-        
+
         .notif-kosong { text-align: center; padding: 50px 20px; color: var(--text-muted); background: #fff; border: 1px dashed var(--border-color); border-radius: 14px; }
         .notif-kosong .judul { font-size: 16px; font-weight: 700; color: #0f766e; margin-bottom: 4px; }
         .notif-info { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
 
-        /* PAGINASI */
         .custom-pagination-wrap nav > div:first-child { display: none !important; }
         .custom-pagination-wrap nav > div:last-child { display: flex !important; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; width: 100%; }
         .custom-pagination-wrap nav p { font-size: 13px !important; color: var(--text-muted) !important; margin: 0 !important; }
@@ -104,7 +102,6 @@
             $adaFilter  = $tipe !== 'semua' || !empty($paramDasar);
         @endphp
 
-        <!-- Ringkasan Kartu (Sekarang hanya Keterangan / Tidak bisa diklik) -->
         <div class="notif-ringkas">
             <div class="notif-kartu kartu-semua">
                 <div class="angka">{{ $hitung['semua'] }}</div>
@@ -133,15 +130,12 @@
             </div>
         </div>
 
-        <!-- Area Kontrol Filter -->
         <form method="GET" action="{{ route('notifikasi.index') }}" class="notif-filter">
-            
-            <!-- 1. Kolom Pencarian -->
+
             <div class="cari-wrap">
                 <input type="text" name="q" value="{{ request('q') }}" placeholder="Cari kode, nama aset, merk, ruangan..." autocomplete="off">
             </div>
 
-            <!-- 2. Dropdown Filter Tipe Peringatan -->
             <select name="tipe" onchange="this.form.submit()">
                 <option value="semua" {{ $tipe === 'semua' ? 'selected' : '' }}>Semua Jenis Peringatan</option>
                 <option value="rusak" {{ $tipe === 'rusak' ? 'selected' : '' }}>Hanya Aset Rusak</option>
@@ -150,7 +144,6 @@
                 <option value="mendekati" {{ $tipe === 'mendekati' ? 'selected' : '' }}>Hanya Mendekati Servis</option>
             </select>
 
-            <!-- 3. Dropdown Filter Cabang -->
             <select name="cabang" onchange="this.form.submit()">
                 <option value="">Semua Cabang</option>
                 @foreach($cabangs as $cabang)
@@ -158,7 +151,6 @@
                 @endforeach
             </select>
 
-            <!-- 4. Tombol Cari & Reset -->
             <button type="submit" class="btn btn-primary" style="padding: 9px 18px;">Terapkan</button>
             @if($adaFilter)
                 <a href="{{ route('notifikasi.index') }}" class="reset">Reset filter</a>
@@ -166,36 +158,33 @@
         </form>
 
         <p class="notif-info">
-            Hari ini: {{ $hariIni->format('d/m/Y') }} 
+            Hari ini: {{ $hariIni->format('d/m/Y') }}
             @if($notifs->total() > 0) &middot; Menampilkan {{ $notifs->firstItem() }}-{{ $notifs->lastItem() }} dari {{ $notifs->total() }} data @endif
         </p>
 
-        <!-- Daftar Notifikasi -->
         <div class="notif-list">
             @forelse($notifs as $aset)
             @php
-                // 1. Logika Warna Kerusakan (Menyalin dari Data Aset)
-                $warnaRusak = '#ef4444'; // Default merah
+
+                $warnaRusak = '#ef4444';
                 if(isset($statuses)) {
                     $match = $statuses->where('nama_status', $aset->status_aset)->first();
                     if($match && !empty($match->warna_status)) $warnaRusak = $match->warna_status;
                 }
 
-                // 2. Logika Warna Servis (Menyalin dari Data Aset)
-                $warnaServis = '#1a4f91'; 
+                $warnaServis = '#1a4f91';
                 $teksServis = '';
                 $labelServis = '';
-                
+
                 if ($aset->jenis_servis) {
                     $teksServis = $aset->jenis_servis === 'terlewat'
                         ? 'Terlewat ' . abs($aset->selisih) . ' hari'
                         : ($aset->selisih === 0 ? 'Hari ini' : $aset->selisih . ' hari lagi');
-                        
-                    $warnaServis = $aset->jenis_servis === 'mendekati' ? '#f59e0b' : '#ef4444'; 
+
+                    $warnaServis = $aset->jenis_servis === 'mendekati' ? '#f59e0b' : '#ef4444';
                     $labelServis = ['terlewat' => 'TERLEWAT SERVIS', 'waktunya' => 'MENDESAK SERVIS', 'mendekati' => 'MENDEKATI SERVIS'][$aset->jenis_servis];
                 }
 
-                // 3. Penentuan Tema Background 
                 $borderCard = $aset->is_rusak ? $warnaRusak : $warnaServis;
                 $hex = ltrim($borderCard, '#');
                 $bgCard = 'rgba(26, 79, 145, 0.03)';
@@ -204,18 +193,18 @@
                     $bgCard = "rgba($r, $g, $b, 0.05)";
                 }
             @endphp
-            
-            <div class="notif-item" style="border-left: 5px solid {{ $borderCard }}; background: {{ $bgCard }};">
-                
+
+            <div class="notif-item" data-border-left="{{ $borderCard }}" data-bg="{{ $bgCard }}">
+
                 <div style="display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; min-width: 130px;">
                     @if($aset->is_rusak)
-                        <div class="notif-badge" style="background: {{ $warnaRusak }}; border: 1px solid rgba(0,0,0,0.1);" title="Status Kerusakan Aset">
+                        <div class="notif-badge" data-bg="{{ $warnaRusak }}" style="border: 1px solid rgba(0,0,0,0.1);" title="Status Kerusakan Aset">
                             {{ strtoupper($aset->status_aset) }}
                         </div>
                     @endif
-                    
+
                     @if($aset->jenis_servis)
-                        <div class="notif-badge" style="background: {{ $warnaServis }}; border: 1px solid rgba(0,0,0,0.1);" title="{{ $labelServis }}">
+                        <div class="notif-badge" data-bg="{{ $warnaServis }}" style="border: 1px solid rgba(0,0,0,0.1);" title="{{ $labelServis }}">
                             {{ $teksServis }}
                         </div>
                     @endif
@@ -224,11 +213,11 @@
                 <div class="notif-isi">
                     <div class="notif-nama">{{ $aset->item->nama_aset ?? 'Aset tidak diketahui' }}</div>
                     <div class="notif-kode">
-                        {{ $aset->kode_aset }} 
-                        @if($aset->is_rusak) &middot; <span style="color: {{ $warnaRusak }}; font-weight: 700;">{{ $aset->status_aset }}</span> @endif
-                        @if($aset->jenis_servis) &middot; <span style="color: {{ $warnaServis }}; font-weight: 700;">{{ $labelServis }}</span> @endif
+                        {{ $aset->kode_aset }}
+                        @if($aset->is_rusak) &middot; <span data-color="{{ $warnaRusak }}" style="font-weight: 700;">{{ $aset->status_aset }}</span> @endif
+                        @if($aset->jenis_servis) &middot; <span data-color="{{ $warnaServis }}" style="font-weight: 700;">{{ $labelServis }}</span> @endif
                     </div>
-                    
+
                     <div class="notif-meta">
                         <span><b>Cabang:</b> {{ $aset->cabang->nama_cabang ?? '-' }}</span>
                         <span><b>Kategori:</b> {{ $aset->kategori->nama_kategori ?? '-' }}</span>
@@ -262,6 +251,19 @@
         </div>
         @endif
     </main>
+    <script>
+        (function () {
+            document.querySelectorAll('[data-bg]').forEach(function (el) {
+                el.style.background = el.getAttribute('data-bg');
+            });
+            document.querySelectorAll('[data-color]').forEach(function (el) {
+                el.style.color = el.getAttribute('data-color');
+            });
+            document.querySelectorAll('[data-border-left]').forEach(function (el) {
+                el.style.borderLeft = '5px solid ' + el.getAttribute('data-border-left');
+            });
+        })();
+    </script>
 </body>
 
 </html>

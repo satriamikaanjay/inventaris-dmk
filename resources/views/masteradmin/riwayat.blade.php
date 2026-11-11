@@ -1,5 +1,5 @@
 @php
-    /* RIWAYAT_REALTIME_SCOPED_V2 */
+
     $__userLoginRiwayat = \Illuminate\Support\Facades\Auth::user();
     $__userIdRiwayat = \Illuminate\Support\Facades\Auth::id();
     $__roleUserRiwayat = $__userLoginRiwayat
@@ -14,13 +14,9 @@
         session(['active_sidebar_panel' => 'admin']);
     }
 
-    // Fungsi pembantu untuk membangun query RiwayatAktivitas sesuai hak akses role & filter aktif
     $__buildRiwayatQuery = function () use ($__isMasterAdminRiwayat, $__userIdRiwayat) {
         $q = \App\Models\RiwayatAktivitas::with('user');
 
-        // ATURAN PRIVASI ROLE:
-        // - Jika Admin (bukan Master Admin): HANYA tampilkan riwayat milik akun Admin itu sendiri!
-        // - Jika Master Admin: Tampilkan seluruh riwayat (Master Admin + seluruh Admin lainnya + Sistem).
         if (!$__isMasterAdminRiwayat) {
             $q->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
         }
@@ -87,7 +83,6 @@
         return $q->orderByDesc('created_at')->orderByDesc('id');
     };
 
-    // 1. Endpoint AJAX: Bersihkan Log sesuai scope Role (tanpa reload halaman)
     if (request()->has('_clear_riwayat_scoped')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -115,7 +110,6 @@
         exit;
     }
 
-    // 2. Endpoint AJAX Polling Real-Time (Sisi Admin & Master Admin tanpa refresh web)
     if (request()->has('_poll_riwayat_realtime')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -150,7 +144,6 @@
                 ];
             }
 
-            // Ambil juga daftar seluruh ID riwayat sesuai scope role untuk sinkronisasi badge sidebar
             $allIdsQuery = \App\Models\RiwayatAktivitas::query();
             if (!$__isMasterAdminRiwayat) {
                 $allIdsQuery->whereNotNull('user_id')->where('user_id', $__userIdRiwayat);
@@ -173,7 +166,6 @@
         exit;
     }
 
-    // 3. Timpa variabel $riwayats dan $tahunList agar halaman awal wajib mengikuti aturan Role Scope
     try {
         $riwayats = $__buildRiwayatQuery()->paginate(15)->withQueryString();
 
@@ -195,29 +187,6 @@
     } catch (\Throwable $e) {
     }
 
-    // Sinkronkan otomatis ke file riwayat.blade.php lain jika project memisahkan folder views/admin & views/masteradmin
-    try {
-        $__currentRiwayatFile = __FILE__;
-        $__kandidatRiwayatFiles = [
-            resource_path('views/riwayat.blade.php'),
-            resource_path('views/admin/riwayat.blade.php'),
-            resource_path('views/masteradmin/riwayat.blade.php'),
-        ];
-        if (is_file($__currentRiwayatFile)) {
-            $__isiRiwayatIni = (string) file_get_contents($__currentRiwayatFile);
-            if (str_contains($__isiRiwayatIni, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
-                foreach ($__kandidatRiwayatFiles as $__targetRFile) {
-                    if (is_file($__targetRFile) && is_writable($__targetRFile) && realpath($__targetRFile) !== realpath($__currentRiwayatFile)) {
-                        $__isiTargetR = (string) file_get_contents($__targetRFile);
-                        if (!str_contains($__isiTargetR, '/* RIWAYAT_REALTIME_SCOPED_V2 */')) {
-                            file_put_contents($__targetRFile, $__isiRiwayatIni);
-                        }
-                    }
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-    }
 @endphp
 <!DOCTYPE html>
 <html lang="id">
@@ -227,7 +196,7 @@
     <title>Riwayat Aktivitas - Sistem {{ $__isMasterAdminRiwayat ? 'Master Admin' : 'Admin' }}</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
-    
+
     <style>
         :root {
             --primary-color: #1a4f91;
@@ -256,7 +225,6 @@
             overflow-x: hidden;
         }
 
-        /* Main Content Layout */
         main {
             margin-left: var(--sidebar-width);
             flex-grow: 1;
@@ -268,7 +236,6 @@
             width: calc(100% - var(--sidebar-width));
         }
 
-        /* ===== NAVBAR / HEADER FIXED BESERTA FITUR SEARCH DI DALAMNYA ===== */
         .main-header {
             position: fixed !important;
             top: 0 !important;
@@ -354,7 +321,6 @@
             opacity: 0.9;
         }
 
-        /* Banner Informasi Scope & Indikator Real-Time */
         .scope-banner {
             display: flex;
             justify-content: space-between;
@@ -408,7 +374,6 @@
             100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
 
-        /* Table Section Styles */
         .card-box {
             background: #fff;
             padding: 20px;
@@ -491,7 +456,6 @@
             border-bottom: none;
         }
 
-        /* Warna Baris Berbeda untuk Riwayat Baru (Otomatis Menghilang Setelah Terbaca) */
         .riwayat-row {
             background-color: transparent;
             transition: background-color 1s ease;
@@ -611,7 +575,6 @@
             }
         }
 
-        /* ===== PAGINASI ===== */
         .custom-pagination-wrap { margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border-color); }
         .custom-pagination-wrap nav > div:first-child { display: none !important; }
         .custom-pagination-wrap nav > div:last-child { display: flex !important; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; width: 100%; }
@@ -628,16 +591,14 @@
 </head>
 <body>
 
-    <!-- Sidebar Navigation (Otomatis menyesuaikan Master Admin atau Admin) -->
     @if($__isMasterAdminRiwayat)
         @include('layouts.mastersidebar')
     @else
         @include('layouts.adminsidebar')
     @endif
 
-    <!-- Main Content Layout -->
     <main>
-        <!-- NAVBAR FIXED (BERISI JUDUL HALAMAN, TOMBOL AKSI, SERTA FITUR SEARCH & FILTER) -->
+
         <header class="main-header" id="navbar-riwayat-fixed">
             <div class="navbar-top-row">
                 <div class="header-title">
@@ -661,6 +622,11 @@
                         <span class="rt-live-dot"></span>
                         <span>Live Real-Time (<span id="label-jumlah-riwayat">{{ method_exists($riwayats, 'total') ? $riwayats->total() : $riwayats->count() }}</span> log)</span>
                     </div>
+                    <button type="button" class="btn" id="btn-baca-semua-riwayat" onclick="prosesBacaSemuaRiwayat()" style="background: #10b981; color: #ffffff; border: 1px solid #059669; font-weight: 700;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <span>Baca Semua</span>
+                        <span id="badge-btn-baca-semua" style="display: none; background: #ffffff; color: #059669; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-left: 2px;">0</span>
+                    </button>
                     <form id="form-clear-riwayat" action="{{ route('riwayat_aktivitas.clear') }}" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
                         @csrf
                         @method('DELETE')
@@ -672,7 +638,6 @@
                 </div>
             </div>
 
-            <!-- BARIS FITUR SEARCH & FILTER DI DALAM NAVBAR FIXED -->
             <div class="navbar-search-row">
                 <form method="GET" action="{{ url()->current() }}" class="filter-form" id="form-filter-riwayat">
                     <div class="search-box">
@@ -680,7 +645,6 @@
                         <input type="text" id="input-search-riwayat" name="search" value="{{ request('search') }}" placeholder="{{ $__isMasterAdminRiwayat ? 'Cari aktivitas, modul, atau nama pengguna...' : 'Cari aktivitas atau modul Anda...' }}" autocomplete="off">
                     </div>
 
-                    <!-- Filter Jenis Aktivitas -->
                     <select name="jenis" id="select-jenis-riwayat" class="filter-select">
                         <option value="">-- Semua Jenis Aktivitas --</option>
                         <option value="Tambah" {{ request('jenis') == 'Tambah' ? 'selected' : '' }}>Penambahan Data</option>
@@ -689,7 +653,6 @@
                         <option value="Sistem" {{ request('jenis') == 'Sistem' ? 'selected' : '' }}>Aktivitas Sistem (Login/Lainnya)</option>
                     </select>
 
-                    <!-- Filter Bulan -->
                     <select name="bulan" id="select-bulan-riwayat" class="filter-select">
                         <option value="">-- Semua Bulan --</option>
                         @for($m = 1; $m <= 12; $m++)
@@ -699,7 +662,6 @@
                         @endfor
                     </select>
 
-                    <!-- Filter Tahun -->
                     <select name="tahun" id="select-tahun-riwayat" class="filter-select">
                         <option value="">-- Semua Tahun --</option>
                         @foreach($tahunList ?? [] as $thn)
@@ -717,7 +679,6 @@
             </div>
         </header>
 
-        <!-- Banner Informasi Hak Akses Log -->
         <div class="scope-banner {{ $__isMasterAdminRiwayat ? 'master-mode' : 'admin-mode' }}">
             <div style="display: flex; align-items: center; gap: 8px;">
                 @if($__isMasterAdminRiwayat)
@@ -736,7 +697,6 @@
             </div>
         @endif
 
-        <!-- Table Container -->
         <div class="card-box">
 
             <div style="overflow-x: auto;">
@@ -803,15 +763,16 @@
         </div>
     </main>
 
-    <!-- Toast Notifikasi Real-Time -->
     <div id="rt-toast-riwayat" class="rt-toast-notif">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
         <span id="rt-toast-riwayat-text">Aktivitas baru tercatat secara real-time!</span>
     </div>
 
+    <input type="hidden" id="json-is-master-riwayat" value="{{ json_encode($__isMasterAdminRiwayat) }}">
+
     <script>
         (function () {
-            const IS_MASTER_ADMIN = @json($__isMasterAdminRiwayat);
+            const IS_MASTER_ADMIN = JSON.parse(document.getElementById('json-is-master-riwayat').value || 'false');
             let observerBaris = null;
             let toastTimer = null;
 
@@ -836,34 +797,38 @@
                 }, 3200);
             }
 
-            // Fungsi otomatis membaca baris tanpa perlu diklik saat halaman dibuka / baris terlihat
+            let latestScopedIds = [];
+
             function prosesOtomatisTerbaca(tr) {
-                if (!tr || tr.getAttribute('data-sedang-dibaca') === '1') return;
-                tr.setAttribute('data-sedang-dibaca', '1');
-
+                if (!tr) return;
                 const id = tr.getAttribute('data-riwayat-id');
-
-                // Kurangi/hilangkan angka badge merah di sidebar secara otomatis saat halaman dibuka
-                setTimeout(function () {
-                    if (typeof window.tandaiSatuRiwayatDibaca === 'function') {
-                        window.tandaiSatuRiwayatDibaca(id);
-                    }
-                }, 400);
-
-                // Setelah user melihat warna baris berbeda (2,5 detik), warna baris menghilang otomatis
-                setTimeout(function () {
-                    tr.classList.remove('belum-dibaca');
-                }, 2500);
+                if (typeof window.tandaiSatuRiwayatDibaca === 'function') {
+                    window.tandaiSatuRiwayatDibaca(id);
+                }
+                tr.classList.remove('belum-dibaca');
             }
 
             function daftarkanObserverKeBaris(tr) {
                 if (!tr) return;
-                if (observerBaris) {
-                    observerBaris.observe(tr);
-                } else {
-                    prosesOtomatisTerbaca(tr);
-                }
+                tr.addEventListener('click', function () {
+                    if (tr.classList.contains('belum-dibaca')) {
+                        prosesOtomatisTerbaca(tr);
+                    }
+                });
             }
+
+            window.prosesBacaSemuaRiwayat = function () {
+                if (typeof window.tandaiSemuaRiwayatDibaca === 'function') {
+                    window.tandaiSemuaRiwayatDibaca(latestScopedIds);
+                }
+                document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
+                    tr.classList.remove('belum-dibaca');
+                });
+                if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                    window.hitungRiwayatBelumDibaca();
+                }
+                tampilkanToastRealtime('Seluruh riwayat aktivitas telah ditandai sudah dibaca.');
+            };
 
             function buatHtmlBarisRiwayat(item, paksaHighlightBaru = false) {
                 const id = String(item.id || '');
@@ -904,7 +869,6 @@
                 return tr;
             }
 
-            // Polling Real-Time setiap 2 detik tanpa perlu me-refresh halaman (berlaku untuk Admin & Master Admin)
             let sedangPollingRiwayat = false;
             async function sinkronkanRiwayatRealtime() {
                 if (sedangPollingRiwayat || document.hidden) return;
@@ -924,9 +888,13 @@
 
                     if (!res.ok) return;
                     const data = await res.json();
-                    if (!data || !data.success || !Array.isArray(data.items)) return;
+                    if (! data || ! data.success || ! Array.isArray(data.items)) return;
 
-                    // Perbarui counter jumlah log di bagian atas
+                    if (Array.isArray(data.scoped_ids)) {
+                        latestScopedIds = data.scoped_ids.map(String);
+                        window.__extraScopedRiwayatIds = latestScopedIds;
+                    }
+
                     const labelJumlah = document.getElementById('label-jumlah-riwayat');
                     if (labelJumlah && typeof data.total_count === 'number') {
                         labelJumlah.textContent = String(data.total_count);
@@ -935,7 +903,6 @@
                     const tbody = document.getElementById('tbody-riwayat-aktivitas');
                     if (!tbody) return;
 
-                    // Jika riwayat kosong (misal baru saja dibersihkan)
                     if (data.items.length === 0) {
                         if (!document.getElementById('row-empty-riwayat')) {
                             tbody.innerHTML = `
@@ -949,19 +916,16 @@
                         return;
                     }
 
-                    // Bandingkan daftar ID yang saat ini tampil di tabel dengan hasil polling terbaru
                     const existingRows = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
                     const existingIds = existingRows.map(r => r.getAttribute('data-riwayat-id'));
                     const incomingIds = data.items.map(it => String(it.id));
 
-                    // Cek apakah ada ID baru yang belum ada di tabel saat ini
                     const itemBaruList = data.items.filter(it => !existingIds.includes(String(it.id)));
 
                     if (itemBaruList.length > 0) {
                         const rowEmpty = document.getElementById('row-empty-riwayat');
                         if (rowEmpty) rowEmpty.remove();
 
-                        // Masukkan baris-baris baru ke urutan paling atas tabel
                         for (let i = itemBaruList.length - 1; i >= 0; i--) {
                             const itemBaru = itemBaruList[i];
                             const trBaru = buatHtmlBarisRiwayat(itemBaru, true);
@@ -969,7 +933,6 @@
                             daftarkanObserverKeBaris(trBaru);
                         }
 
-                        // Jaga agar jumlah baris per halaman tetap rapi (maksimal 15 baris)
                         const semuaBarisSekarang = Array.from(tbody.querySelectorAll('tr.riwayat-row[data-riwayat-id]'));
                         if (semuaBarisSekarang.length > 15) {
                             semuaBarisSekarang.slice(15).forEach(trLama => trLama.remove());
@@ -979,17 +942,21 @@
                         const pesanNotif = IS_MASTER_ADMIN
                             ? `Aktivitas baru (${infoTerbaru.nama_user}): ${infoTerbaru.aktivitas}`
                             : `Aktivitas baru tercatat: ${infoTerbaru.aktivitas}`;
+                        if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                            window.hitungRiwayatBelumDibaca();
+                        }
                         tampilkanToastRealtime(pesanNotif);
                     } else if (JSON.stringify(existingIds) !== JSON.stringify(incomingIds)) {
-                        // Jika ada baris yang dihapus sebagian, sinkronkan tabel secara mulus
+
                         tbody.innerHTML = '';
                         data.items.forEach(item => {
                             const tr = buatHtmlBarisRiwayat(item, false);
                             tbody.appendChild(tr);
-                            if (tr.classList.contains('belum-dibaca')) {
-                                daftarkanObserverKeBaris(tr);
-                            }
+                            daftarkanObserverKeBaris(tr);
                         });
+                        if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                            window.hitungRiwayatBelumDibaca();
+                        }
                     }
                 } catch (err) {
                 } finally {
@@ -997,7 +964,6 @@
                 }
             }
 
-            // Fungsi Bersihkan Log tanpa reload halaman (tetap mengikuti scope Role)
             window.prosesBersihkanLogRealtime = async function (e) {
                 if (e) e.preventDefault();
                 const pesanKonfirmasi = IS_MASTER_ADMIN
@@ -1077,7 +1043,6 @@
 
                 const barisList = document.querySelectorAll('tr.riwayat-row[data-riwayat-id]');
 
-                // 1. Tampilkan warna baris berbeda untuk riwayat terbaru yang belum dibaca
                 barisList.forEach(function (tr) {
                     const id = tr.getAttribute('data-riwayat-id');
                     const sudahDibaca = typeof window.apakahRiwayatSudahDibaca === 'function'
@@ -1087,29 +1052,13 @@
                     if (!sudahDibaca) {
                         tr.classList.add('belum-dibaca');
                     }
+                    daftarkanObserverKeBaris(tr);
                 });
 
-                // 2. Gunakan sensor keterlihatan layar (IntersectionObserver) agar otomatis terbaca tanpa diklik
-                if ('IntersectionObserver' in window) {
-                    observerBaris = new IntersectionObserver(function (entries, obs) {
-                        entries.forEach(function (entry) {
-                            if (entry.isIntersecting) {
-                                prosesOtomatisTerbaca(entry.target);
-                                obs.unobserve(entry.target);
-                            }
-                        });
-                    }, { threshold: 0.1 });
-
-                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
-                        observerBaris.observe(tr);
-                    });
-                } else {
-                    document.querySelectorAll('tr.riwayat-row.belum-dibaca').forEach(function (tr) {
-                        prosesOtomatisTerbaca(tr);
-                    });
+                if (typeof window.hitungRiwayatBelumDibaca === 'function') {
+                    window.hitungRiwayatBelumDibaca();
                 }
 
-                // 3. Jalankan polling real-time setiap 2 detik tanpa refresh
                 setInterval(sinkronkanRiwayatRealtime, 2000);
             });
         })();
