@@ -548,6 +548,7 @@
     </div>
 </div>
 </sidebar>
+@include('layouts.mobile')
 
 <div id="global-page-nav-loader" class="nav-loading-overlay" aria-live="polite" aria-busy="true">
     <div class="nav-top-progress-track">
