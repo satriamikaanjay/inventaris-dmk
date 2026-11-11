@@ -599,26 +599,218 @@
 
         @media screen and (max-width: 968px) {
             body {
-                background-color: #fff;
+                background: linear-gradient(155deg, #0d2642 0%, #102a45 55%, #0a1e36 100%);
                 overflow-y: auto;
+                min-height: 100vh;
+            }
+
+            .login-master-admin {
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                padding: 16px 12px 24px;
+                gap: 12px;
             }
 
             .info-panel {
+                display: flex;
+                width: 100%;
+                max-width: 356px;
+                padding: 0;
+                margin-bottom: 2px;
+            }
+
+            .info-panel .hero-section,
+            .info-panel .features-container {
                 display: none;
+            }
+
+            .brand-header {
+                margin-bottom: 0;
+                width: 100%;
+                justify-content: center;
+                text-align: center;
+                padding: 8px 12px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 11px;
+            }
+
+            .brand-text {
+                align-items: center;
+            }
+
+            .pt-name {
+                font-size: 13.5px;
+            }
+
+            .logistics-solutions {
+                font-size: 9px;
+                letter-spacing: 0.8px;
             }
 
             .login-panel {
                 width: 100%;
-                min-height: 100vh;
-                padding: 1rem;
+                min-height: auto;
+                padding: 0;
                 display: flex;
                 align-items: center;
                 justify-content: center;
             }
 
             .login-card {
-                padding: 1.5rem;
-                box-shadow: none;
+                max-width: 356px;
+                padding: 1.25rem 1.3rem;
+                border-radius: 14px;
+                box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
+            }
+
+            .login-header {
+                margin-bottom: 0.9rem;
+            }
+
+            .selamat-datang-kembali {
+                font-size: 17.5px;
+                margin-bottom: 0.2rem;
+            }
+
+            .masuk-ke-akun-desc {
+                font-size: 11.5px;
+            }
+
+            .role-toggle {
+                padding: 3px;
+                margin-bottom: 0.95rem;
+                border-radius: 9px;
+            }
+
+            .role-btn {
+                padding: 0.48rem;
+                font-size: 12px;
+                border-radius: 7px;
+            }
+
+            .form-group {
+                margin-bottom: 0.78rem;
+            }
+
+            .form-label {
+                font-size: 11.5px;
+                margin-bottom: 0.35rem;
+            }
+
+            .form-input {
+                padding: 0.62rem 0.82rem;
+                font-size: 12.5px;
+                border-radius: 9px;
+            }
+
+            .password-attempt-label {
+                padding: 6px 9px;
+                font-size: 10.5px;
+                flex-wrap: wrap;
+                gap: 5px;
+            }
+
+            .attempt-badge-pill {
+                font-size: 9.8px;
+                padding: 2px 7px;
+            }
+
+            .admin-blocked-box {
+                padding: 10px 12px;
+                margin-bottom: 0.85rem;
+                border-radius: 10px;
+            }
+
+            .admin-blocked-header {
+                font-size: 11.5px;
+            }
+
+            .admin-blocked-desc,
+            .admin-blocked-contact {
+                font-size: 10.8px;
+            }
+
+            .form-options {
+                margin-bottom: 1rem;
+                font-size: 11.5px;
+            }
+
+            .submit-btn {
+                padding: 0.7rem;
+                font-size: 13.5px;
+                border-radius: 9px;
+                margin-bottom: 0.85rem;
+            }
+
+            .halaman-ini-diperuntukkan {
+                font-size: 10.2px;
+                line-height: 1.35;
+            }
+
+            .toast-notification {
+                top: 12px;
+                left: 12px;
+                right: 12px !important;
+                padding: 11px 14px;
+                font-size: 12px;
+                border-radius: 10px;
+                transform: translateY(-130%);
+                transition: transform 0.35s ease;
+            }
+
+            .toast-notification.show {
+                transform: translateY(0);
+            }
+
+            .reset-modal-card {
+                max-width: 345px;
+                padding: 18px 18px;
+                border-radius: 13px;
+            }
+
+            .reset-modal-title {
+                font-size: 14.5px;
+            }
+
+            .reset-modal-desc {
+                font-size: 11.5px;
+                margin-bottom: 12px;
+            }
+
+            .reset-modal-textarea {
+                font-size: 12px;
+                padding: 8px 10px;
+                min-height: 64px;
+            }
+
+            .btn-batal-reset,
+            .btn-kirim-reset {
+                padding: 8px 13px;
+                font-size: 12px;
+                border-radius: 8px;
+            }
+
+            .login-auth-card {
+                max-width: 315px;
+                padding: 22px 20px;
+                border-radius: 14px;
+                gap: 10px;
+            }
+
+            .login-spinner-wrap {
+                width: 48px;
+                height: 48px;
+            }
+
+            .login-auth-title {
+                font-size: 14px;
+            }
+
+            .login-auth-subtitle {
+                font-size: 11.5px;
             }
         }
 
