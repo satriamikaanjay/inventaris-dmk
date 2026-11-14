@@ -1,7 +1,0 @@
-- Ambil project dari github dari branch masing masing
-- lalu ketik `composer install` di cmd/terminal
-- lalu ketik `copy .env.example .env` di cmd/terminal
-- lalu ketik `php artisan key:generate` di cmd/terminal
-- lalu import database yang diberikan yang berformat sql
-- lalu ketik  `php artisan db:seed` di cmd/terminal
-- lalu running `php artisan serve`
