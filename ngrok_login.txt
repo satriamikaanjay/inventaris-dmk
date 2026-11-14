@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: *
+Cache-Control: no-cache, private
+Content-Type: application/json
+Date: Wed, 11 Nov 2026 05:34:33 GMT
+Host: pound-overview-boozy.ngrok-free.dev
+Ngrok-Agent-Ips: 103.165.213.66
+X-Powered-By: PHP/8.3.26
+X-Robots-Tag: noindex, nofollow
+Transfer-Encoding: chunked
+
+    {"status":"success","message":"Login berhasil","data":{"user_name":"Budi"}}

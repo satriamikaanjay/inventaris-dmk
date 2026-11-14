@@ -1,0 +1,10 @@
+HTTP/1.1 401 Unauthorized
+Date: Wed, 11 Nov 2026 05:34:57 GMT
+Server: Apache/2.4.54 (Win64) OpenSSL/1.1.1q mod_fcgid/2.3.10-dev
+X-Powered-By: PHP/8.3.33
+Cache-Control: no-cache, private
+Access-Control-Allow-Origin: *
+Transfer-Encoding: chunked
+Content-Type: application/json
+
+    {"status":"error","message":"Email atau kata sandi salah."}
