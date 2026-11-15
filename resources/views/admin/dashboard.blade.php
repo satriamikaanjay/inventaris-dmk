@@ -20,6 +20,8 @@
   	<meta charset="utf-8">
   	<meta name="viewport" content="width=device-width, initial-scale=1.0">
   	<title>Dashboard Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
   	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
   	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -73,17 +75,22 @@
     		}
 
     		.brand-logo {
-      			background-color: var(--primary-color);
-      			color: #fff;
-      			font-family: 'Coda Caption', sans-serif;
-      			font-size: 24px;
-      			font-weight: 800;
+      			background-color: transparent;
       			width: 48px;
-      			height: 40px;
+      			height: 44px;
       			display: flex;
       			align-items: center;
       			justify-content: center;
       			border-radius: 8px;
+      			overflow: hidden;
+      			flex-shrink: 0;
+    		}
+
+    		.brand-logo img {
+      			width: 100%;
+      			height: 100%;
+      			object-fit: contain;
+      			display: block;
     		}
 
     		.brand-text span {

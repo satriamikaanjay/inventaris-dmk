@@ -5,6 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Master Cabang - Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -425,7 +427,7 @@
 
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Cabang Baru</h2>
-                <form action="{{ route('cabang.store') }}" method="POST">
+                <form action="{{ route('admin.cabang.store') }}" method="POST">
                     @csrf
                     <div class="form-group">
                         <label>Nama Cabang</label>
@@ -447,7 +449,7 @@
                             <span class="chip-code" style="background: var(--primary-color);" title="Jumlah aset di cabang ini">{{ $cabang->asets_count }}</span>
                         </div>
 
-                        <form action="{{ route('cabang.update', $cabang->id) }}" method="POST" class="chip-edit-form" onclick="event.stopPropagation()">
+                        <form action="{{ route('admin.cabang.update', $cabang->id) }}" method="POST" class="chip-edit-form" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
                             <div class="edit-input-group">
@@ -461,7 +463,7 @@
 
                         <div class="chip-actions" onclick="event.stopPropagation()">
                             <button type="button" class="btn-edit-sm" onclick="enableInlineEdit('cab-{{ $cabang->id }}')">Edit</button>
-                            <form action="{{ route('cabang.destroy', $cabang->id) }}" method="POST" style="display: inline;" data-nama="{{ $cabang->nama_cabang }}" onsubmit="return konfirmasiHapus(this)">
+                            <form action="{{ route('admin.cabang.destroy', $cabang->id) }}" method="POST" style="display: inline;" data-nama="{{ $cabang->nama_cabang }}" onsubmit="return konfirmasiHapus(this)">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn-delete-sm">Hapus</button>

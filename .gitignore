@@ -17,6 +17,8 @@
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
+/public/lampiran_pengajuan/*
+!/public/lampiran_pengajuan/.htaccess
 /public/storage
 /storage/*.key
 /storage/pail

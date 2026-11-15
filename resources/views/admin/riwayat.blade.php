@@ -194,6 +194,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riwayat Aktivitas - Sistem {{ $__isMasterAdminRiwayat ? 'Master Admin' : 'Admin' }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -627,7 +629,7 @@
                         <span>Baca Semua</span>
                         <span id="badge-btn-baca-semua" style="display: none; background: #ffffff; color: #059669; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-left: 2px;">0</span>
                     </button>
-                    <form id="form-clear-riwayat" action="{{ route('riwayat_aktivitas.clear') }}" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
+                    <form id="form-clear-riwayat" action="{{ route('admin.riwayat_aktivitas.clear') }}" method="POST" onsubmit="return prosesBersihkanLogRealtime(event);">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-danger-soft" id="btn-bersihkan-log" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; font-weight: 700;">
@@ -815,6 +817,24 @@
                         prosesOtomatisTerbaca(tr);
                     }
                 });
+                // Otomatis dianggap sudah dibaca setelah baris tampil di halaman (tanpa perlu klik)
+                if (tr.dataset.autoBacaTerjadwal === '1') return;
+                tr.dataset.autoBacaTerjadwal = '1';
+                const jalankanAutoBaca = function () {
+                    if (document.hidden) {
+                        document.addEventListener('visibilitychange', function tunggu() {
+                            if (!document.hidden) {
+                                document.removeEventListener('visibilitychange', tunggu);
+                                setTimeout(jalankanAutoBaca, 1500);
+                            }
+                        });
+                        return;
+                    }
+                    if (tr.isConnected && tr.classList.contains('belum-dibaca')) {
+                        prosesOtomatisTerbaca(tr);
+                    }
+                };
+                setTimeout(jalankanAutoBaca, 1500);
             }
 
             window.prosesBacaSemuaRiwayat = function () {

@@ -88,18 +88,22 @@
         }
 
         html body .mobile-brand-logo {
-            background: var(--primary-color, #1a4f91);
-            color: #ffffff;
-            font-weight: 800;
-            font-size: 11px;
-            width: 28px;
-            height: 24px;
+            background: transparent;
+            width: 30px;
+            height: 28px;
             border-radius: 6px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            letter-spacing: 0.3px;
+            overflow: hidden;
+        }
+
+        html body .mobile-brand-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
         }
 
         html body .mobile-brand-text {
@@ -931,7 +935,9 @@
             </svg>
         </button>
         <div class="mobile-brand-wrap">
-            <div class="mobile-brand-logo">SM</div>
+            <div class="mobile-brand-logo">
+                <img src="{{ asset('logo.png') }}" alt="Logo DMK">
+            </div>
             <div class="mobile-brand-text">
                 <span class="mobile-brand-title">Inventaris DMK</span>
                 <span class="mobile-brand-sub">{{ $__labelRoleMobile }}</span>
@@ -947,6 +953,17 @@
 </div>
 <div class="mobile-sidebar-backdrop" id="mobile-sidebar-backdrop"></div>
 
+<script>
+(function () {
+    var cek = function () {
+        fetch("{{ route('cek_sesi') }}", { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { if (r.status === 401) { window.location.href = "{{ route('login') }}"; } })
+            .catch(function () {});
+    };
+    setInterval(cek, 5000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) cek(); });
+})();
+</script>
 <script>
     (function () {
         var btn = document.getElementById('mobile-menu-btn');

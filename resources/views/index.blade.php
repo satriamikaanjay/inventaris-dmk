@@ -4,17 +4,9 @@
 
     $rawClientId = trim((string) (request('client_lock_id') ?: request()->cookie('admin_login_client_id') ?: old('client_lock_id', '')));
     $clientKey = preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawClientId);
+    $serverIpKey = 'ip_' . md5((string) request()->ip());
     if ($clientKey === '') {
-        try {
-            $sid = session()->getId();
-            if (!empty($sid)) {
-                $clientKey = 'sess_' . $sid;
-            }
-        } catch (\Throwable $e) {
-        }
-    }
-    if ($clientKey === '') {
-        $clientKey = 'ip_' . md5((string) request()->ip() . '|' . (string) request()->userAgent());
+        $clientKey = $serverIpKey;
     }
     $clientKey = substr($clientKey, 0, 80);
 
@@ -52,6 +44,17 @@
         $lockData = array_merge($defaultClientLock, $allLocks['clients'][$clientKey]);
     } else {
         $lockData = $defaultClientLock;
+    }
+
+    if (
+        $serverIpKey !== $clientKey
+        && isset($allLocks['clients'][$serverIpKey])
+        && is_array($allLocks['clients'][$serverIpKey])
+    ) {
+        $ipLockRow = array_merge($defaultClientLock, $allLocks['clients'][$serverIpKey]);
+        if (!empty($ipLockRow['is_blocked']) && empty($lockData['is_blocked'])) {
+            $lockData = $ipLockRow;
+        }
     }
 
     $sinkronkanGlobalLock = function (array &$locksArr): void {
@@ -96,62 +99,28 @@
         $act = (string) request('_login_lock_action');
 
         if ($act === 'status') {
-            echo json_encode(['success' => true, 'lock' => $lockData]);
+            $safeLock = [
+                'failed_count' => (int) ($lockData['failed_count'] ?? 0),
+                'is_blocked'   => !empty($lockData['is_blocked']),
+                'blocked_at'   => $lockData['blocked_at'] ?? null,
+                'updated_at'   => $lockData['updated_at'] ?? 0,
+            ];
+            echo json_encode(['success' => true, 'lock' => $safeLock]);
             exit;
         }
 
         if ($act === 'record_fail') {
-            $emailGagal = substr(strip_tags(trim((string) request('email', ''))), 0, 150);
-            $lockData['failed_count'] = ((int) ($lockData['failed_count'] ?? 0)) + 1;
-            if ($emailGagal !== '') {
-                $lockData['last_email'] = $emailGagal;
-            }
-            $baruTerblokir = false;
-            if ($lockData['failed_count'] >= 3) {
-                if (empty($lockData['is_blocked'])) {
-                    $baruTerblokir = true;
-                }
-                $lockData['is_blocked'] = true;
-                $lockData['blocked_at'] = now()->format('d M Y, H:i:s');
-            }
-            $lockData['updated_at'] = round(microtime(true) * 1000);
-
-            $allLocks['clients'][$clientKey] = $lockData;
-            $sinkronkanGlobalLock($allLocks);
-
-            try {
-                file_put_contents($lockFilePath, json_encode($allLocks, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-            } catch (\Throwable $e) {
-            }
-
-            if ($baruTerblokir && class_exists(\App\Models\RiwayatAktivitas::class)) {
-                try {
-                    $riwayat = new \App\Models\RiwayatAktivitas();
-                    $tbl = $riwayat->getTable();
-                    $dataLog = [];
-                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'user_id')) {
-                        $dataLog['user_id'] = null;
-                    }
-                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'aktivitas')) {
-                        $infoEmail = $emailGagal !== '' ? (' (' . $emailGagal . ')') : '';
-                        $dataLog['aktivitas'] = 'Peringatan Keamanan: Akses login Admin terblokir setelah 3 kali berturut-turut salah memasukkan username/password' . $infoEmail . '.';
-                    }
-                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'modul')) {
-                        $dataLog['modul'] = 'Autentikasi Sistem';
-                    }
-                    if (\Illuminate\Support\Facades\Schema::hasColumn($tbl, 'status')) {
-                        $dataLog['status'] = 'Peringatan';
-                    }
-                    $riwayat->forceFill($dataLog)->save();
-                } catch (\Throwable $e) {
-                }
-            }
-
-            echo json_encode(['success' => true, 'lock' => $lockData]);
+            http_response_code(403);
+            echo json_encode(['success' => false, 'message' => 'Pencatatan gagal login hanya diproses melalui autentikasi server.']);
             exit;
         }
 
         if ($act === 'request_password_reset') {
+            if (!request()->ajax() || !hash_equals((string) csrf_token(), (string) request('_token', ''))) {
+                http_response_code(403);
+                echo json_encode(['success' => false, 'message' => 'Permintaan tidak valid atau token keamanan kedaluwarsa. Silakan muat ulang halaman.']);
+                exit;
+            }
             $resetThrottleKey = 'pwd_reset_req|' . request()->ip();
             if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($resetThrottleKey, 5)) {
                 echo json_encode(['success' => false, 'message' => 'Terlalu banyak permintaan reset. Silakan tunggu beberapa menit sebelum mengirim ulang.']);
@@ -161,9 +130,41 @@
 
             $emailReq = substr(strip_tags(trim((string) request('email', ''))), 0, 150);
             $catatanReq = substr(strip_tags(trim((string) request('catatan', ''))), 0, 500);
+            $roleTargetReq = strtolower(trim((string) request('role_target', 'admin')));
 
             if ($emailReq === '') {
-                echo json_encode(['success' => false, 'message' => 'Email atau username Admin wajib diisi.']);
+                echo json_encode(['success' => false, 'message' => 'Email atau username wajib diisi.']);
+                exit;
+            }
+
+            if ($roleTargetReq === 'master_admin' || $roleTargetReq === 'masteradmin') {
+                $masterResetPath = storage_path('app/master_reset_requests.json');
+                $masterReqs = [];
+                if (is_file($masterResetPath)) {
+                    $decM = json_decode((string) @file_get_contents($masterResetPath), true);
+                    if (is_array($decM)) {
+                        $masterReqs = $decM;
+                    }
+                }
+                array_unshift($masterReqs, [
+                    'id'                => 'mrst_' . round(microtime(true) * 1000),
+                    'email_or_username' => $emailReq,
+                    'catatan'           => $catatanReq !== '' ? $catatanReq : 'Permintaan reset password Master Admin karena salah/lupa kata sandi.',
+                    'ip'                => (string) request()->ip(),
+                    'status'            => 'Menunggu',
+                    'created_at'        => date('Y-m-d H:i:s'),
+                    'resolved_at'       => null,
+                ]);
+                if (count($masterReqs) > 50) {
+                    $masterReqs = array_slice($masterReqs, 0, 50);
+                }
+                @file_put_contents($masterResetPath, json_encode($masterReqs, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+                echo json_encode([
+                    'success'     => true,
+                    'role_target' => 'master_admin',
+                    'message'     => 'Permintaan reset password Master Admin berhasil dikirim ke Developer Console.',
+                ]);
                 exit;
             }
 
@@ -283,6 +284,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Master Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" />
     <style>
         * {
@@ -1274,6 +1277,23 @@
                         </div>
                     @endif
 
+                    @php
+                        $__userAksesAktif = true;
+                        $__rolesFileLogin = storage_path('app/roles_permissions.json');
+                        if (is_file($__rolesFileLogin)) {
+                            $__decRolesLogin = json_decode((string) file_get_contents($__rolesFileLogin), true);
+                            if (is_array($__decRolesLogin) && isset($__decRolesLogin['roles']['user']['permissions']['dashboard']['view'])) {
+                                $__userAksesAktif = !empty($__decRolesLogin['roles']['user']['permissions']['dashboard']['view']);
+                            }
+                        }
+                    @endphp
+                    @if (!$__userAksesAktif)
+                        <div style="margin-bottom: 14px; padding: 11px 14px; border-radius: 10px; background: #fef2f2; border: 1.5px solid #fca5a5; color: #b91c1c; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                            <span>Akses user diblokir oleh master admin</span>
+                        </div>
+                    @endif
+
                     <div id="admin-blocked-box" class="admin-blocked-box">
                         <div class="admin-blocked-header">
                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1332,6 +1352,28 @@
                             <a href="javascript:void(0)" onclick="bukaModalLupaPassword()" class="lupa-password" id="btn-lupa-password">Lupa password?</a>
                         </div>
                     </div>
+
+                    @if (config('services.turnstile.site_key'))
+                        <div id="turnstile-guard-box" style="margin-bottom: 14px; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; background: #f8fafc; transition: border-color .2s, box-shadow .2s;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; gap: 8px;">
+                                <span style="display:inline-flex; align-items:center; gap:6px; font-size: 12px; font-weight: 700; color: #334155;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                    <span>Verifikasi Anti-Bot Cloudflare</span>
+                                </span>
+                                <span id="turnstile-status-pill" style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #b45309;">Memeriksa...</span>
+                            </div>
+                            <div class="cf-turnstile"
+                                 data-sitekey="{{ config('services.turnstile.site_key') }}"
+                                 data-theme="light"
+                                 data-size="flexible"
+                                 data-callback="onTurnstileSuccess"
+                                 data-expired-callback="onTurnstileExpired"
+                                 data-error-callback="onTurnstileError"></div>
+                            <div id="turnstile-error-hint" style="display:none; margin-top: 6px; font-size: 11.5px; font-weight: 600; color: #dc2626;">
+                                Selesaikan verifikasi Cloudflare di atas terlebih dahulu sebelum masuk.
+                            </div>
+                        </div>
+                    @endif
 
                     <button type="submit" class="submit-btn" id="btn-submit">
                         <span id="btn-text">Masuk ke Akun</span>
@@ -1605,10 +1647,16 @@
             }
 
             if (!isRoleAdmin) {
-                if (formReqReset) formReqReset.style.display = 'none';
-                if (infoDevMaster) infoDevMaster.style.display = 'block';
+                if (formReqReset) formReqReset.style.display = 'block';
+                if (infoDevMaster) infoDevMaster.style.display = 'none';
                 if (descModalReset) {
-                    descModalReset.innerHTML = 'Jika lupa password atau salah memasukkan kredensial akun <strong>Master Admin</strong>, silakan hubungi pihak <strong>Developer</strong> untuk peresetan password.';
+                    descModalReset.innerHTML = 'Permintaan peresetan password dan pembukaan blokir akun <strong>Master Admin</strong> akan dikirimkan langsung ke <strong>Developer Console</strong>.';
+                }
+                if (resetEmail && emailInput && emailInput.value.trim() !== '') {
+                    resetEmail.value = emailInput.value.trim();
+                }
+                if (resetCatatan && !resetCatatan.value.trim()) {
+                    resetCatatan.value = 'Saya salah memasukkan kata sandi / lupa password Master Admin. Mohon bantuan Developer untuk reset password.';
                 }
                 modal.classList.add('show');
                 return;
@@ -1659,6 +1707,8 @@
             try {
                 const params = new URLSearchParams({
                     _login_lock_action: 'request_password_reset',
+                    _token: '{{ csrf_token() }}',
+                    role_target: hiddenRole ? hiddenRole.value : 'admin',
                     client_lock_id: CURRENT_CLIENT_LOCK_ID,
                     email: emailVal,
                     catatan: (resetCatatan.value || '').trim()
@@ -1671,7 +1721,10 @@
 
                 const data = await res.json();
                 if (data && data.success) {
-                    alertBox.innerHTML = `<strong>Terkirim!</strong> ${data.message} Master Admin akan melihat permintaan ini di menu <strong>Notifikasi</strong>.`;
+                    const targetText = data.role_target === 'master_admin'
+                        ? 'Developer akan melihat permintaan ini di <strong>Developer Console</strong>.'
+                        : 'Master Admin akan melihat permintaan ini di menu <strong>Notifikasi</strong>.';
+                    alertBox.innerHTML = `<strong>Terkirim!</strong> ${data.message} ${targetText}`;
                     alertBox.classList.add('show');
                     resetCatatan.value = '';
                 } else {
@@ -1734,24 +1787,6 @@
                     if (nextCount >= MAX_ADMIN_ATTEMPTS) {
                         localStorage.setItem(STORAGE_KEY_BLOCKED, '1');
                     }
-
-                    try {
-                        const params = new URLSearchParams({
-                            _login_lock_action: 'record_fail',
-                            client_lock_id: CURRENT_CLIENT_LOCK_ID,
-                            email: emailInput ? emailInput.value : ''
-                        });
-                        const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
-                            method: 'GET',
-                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data && data.lock) {
-                                syncLockStateFromServerObj(data.lock);
-                            }
-                        }
-                    } catch (e) {}
                 }
 
                 pilihTabRole('admin');
@@ -1919,6 +1954,20 @@
                 return false;
             }
 
+            const turnstileBox = document.getElementById('turnstile-guard-box');
+            if (turnstileBox) {
+                const tokenField = formLogin.querySelector('input[name="cf-turnstile-response"]');
+                const tokenVal = tokenField ? (tokenField.value || '').trim() : '';
+                if (!tokenVal) {
+                    e.preventDefault();
+                    turnstileBox.style.borderColor = '#ef4444';
+                    turnstileBox.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.14)';
+                    const hint = document.getElementById('turnstile-error-hint');
+                    if (hint) hint.style.display = 'block';
+                    return false;
+                }
+            }
+
             ensureClientLockId();
 
             if (rememberCheckbox && rememberCheckbox.checked) {
@@ -1964,6 +2013,53 @@
                 eyeOffIcon.style.display = 'none';
             }
         });
+
+        function onTurnstileSuccess() {
+            const box = document.getElementById('turnstile-guard-box');
+            const pill = document.getElementById('turnstile-status-pill');
+            const hint = document.getElementById('turnstile-error-hint');
+            if (box) {
+                box.style.borderColor = '#86efac';
+                box.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.12)';
+            }
+            if (pill) {
+                pill.textContent = 'Terverifikasi ✓';
+                pill.style.background = '#dcfce7';
+                pill.style.color = '#15803d';
+            }
+            if (hint) hint.style.display = 'none';
+        }
+
+        function onTurnstileExpired() {
+            const box = document.getElementById('turnstile-guard-box');
+            const pill = document.getElementById('turnstile-status-pill');
+            if (box) {
+                box.style.borderColor = '#f59e0b';
+                box.style.boxShadow = 'none';
+            }
+            if (pill) {
+                pill.textContent = 'Kedaluwarsa - Ulangi';
+                pill.style.background = '#fef3c7';
+                pill.style.color = '#b45309';
+            }
+        }
+
+        function onTurnstileError() {
+            const box = document.getElementById('turnstile-guard-box');
+            const pill = document.getElementById('turnstile-status-pill');
+            if (box) {
+                box.style.borderColor = '#ef4444';
+                box.style.boxShadow = 'none';
+            }
+            if (pill) {
+                pill.textContent = 'Gagal Memuat';
+                pill.style.background = '#fee2e2';
+                pill.style.color = '#b91c1c';
+            }
+        }
     </script>
+    @if (config('services.turnstile.site_key'))
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    @endif
 </body>
 </html>

@@ -6,6 +6,8 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -14,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
 class LoginAttemptMiddleware
 {
     private const MAX_ATTEMPTS = 3;
-    private const MAX_MASTER_ATTEMPTS = 5;
+    private const MAX_MASTER_ATTEMPTS = 3;
     private const MASTER_LOCKOUT_SECONDS = 900;
 
     public function handle(Request $request, Closure $next): Response
@@ -61,6 +63,63 @@ class LoginAttemptMiddleware
             ]);
         }
 
+        $turnstileSecret = trim((string) config('services.turnstile.secret_key', ''));
+        if ($turnstileSecret !== '') {
+            $turnstileToken = trim((string) $request->input('cf-turnstile-response', ''));
+            if ($turnstileToken === '') {
+                $this->catatLogKeamananLogin('Memblokir percobaan login tanpa verifikasi Cloudflare Turnstile dari IP ' . $request->ip());
+                return redirect()->route('login')
+                    ->withInput($request->only('email', 'username', 'login_as', 'remember', 'client_lock_id'))
+                    ->withErrors([
+                        'email' => 'Silakan tunggu atau selesaikan verifikasi keamanan Cloudflare terlebih dahulu.',
+                    ]);
+            }
+
+            try {
+                $httpOptions = [];
+                $iniCa = trim((string) ini_get('curl.cainfo'));
+                if ($iniCa === '' || !is_file($iniCa)) {
+                    $laragonCa = 'C:\\laragon\\etc\\ssl\\cacert.pem';
+                    if (is_file($laragonCa)) {
+                        $httpOptions['verify'] = $laragonCa;
+                    } else {
+                        $httpOptions['verify'] = false;
+                    }
+                }
+
+                $verifyResponse = Http::withOptions($httpOptions)
+                    ->asForm()
+                    ->timeout(8)
+                    ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                        'secret'   => $turnstileSecret,
+                        'response' => $turnstileToken,
+                        'remoteip' => $request->ip(),
+                    ]);
+
+                $jsonVerify = $verifyResponse->json();
+                if (!$verifyResponse->successful() || !($jsonVerify['success'] ?? false)) {
+                    Log::warning('Cloudflare Turnstile siteverify failed', [
+                        'status'      => $verifyResponse->status(),
+                        'error_codes' => $jsonVerify['error-codes'] ?? [],
+                        'ip'          => $request->ip(),
+                    ]);
+                    $this->catatLogKeamananLogin('Memblokir percobaan login dengan token Cloudflare Turnstile tidak valid dari IP ' . $request->ip());
+                    return redirect()->route('login')
+                        ->withInput($request->only('email', 'username', 'login_as', 'remember', 'client_lock_id'))
+                        ->withErrors([
+                            'email' => 'Verifikasi keamanan Cloudflare gagal atau kedaluwarsa. Silakan ulangi verifikasi dan coba login kembali.',
+                        ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Cloudflare Turnstile siteverify exception: ' . $e->getMessage());
+                return redirect()->route('login')
+                    ->withInput($request->only('email', 'username', 'login_as', 'remember', 'client_lock_id'))
+                    ->withErrors([
+                        'email' => 'Tidak dapat memverifikasi keamanan Cloudflare saat ini. Silakan muat ulang halaman dan coba lagi.',
+                    ]);
+            }
+        }
+
         $roleAkunDatabase = $this->cekRoleAkunDiDatabase($inputIdentifier);
 
         $apakahLoginAdmin = ($loginAsInput === 'admin') || ($roleAkunDatabase === 'admin');
@@ -69,33 +128,90 @@ class LoginAttemptMiddleware
         RateLimiter::clear($throttleKey);
 
         if (!$apakahLoginAdmin) {
-            $masterRateKey = 'master_login_guard|' . $clientKey . '|' . $request->ip();
-            if (RateLimiter::tooManyAttempts($masterRateKey, self::MAX_MASTER_ATTEMPTS)) {
-                $sisaDetikMaster = RateLimiter::availableIn($masterRateKey);
+            $masterLockFile = storage_path('app/master_login_locks.json');
+            $masterIpKey = 'master_login_guard_ip|' . $request->ip();
+            $masterAcctKey = $inputIdentifier !== ''
+                ? ('master_login_guard_acct|' . sha1(Str::lower($inputIdentifier)) . '|' . $request->ip())
+                : $masterIpKey;
+
+            $trackedMasterKeys = [$masterIpKey, $masterAcctKey];
+
+            if (is_file($masterLockFile)) {
+                $mLockData = json_decode((string) @file_get_contents($masterLockFile), true);
+                if (is_array($mLockData) && !empty($mLockData['unlocked_by_dev'])) {
+                    foreach ((array) ($mLockData['tracked_keys'] ?? []) as $savedKey) {
+                        if (is_string($savedKey) && $savedKey !== '') {
+                            RateLimiter::clear($savedKey);
+                        }
+                    }
+                    RateLimiter::clear($masterIpKey);
+                    RateLimiter::clear($masterAcctKey);
+                    RateLimiter::clear($ipFloodKey);
+                    @unlink($masterLockFile);
+                }
+            }
+
+            if (
+                RateLimiter::tooManyAttempts($masterIpKey, self::MAX_MASTER_ATTEMPTS)
+                || RateLimiter::tooManyAttempts($masterAcctKey, self::MAX_MASTER_ATTEMPTS)
+            ) {
+                $sisaDetikMaster = max(
+                    RateLimiter::availableIn($masterIpKey),
+                    RateLimiter::availableIn($masterAcctKey)
+                );
                 $menitMaster = max(1, (int) ceil($sisaDetikMaster / 60));
                 return redirect()->route('login')
                     ->withInput($request->only('email', 'username', 'login_as', 'remember', 'client_lock_id'))
                     ->withErrors([
-                        'email' => "Demi keamanan dari serangan Brute Force, akses login Master Admin dikunci sementara selama {$menitMaster} menit (5/5 gagal berturut-turut). Silakan tunggu atau hubungi pihak Developer untuk peresetan password.",
+                        'email' => "Demi keamanan dari serangan Brute Force, akses login Master Admin dikunci sementara selama {$menitMaster} menit (3/3 gagal berturut-turut). Silakan tunggu atau hubungi pihak Developer untuk peresetan password.",
                     ]);
             }
 
             $response = $next($request);
 
             if (Auth::check()) {
-                RateLimiter::clear($masterRateKey);
+                RateLimiter::clear($masterIpKey);
+                RateLimiter::clear($masterAcctKey);
                 RateLimiter::clear($ipFloodKey);
+                if (is_file($masterLockFile)) {
+                    @unlink($masterLockFile);
+                }
                 return $response;
             }
 
-            RateLimiter::hit($masterRateKey, self::MASTER_LOCKOUT_SECONDS);
+            RateLimiter::hit($masterIpKey, self::MASTER_LOCKOUT_SECONDS);
+            if ($masterAcctKey !== $masterIpKey) {
+                RateLimiter::hit($masterAcctKey, self::MASTER_LOCKOUT_SECONDS);
+            }
             RateLimiter::hit($ipFloodKey, 600);
-            $gagalMaster = RateLimiter::attempts($masterRateKey);
+            $gagalMaster = max(
+                RateLimiter::attempts($masterIpKey),
+                RateLimiter::attempts($masterAcctKey)
+            );
             $sisaMaster = max(0, self::MAX_MASTER_ATTEMPTS - $gagalMaster);
 
+            $prevTracked = [];
+            if (is_file($masterLockFile)) {
+                $existingLock = json_decode((string) @file_get_contents($masterLockFile), true);
+                if (is_array($existingLock) && isset($existingLock['tracked_keys']) && is_array($existingLock['tracked_keys'])) {
+                    $prevTracked = $existingLock['tracked_keys'];
+                }
+            }
+            $allTracked = array_values(array_unique(array_merge($prevTracked, $trackedMasterKeys)));
+
+            @file_put_contents($masterLockFile, json_encode([
+                'failed_count' => $gagalMaster,
+                'is_blocked'   => $gagalMaster >= self::MAX_MASTER_ATTEMPTS,
+                'last_email'   => $inputIdentifier,
+                'ip'           => (string) $request->ip(),
+                'tracked_keys' => $allTracked,
+                'blocked_at'   => $gagalMaster >= self::MAX_MASTER_ATTEMPTS ? date('Y-m-d H:i:s') : null,
+                'updated_at'   => round(microtime(true) * 1000),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
             if ($gagalMaster >= self::MAX_MASTER_ATTEMPTS) {
-                $this->catatLogKeamananLogin('Peringatan Keamanan: Akses login Master Admin dikunci sementara (15 menit) setelah 5 kali gagal berturut-turut (' . $inputIdentifier . ').');
-                $pesanMaster = 'Demi keamanan dari serangan Brute Force, akses login Master Admin dikunci sementara selama 15 menit (5/5 gagal berturut-turut). Silakan hubungi pihak Developer untuk peresetan password.';
+                $this->catatLogKeamananLogin('Peringatan Keamanan: Akses login Master Admin dikunci sementara (15 menit) setelah 3 kali gagal berturut-turut (' . $inputIdentifier . ').');
+                $pesanMaster = 'Demi keamanan dari serangan Brute Force, akses login Master Admin dikunci sementara selama 15 menit (3/3 gagal berturut-turut). Silakan hubungi pihak Developer untuk peresetan password.';
             } else {
                 $pesanMaster = "Username/email atau password Master Admin salah ({$gagalMaster}/" . self::MAX_MASTER_ATTEMPTS . "). Sisa kesempatan: {$sisaMaster} kali lagi sebelum dikunci sementara.";
             }
@@ -109,11 +225,18 @@ class LoginAttemptMiddleware
 
         $request->merge(['login_as' => 'admin']);
 
-        $sudahTerblokir = !empty($clientLock['is_blocked']) || ((int) ($clientLock['failed_count'] ?? 0)) >= self::MAX_ATTEMPTS;
+        $serverIpKey = 'ip_' . md5((string) $request->ip());
+        $ipLock = $this->ambilLockClient($allLocks, $serverIpKey);
+
+        $sudahTerblokir = !empty($clientLock['is_blocked'])
+            || ((int) ($clientLock['failed_count'] ?? 0)) >= self::MAX_ATTEMPTS
+            || !empty($ipLock['is_blocked'])
+            || ((int) ($ipLock['failed_count'] ?? 0)) >= self::MAX_ATTEMPTS;
 
         if ($sudahTerblokir) {
+            $stateToFlash = !empty($ipLock['is_blocked']) && empty($clientLock['is_blocked']) ? $ipLock : $clientLock;
             session()->flash('login_attempt_recorded', true);
-            session()->flash('login_client_lock_state', $clientLock);
+            session()->flash('login_client_lock_state', $stateToFlash);
 
             return redirect()->route('login')
                 ->withInput($request->only('email', 'username', 'login_as', 'remember', 'client_lock_id'))
@@ -130,6 +253,9 @@ class LoginAttemptMiddleware
 
             if ($roleUserLogin === 'admin') {
                 $this->resetLockClient($lockFilePath, $clientKey);
+                if ($serverIpKey !== $clientKey) {
+                    $this->resetLockClient($lockFilePath, $serverIpKey);
+                }
             }
             RateLimiter::clear($ipFloodKey);
 
@@ -156,17 +282,41 @@ class LoginAttemptMiddleware
         $clientLock['updated_at'] = round(microtime(true) * 1000);
 
         $this->simpanLockClient($lockFilePath, $allLocks, $clientKey, $clientLock);
+
+        $effectiveLock = $clientLock;
+        if ($serverIpKey !== $clientKey) {
+            $allLocks = $this->bacaSemuaLockData($lockFilePath);
+            $ipLock = $this->ambilLockClient($allLocks, $serverIpKey);
+            $ipLock['failed_count'] = ((int) ($ipLock['failed_count'] ?? 0)) + 1;
+            if ($inputIdentifier !== '') {
+                $ipLock['last_email'] = strip_tags($inputIdentifier);
+            }
+            if ($ipLock['failed_count'] >= self::MAX_ATTEMPTS) {
+                if (empty($ipLock['is_blocked'])) {
+                    $baruTerblokir = true;
+                }
+                $ipLock['is_blocked'] = true;
+                $ipLock['blocked_at'] = now()->format('d M Y, H:i:s');
+            }
+            $ipLock['updated_at'] = round(microtime(true) * 1000);
+            $this->simpanLockClient($lockFilePath, $allLocks, $serverIpKey, $ipLock);
+
+            if ((int) ($ipLock['failed_count'] ?? 0) > (int) ($clientLock['failed_count'] ?? 0)) {
+                $effectiveLock = $ipLock;
+            }
+        }
+
         session()->flash('login_attempt_recorded', true);
-        session()->flash('login_client_lock_state', $clientLock);
+        session()->flash('login_client_lock_state', $effectiveLock);
 
         if ($baruTerblokir) {
             $this->catatLogBlokirAdmin($inputIdentifier);
         }
 
-        $jumlahGagal = (int) $clientLock['failed_count'];
+        $jumlahGagal = (int) $effectiveLock['failed_count'];
         $sisaKesempatan = max(0, self::MAX_ATTEMPTS - $jumlahGagal);
 
-        if ($clientLock['is_blocked'] || $sisaKesempatan <= 0) {
+        if ($effectiveLock['is_blocked'] || $sisaKesempatan <= 0) {
             $pesanError = 'Akses login Admin telah terblokir (3/3 gagal berturut-turut). Silakan hubungi Master Admin untuk peresetan password/username.';
         } else {
             $pesanError = "Username/email atau password Admin salah ({$jumlahGagal}/" . self::MAX_ATTEMPTS . "). Sisa kesempatan: {$sisaKesempatan} kali lagi sebelum terblokir.";
@@ -215,17 +365,7 @@ class LoginAttemptMiddleware
             }
         }
 
-        try {
-            if ($request->hasSession()) {
-                $sid = $request->session()->getId();
-                if (!empty($sid)) {
-                    return 'sess_' . $sid;
-                }
-            }
-        } catch (\Throwable $e) {
-        }
-
-        return 'ip_' . md5((string) $request->ip() . '|' . (string) $request->userAgent());
+        return 'ip_' . md5((string) $request->ip());
     }
 
     private function cekRoleAkunDiDatabase(string $identifier): ?string

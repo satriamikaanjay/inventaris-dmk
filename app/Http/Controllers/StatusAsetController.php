@@ -8,12 +8,12 @@ namespace App\Http\Controllers;
     {
         public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_status'  => 'required|string|max:255',
-            'warna_status' => 'nullable|string',
+            'warna_status' => 'nullable|string|max:50',
         ]);
 
-        StatusAset::create($request->all());
+        StatusAset::create($validated);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -27,13 +27,13 @@ namespace App\Http\Controllers;
 
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $validated = $request->validate([
             'nama_status'  => 'required|string|max:255',
-            'warna_status' => 'nullable|string',
+            'warna_status' => 'nullable|string|max:50',
         ]);
 
         $status = StatusAset::findOrFail($id);
-        $status->update($request->all());
+        $status->update($validated);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([

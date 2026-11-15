@@ -5,6 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Master Kategori & Aset - Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -505,7 +507,7 @@
         <div class="layout-grid">
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--primary-color);">
                 <h2 class="section-title">Tambah Kategori Baru</h2>
-                <form action="{{ route('kategori.store') }}" method="POST" id="form-kategori">
+                <form action="{{ route('admin.kategori.store') }}" method="POST" id="form-kategori">
                     @csrf
                     <div class="form-group">
                         <label>Nama Kategori</label>
@@ -564,7 +566,7 @@
 
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--secondary-color);">
                 <h2 class="section-title">Tambah Master Aset Baru</h2>
-                <form action="{{ route('items.store') }}" method="POST" id="form-aset">
+                <form action="{{ route('admin.items.store') }}" method="POST" id="form-aset">
                     @csrf
 
                     <div class="form-group">
@@ -672,7 +674,7 @@
                             })();
                         </script>
 
-                        <form action="{{ route('items.update', $item->id) }}" method="POST" class="chip-edit-form" id="form-edit-aset-{{ $item->id }}" onsubmit="setLoadingUpdate(event, 'aset-{{ $item->id }}')" onclick="event.stopPropagation()">
+                        <form action="{{ route('admin.items.update', $item->id) }}" method="POST" class="chip-edit-form" id="form-edit-aset-{{ $item->id }}" onsubmit="setLoadingUpdate(event, 'aset-{{ $item->id }}')" onclick="event.stopPropagation()">
                             @csrf
                             @method('PUT')
 
@@ -733,7 +735,7 @@
         <div class="layout-grid">
             <div class="card-box" style="align-self: start; border-top: 4px solid var(--warning-color);">
                 <h2 class="section-title">Tambah Status Aset Baru</h2>
-                <form action="{{ route('status-aset.store') ?? '#' }}" method="POST" id="form-status-aset">
+                <form action="{{ route('admin.status-aset.store') ?? '#' }}" method="POST" id="form-status-aset">
                     @csrf
                     <div class="form-group">
                         <label>Nama Status</label>
@@ -1115,7 +1117,7 @@
                             chipWrapper.style.opacity = '0';
                             setTimeout(() => chipWrapper.remove(), 300);
                         } else {
-                            showCustomToast('Gagal menghapus.', 'error');
+                            showCustomToast((res.body && res.body.message) || 'Gagal menghapus.', 'error');
                             if (btnDelete) btnDelete.innerHTML = 'Hapus';
                         }
                     }).catch(err => {

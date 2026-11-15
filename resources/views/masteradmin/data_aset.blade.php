@@ -491,6 +491,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Aset - Sistem Master Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
     <style>
@@ -909,7 +911,7 @@
                     });
                 }
 
-                $detailAsets = $__qFilterTipe->latest()->paginate(100)->withQueryString();
+                $detailAsets = (request('sort') === 'terlama' ? $__qFilterTipe->oldest('aset_id') : $__qFilterTipe->latest('aset_id'))->paginate(100)->withQueryString();
             }
         } catch (\Throwable $e) {
         }
@@ -986,15 +988,29 @@
                                 <input type="text" id="hasil_kode_final" name="kode_aset" readonly required>
                             </div>
                             <div class="form-group">
-                                <label>Nomor Seri Final (Otomatis)</label>
-                                <input type="text" id="hasil_seri_final" name="nomor_seri" readonly required>
+                                <label>Nomor Seri (Tidak digunakan)</label>
+                                <input type="text" id="hasil_seri_final" name="nomor_seri" readonly disabled placeholder="Dikosongkan" style="background:#f1f5f9;cursor:not-allowed;">
                             </div>
                         </div>
+
+                        @php
+                            $daftarRuanganTersedia = \App\Models\DetailAset::whereNotNull('Ruangan')
+                                ->where('Ruangan', '!=', '')
+                                ->where('Ruangan', '!=', '-')
+                                ->distinct()
+                                ->orderBy('Ruangan')
+                                ->pluck('Ruangan');
+                        @endphp
+                        <datalist id="daftar_ruangan_aset">
+                            @foreach($daftarRuanganTersedia as $namaRg)
+                                <option value="{{ $namaRg }}"></option>
+                            @endforeach
+                        </datalist>
 
                         <div class="step-box">
                             <div class="step-header">
                                 <div class="step-number">1</div>
-                                <div class="step-title">Klasifikasi & Cabang</div>
+                                <div class="step-title">Klasifikasi, Cabang & Ruangan</div>
                             </div>
                             <div class="grid-1">
                                 <div class="form-group">
@@ -1031,6 +1047,10 @@
                                         @endif
                                     </select>
                                 </div>
+                                <div class="form-group">
+                                    <label>Ruangan / Penempatan Ruangan <span style="color: var(--primary-color); font-weight: 700; font-size: 11px;">(Pilih atau ketik ruangan; kosongkan / isi '-' jika tanpa ruangan)</span></label>
+                                    <input type="text" id="input_ruangan_tambah" name="Ruangan" list="daftar_ruangan_aset" placeholder="Contoh: R. Direktur, Lt 1, Gudang, Lobby (Kosongkan jika tanpa ruangan)" autocomplete="off">
+                                </div>
                             </div>
                         </div>
 
@@ -1048,7 +1068,7 @@
                             </div>
                             <div class="grid-2" style="margin-top: 12px;">
                                 <div class="form-group"><label>Urut Kode <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="text" id="input_urut_kode" value="1" oninput="updateAutoGenerate()"></div>
-                                <div class="form-group"><label>Urut Seri <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="text" id="input_urut_seri" value="001" oninput="updateAutoGenerate()"></div>
+                                <div class="form-group"><label>Urut Seri (Tidak digunakan)</label><input type="text" id="input_urut_seri" value="" readonly disabled placeholder="Dikosongkan" style="background:#f1f5f9;cursor:not-allowed;"></div>
                             </div>
                         </div>
 
@@ -1098,11 +1118,6 @@
                                         <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
-                            </div>
-
-                            <div class="form-group" style="margin-top: 12px;">
-                                <label>Keterangan Ruangan <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
-                                <input type="text" name="Ruangan" value="-" placeholder="-">
                             </div>
                         </div>
 
@@ -1171,15 +1186,15 @@
 
                         <div class="preview-banner" style="grid-template-columns: 1fr 1fr;">
                             <div class="form-group"><label>Kode Aset Final</label><input type="text" id="edit_kode_aset" name="kode_aset" readonly></div>
-                            <div class="form-group"><label>Nomor Seri Final</label><input type="text" id="edit_nomor_seri" name="nomor_seri" readonly></div>
+                            <div class="form-group"><label>Nomor Seri (Tidak digunakan)</label><input type="text" id="edit_nomor_seri" readonly disabled placeholder="Dikosongkan" style="background:#f1f5f9;cursor:not-allowed;"></div>
                         </div>
 
                         <div class="step-box">
                             <div class="step-header">
                                 <div class="step-number">1</div>
-                                <div class="step-title">Klasifikasi & Cabang</div>
+                                <div class="step-title">Klasifikasi, Cabang & Ruangan</div>
                             </div>
-                            <div class="grid-3">
+                            <div class="grid-2">
                                 <div class="form-group"><label>Kategori Master <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label>
                                     <select id="edit_kategori" name="kategori_id" required>
                                         @foreach($kategoris as $kat) <option value="{{ $kat->id }}">{{ $kat->nama_kategori }}</option> @endforeach
@@ -1200,6 +1215,10 @@
                                             @endforeach
                                         @endif
                                     </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Ruangan <span style="color: var(--primary-color); font-weight: 700; font-size: 11px;">(Isi ruangan atau '-' jika tanpa ruangan)</span></label>
+                                    <input type="text" id="edit_ruangan" name="Ruangan" list="daftar_ruangan_aset" placeholder="Contoh: R. Direktur, Lt 1 (Isi '-' jika tanpa ruangan)" autocomplete="off">
                                 </div>
                             </div>
                         </div>
@@ -1240,9 +1259,6 @@
                                         <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div class="form-group" style="margin-top: 12px;"><label>Keterangan Ruangan <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label>
-                                <input type="text" id="edit_ruangan" name="Ruangan" placeholder="-">
                             </div>
                         </div>
 
@@ -1349,7 +1365,7 @@
 
                     <button type="submit" class="btn btn-primary" style="padding: 9px 18px;">Cari Data</button>
 
-                    @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
+                    @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua') || request('sort') === 'terlama')
                         <a href="{{ url()->current() }}" class="btn btn-danger" style="text-decoration: none; padding: 9px 18px;">Reset</a>
                     @endif
                 </div>
@@ -1363,6 +1379,15 @@
                         <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan</option>
                         <option value="Aset Tidak Dipakai" {{ strtolower((string) request('filter_tipe')) === 'aset tidak dipakai' ? 'selected' : '' }}>Aset Tidak Dipakai</option>
                         <option value="Tidak Ada" {{ request('filter_tipe') == 'Tidak Ada' ? 'selected' : '' }}>Tidak Ada</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="sortAset" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Urutkan:</label>
+
+                    <select name="sort" id="sortAset" onchange="this.form.submit()" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; outline: none; cursor: pointer;">
+                        <option value="terbaru" {{ request('sort') !== 'terlama' ? 'selected' : '' }}>Data Terbaru Ditambah</option>
+                        <option value="terlama" {{ request('sort') === 'terlama' ? 'selected' : '' }}>Data Terlama Ditambah</option>
                     </select>
                 </div>
             </form>
@@ -1586,7 +1611,7 @@
             document.getElementById('form-delete-fisik').action = `/masteradmin/data-aset/${id}`;
 
             document.getElementById('edit_kode_aset').value = data.kode_aset || '';
-            document.getElementById('edit_nomor_seri').value = data.nomor_seri || '';
+            document.getElementById('edit_nomor_seri').value = '';
             setSelectDenganCadangan('edit_kategori', data.kategori_id, data.kategori && data.kategori.nama_kategori);
             setSelectDenganCadangan('edit_item', data.item_id, data.item && data.item.nama_aset);
             setSelectDenganCadangan('edit_cabang', data.cabang_id, data.cabang && data.cabang.nama_cabang);
@@ -1719,7 +1744,8 @@
                 el.disabled = false;
             });
             document.getElementById('edit_kode_aset').readOnly = false;
-            document.getElementById('edit_nomor_seri').readOnly = false;
+            document.getElementById('edit_nomor_seri').readOnly = true;
+            document.getElementById('edit_nomor_seri').disabled = true;
             document.getElementById('edit-barcode-warning').style.display = 'block';
 
             document.getElementById('upload-baru-section').style.display = 'block';
@@ -1895,9 +1921,9 @@
             let itemId = document.getElementById('pilih_aset').value;
             let inputSeri = document.getElementById('input_urut_seri');
             if (itemId && DATA_SERI_ITEM[itemId] !== undefined) {
-                inputSeri.value = String(parseInt(DATA_SERI_ITEM[itemId]) + 1).padStart(3, '0');
+                inputSeri.value = '';
             } else {
-                inputSeri.value = '001';
+                inputSeri.value = '';
             }
         }
 
@@ -1954,7 +1980,7 @@
             let urutSeri = document.getElementById('input_urut_seri')?.value || '001';
 
             document.getElementById('hasil_kode_final').value = `${kodeKat}.${formatUrutAset}/${formatHariBulanTahun}/${urutKode}`;
-            document.getElementById('hasil_seri_final').value = `${awalSerial}-${urutSeri}`;
+            document.getElementById('hasil_seri_final').value = '';
         }
 
         let MASTER_ASET_OPTIONS = null;

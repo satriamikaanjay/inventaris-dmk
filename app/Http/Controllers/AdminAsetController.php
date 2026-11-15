@@ -18,7 +18,7 @@ class AdminAsetController extends Controller
         $statuses = StatusAset::all();
         $cabangs = Cabang::withCount('asets')->get();
 
-        $query = DetailAset::with(['item', 'kategori', 'cabang'])->latest('aset_id');
+        $query = DetailAset::with(['item', 'kategori', 'cabang'])->orderBy('aset_id', $request->sort === 'terlama' ? 'asc' : 'desc');
 
         if ($request->filled('search')) {
             $search = $request->search;

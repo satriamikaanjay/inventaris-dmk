@@ -85,17 +85,22 @@
     }
 
     .brand-logo {
-        background-color: var(--primary-color);
-        color: #fff;
-        font-family: 'Coda Caption', sans-serif;
-        font-size: 24px;
-        font-weight: 800;
+        background-color: transparent;
         width: 48px;
-        height: 40px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .brand-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
     }
 
     .brand-text span {
@@ -452,7 +457,9 @@
 
 <sidebar>
     		<div class="sidebar-brand">
-      			<div class="brand-logo">SM</div>
+      			<div class="brand-logo">
+        				<img src="{{ asset('logo.png') }}" alt="Logo DMK">
+      			</div>
       			<div class="brand-text">
         				<span class="sistem">Sistem</span>
         				<span class="master-admin">Master Admin</span>
@@ -580,6 +587,17 @@
 <input type="hidden" id="json-daftar-id-riwayat-master" value="{{ json_encode($daftarIdRiwayat) }}">
 <input type="hidden" id="json-ada-aksi-baru-master" value="{{ json_encode($adaAksiBaru) }}">
 
+<script>
+(function () {
+    var cek = function () {
+        fetch("{{ route('cek_sesi') }}", { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { if (r.status === 401) { window.location.href = "{{ route('login') }}"; } })
+            .catch(function () {});
+    };
+    setInterval(cek, 5000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) cek(); });
+})();
+</script>
 <script>
     (function () {
         const STORAGE_KEY_RIWAYAT = 'riwayat_terbaca_auto_user_{{ Auth::id() ?? "guest" }}';

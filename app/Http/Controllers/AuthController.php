@@ -66,6 +66,23 @@ class AuthController extends Controller
                 $userRole = 'master_admin';
             }
 
+            if ($userRole === 'user') {
+                $rolesPath = storage_path('app/roles_permissions.json');
+                $userAllowed = true;
+                if (is_file($rolesPath)) {
+                    $decodedRoles = json_decode((string) file_get_contents($rolesPath), true);
+                    if (is_array($decodedRoles) && isset($decodedRoles['roles']['user']['permissions']['dashboard']['view'])) {
+                        $userAllowed = !empty($decodedRoles['roles']['user']['permissions']['dashboard']['view']);
+                    }
+                }
+                if (!$userAllowed) {
+                    Auth::logout();
+                    return back()->withErrors([
+                        'email' => 'Akses user diblokir oleh master admin',
+                    ])->withInput($request->only('email', 'login_as', 'remember'));
+                }
+            }
+
             if ($loginAs !== '' && $userRole !== $loginAs) {
                 Auth::logout();
                 $labelRole = $loginAs === 'admin' ? 'Admin' : 'Master Admin';

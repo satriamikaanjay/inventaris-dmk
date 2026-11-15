@@ -22,7 +22,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
         $statuses = StatusAset::all(); 
         $cabangs = Cabang::all(); 
 
-        $query = \App\Models\DetailAset::with(['item', 'kategori', 'cabang'])->latest('aset_id');
+        $query = \App\Models\DetailAset::with(['item', 'kategori', 'cabang'])->orderBy('aset_id', $request->sort === 'terlama' ? 'asc' : 'desc');
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -85,7 +85,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
         $request->validate([
             'kategori_id' => 'required',
             'item_id'     => 'required',
-            'Ruangan'     => 'required',
+            'Ruangan'     => 'nullable|string|max:255',
             'status_aset' => 'required',
             'lampiran.*'  => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx|max:5120',
         ], [
@@ -108,16 +108,17 @@ $items = Item::paginate(50, ['*'], 'item_page');
         $detail = \App\Models\DetailAset::create([
             'item_id' => $request->item_id,
             'kategori_id' => $request->kategori_id,
+            'cabang_id' => $request->cabang_id,
             'kategori' => $namaKategori,
             'kode_aset' => $request->kode_aset,
-            'nomor_seri' => $request->nomor_seri,
+            'nomor_seri' => $request->nomor_seri ?? '',
             'merk' => $request->merk ?? '-',
             'unit' => $request->unit ?? 1,
             'tanggal_pengadaan' => $request->tanggal_pengadaan ?? date('Y-m-d'),
             'harga_beli' => $request->harga_beli ?? 0,
             'vendor_pengadaan' => $request->vendor_pengadaan ?? '-',
             'no_berita_acara' => $request->no_berita_acara ?? '-',
-            'Ruangan' => $request->Ruangan,
+            'Ruangan' => \App\Models\DetailAset::normalisasiRuangan($request->Ruangan),
             'lokasi_saat_ini' => $request->lokasi_saat_ini ?? '-',
             'penanggung_jawab' => $request->penanggung_jawab ?? '-',
             'status_aset' => $request->status_aset ?? 'Tersedia',
@@ -239,7 +240,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
 
         $request->validate([
             'kategori_id' => 'required',
-            'Ruangan'     => 'required',
+            'Ruangan'     => 'nullable|string|max:255',
             'status_aset' => 'required',
             'lampiran.*'  => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx|max:5120',
         ], [
@@ -302,6 +303,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
         $detail->update([
             'item_id'             => $request->item_id ?? $detail->item_id,
             'kategori_id'         => $request->kategori_id,
+            'cabang_id'           => $request->cabang_id ?? $detail->cabang_id,
             'kategori'            => $namaKategori,
             'kode_aset'           => $request->kode_aset ?? $detail->kode_aset,
             'nomor_seri'          => $request->nomor_seri ?? $detail->nomor_seri,
@@ -311,7 +313,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
             'harga_beli'          => $request->harga_beli ?? 0,
             'vendor_pengadaan'    => $request->vendor_pengadaan ?? '-',
             'no_berita_acara'     => $request->no_berita_acara ?? '-',
-            'Ruangan'             => $request->Ruangan,
+            'Ruangan'             => \App\Models\DetailAset::normalisasiRuangan($request->Ruangan),
             'lokasi_saat_ini'     => $request->lokasi_saat_ini ?? '-',
             'penanggung_jawab'    => $request->penanggung_jawab ?? '-',
             'status_aset'         => $request->status_aset ?? 'Tersedia',
@@ -372,32 +374,159 @@ $items = Item::paginate(50, ['*'], 'item_page');
         $query = \App\Models\DetailAset::with(['item', 'kategori', 'cabang'])->latest('aset_id');
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('kode_aset', 'like', "%{$search}%")
-                  ->orWhere('nomor_seri', 'like', "%{$search}%")
-                  ->orWhere('merk', 'like', "%{$search}%")
-                  ->orWhere('status_aset', 'like', "%{$search}%")
-                  ->orWhereHas('item', function($qItem) use ($search) {
-                      $qItem->where('nama_aset', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('kategori', function($qKat) use ($search) {
-                      $qKat->where('nama_kategori', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('cabang', function($qCabang) use ($search) {
-                      $qCabang->where('nama_cabang', 'like', "%{$search}%");
-                  });
-            });
+            $rawSearch = trim((string) $request->search);
+            $words = preg_split('/\s+/', $rawSearch, -1, PREG_SPLIT_NO_EMPTY) ?: [$rawSearch];
+
+            foreach ($words as $word) {
+                $query->where(function ($q) use ($word) {
+                    $q->where('kode_aset', 'like', "%{$word}%")
+                      ->orWhere('nomor_seri', 'like', "%{$word}%")
+                      ->orWhere('merk', 'like', "%{$word}%")
+                      ->orWhere('Ruangan', 'like', "%{$word}%")
+                      ->orWhere('lokasi_saat_ini', 'like', "%{$word}%")
+                      ->orWhere('penanggung_jawab', 'like', "%{$word}%")
+                      ->orWhere('status_aset', 'like', "%{$word}%")
+                      ->orWhere('status_berjalan', 'like', "%{$word}%")
+                      ->orWhere('status_maintenance', 'like', "%{$word}%")
+                      ->orWhere('status_peleburan', 'like', "%{$word}%")
+                      ->orWhere('metode_peleburan', 'like', "%{$word}%")
+                      ->orWhere('vendor_pengadaan', 'like', "%{$word}%")
+                      ->orWhere('teknisi', 'like', "%{$word}%")
+                      ->orWhere('no_berita_acara', 'like', "%{$word}%")
+                      ->orWhere('riwayat_mutasi', 'like', "%{$word}%")
+                      ->orWhere('tanggal_pengadaan', 'like', "%{$word}%")
+                      ->orWhere('unit', 'like', "%{$word}%")
+                      ->orWhere('harga_beli', 'like', "%{$word}%")
+                      ->orWhereHas('item', function ($qItem) use ($word) {
+                          $qItem->where('nama_aset', 'like', "%{$word}%")
+                                ->orWhere('awal_serial', 'like', "%{$word}%")
+                                ->orWhere('warna_seri', 'like', "%{$word}%");
+                      })
+                      ->orWhereHas('kategori', function ($qKat) use ($word) {
+                          $qKat->where('nama_kategori', 'like', "%{$word}%")
+                               ->orWhere('kode_kategori', 'like', "%{$word}%");
+                      })
+                      ->orWhereHas('cabang', function ($qCabang) use ($word) {
+                          $qCabang->where('nama_cabang', 'like', "%{$word}%");
+                      });
+                });
+            }
         }
         
         if ($request->filled('filter_tipe') && $request->filter_tipe !== 'Semua') {
-            $query->where('status_berjalan', $request->filter_tipe);
+            if ($request->filter_tipe === 'Tidak Ada') {
+                $query->where(function ($q) {
+                    $q->whereNull('status_berjalan')
+                      ->orWhere('status_berjalan', '')
+                      ->orWhere('status_berjalan', 'Tidak Ada');
+                });
+            } else {
+                $query->where('status_berjalan', $request->filter_tipe);
+            }
         }
 
         $detailAsets = $query->paginate(100)->withQueryString();
         $statuses = \App\Models\StatusAset::all(); 
+
+        $qrDir = storage_path('app/public/qrcodes');
+        $setFileQrExact = [];
+        $mapFileQrByAsetId = [];
+        if (is_dir($qrDir)) {
+            foreach (@scandir($qrDir) ?: [] as $fn) {
+                if (substr($fn, -4) === '.svg' && strpos($fn, 'qr_aset_') === 0) {
+                    $setFileQrExact[$fn] = true;
+                    if (preg_match('/^qr_aset_(\d+)_/', $fn, $mQr)) {
+                        $idAsetMap = (int) $mQr[1];
+                        if (!isset($mapFileQrByAsetId[$idAsetMap])) {
+                            $mapFileQrByAsetId[$idAsetMap] = $fn;
+                        }
+                    }
+                }
+            }
+        }
+
+        $petaWarnaStatus = [];
+        foreach ($statuses as $stItem) {
+            if (!empty($stItem->nama_status) && !empty($stItem->warna_status)) {
+                $petaWarnaStatus[$stItem->nama_status] = $stItem->warna_status;
+            }
+        }
+
+        $baseQrStorageUrl = asset('storage/qrcodes');
+        $siapkanAtributQr = function ($rowQr) use ($petaWarnaStatus, $setFileQrExact, $mapFileQrByAsetId, $baseQrStorageUrl) {
+            $wBg = $petaWarnaStatus[$rowQr->status_aset] ?? '#94a3b8';
+            $hx = ltrim($wBg, '#');
+            $cBg = 'rgba(148, 163, 184, 0.08)';
+            if (strlen($hx) === 6) {
+                $cBg = 'rgba(' . hexdec(substr($hx, 0, 2)) . ', ' . hexdec(substr($hx, 2, 2)) . ', ' . hexdec(substr($hx, 4, 2)) . ', 0.08)';
+            } elseif (strlen($hx) === 3) {
+                $cBg = 'rgba(' . hexdec(str_repeat(substr($hx, 0, 1), 2)) . ', ' . hexdec(str_repeat(substr($hx, 1, 1), 2)) . ', ' . hexdec(str_repeat(substr($hx, 2, 1), 2)) . ', 0.08)';
+            }
+            $expFile = 'qr_aset_' . $rowQr->aset_id . '_' . md5((string) $rowQr->kode_aset) . '.svg';
+            $upToDate = isset($setFileQrExact[$expFile]);
+            $anyQr = $upToDate || isset($mapFileQrByAsetId[(int) $rowQr->aset_id]);
+            $showFile = $upToDate ? $expFile : ($mapFileQrByAsetId[(int) $rowQr->aset_id] ?? null);
+            $namaItem = $rowQr->item->nama_aset ?? 'Tanpa Nama';
+            $namaKat = $rowQr->kategori->nama_kategori ?? (is_string($rowQr->kategori) ? $rowQr->kategori : '-');
+            $namaCab = $rowQr->cabang->nama_cabang ?? '-';
+            $ruanganVal = ($rowQr->Ruangan && $rowQr->Ruangan !== '-') ? $rowQr->Ruangan : '-';
+            $tipeBerjalanVal = $rowQr->status_berjalan ?? 'Tidak Ada';
+            $blobText = strtolower(implode(' ', array_filter([
+                $rowQr->kode_aset ?? '',
+                $namaItem,
+                $rowQr->item->awal_serial ?? '',
+                $namaKat,
+                $rowQr->kategori->kode_kategori ?? '',
+                $namaCab,
+                $rowQr->Ruangan ?? '',
+                $rowQr->lokasi_saat_ini ?? '',
+                $rowQr->merk ?? '',
+                $rowQr->nomor_seri ?? '',
+                $rowQr->penanggung_jawab ?? '',
+                $rowQr->status_aset ?? '',
+                $tipeBerjalanVal,
+                $rowQr->status_maintenance ?? '',
+                $rowQr->status_peleburan ?? '',
+                $rowQr->vendor_pengadaan ?? '',
+                $rowQr->teknisi ?? '',
+                $rowQr->no_berita_acara ?? '',
+                $rowQr->riwayat_mutasi ?? '',
+                $rowQr->tanggal_pengadaan ?? '',
+                $rowQr->unit ?? '',
+            ])));
+            return [
+                'id' => $rowQr->aset_id,
+                'nama' => $namaItem,
+                'kategori' => $namaKat,
+                'status_aset' => $rowQr->status_aset ?? 'N/A',
+                'kode_aset' => $rowQr->kode_aset ?? '-',
+                'nomor_seri' => $rowQr->nomor_seri ?? '-',
+                'merk' => $rowQr->merk ?? '-',
+                'cabang' => $namaCab,
+                'ruangan' => $ruanganVal,
+                'status_berjalan' => $tipeBerjalanVal,
+                'warna_bg' => $wBg,
+                'card_bg' => $cBg,
+                'has_qr' => $anyQr,
+                'up_to_date' => $upToDate,
+                'file_qr' => $showFile,
+                'url_qr' => $showFile ? ($baseQrStorageUrl . '/' . $showFile) : '',
+                'search' => $blobText,
+            ];
+        };
+
+        foreach ($detailAsets as $dtItem) {
+            $attr = $siapkanAtributQr($dtItem);
+            $dtItem->qr_attr = $attr;
+        }
+
+        $semuaAsetGlobal = \App\Models\DetailAset::with(['item', 'kategori', 'cabang'])->orderBy('aset_id', 'desc')->get();
+        $katalogSemuaQr = [];
+        foreach ($semuaAsetGlobal as $rowGlobal) {
+            $katalogSemuaQr[] = $siapkanAtributQr($rowGlobal);
+        }
         
-        return view('masteradmin.barcode', compact('detailAsets', 'statuses'));
+        return view('masteradmin.barcode', compact('detailAsets', 'statuses', 'katalogSemuaQr'));
     }
 
     public function generateAndSaveQr(Request $request, $id)
@@ -498,65 +627,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
 
     private function validasiKeamananFileUpload($file): ?string
     {
-        if (!$file || !$file->isValid()) {
-            return 'File lampiran gagal diunggah atau rusak.';
-        }
-
-        $origName = (string) $file->getClientOriginalName();
-        $ext = strtolower((string) $file->getClientOriginalExtension());
-        $allowedExt = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
-
-        if (!in_array($ext, $allowedExt, true)) {
-            return 'Format file "' . strip_tags($origName) . '" tidak sesuai! Hanya diizinkan format JPG, PNG, PDF, DOC, dan XLS.';
-        }
-
-        if (preg_match('/\.(?:php\d*|phtml|phar|pl|py|cgi|sh|bat|cmd|exe|dll|jsp|asp|aspx|hta|htaccess|ini|svg|html|htm|js)\b/i', $origName)) {
-            return 'Sistem Keamanan: File "' . strip_tags($origName) . '" ditolak karena mengandung ekstensi ganda berbahaya.';
-        }
-
-        $realPath = $file->getRealPath();
-        if ($realPath && is_file($realPath)) {
-            if (function_exists('finfo_open')) {
-                $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                if ($finfo) {
-                    $realMime = strtolower((string) finfo_file($finfo, $realPath));
-                    finfo_close($finfo);
-                    $allowedMimes = [
-                        'image/jpeg',
-                        'image/png',
-                        'application/pdf',
-                        'application/msword',
-                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'application/vnd.ms-excel',
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        'application/zip',
-                        'application/octet-stream',
-                        'application/cdfv2',
-                    ];
-                    if ($realMime !== '' && !in_array($realMime, $allowedMimes, true)) {
-                        return 'Sistem Keamanan: Isi asli file "' . strip_tags($origName) . '" (' . $realMime . ') tidak sesuai dengan format yang diizinkan.';
-                    }
-                }
-            }
-
-            $rawSample = (string) @file_get_contents($realPath, false, null, 0, 262144);
-            if ($rawSample !== '' && preg_match('/<\?(?:php|=)|<\s*script\b|\b(?:eval|shell_exec|passthru|proc_open|popen)\s*\(/i', $rawSample)) {
-                try {
-                    if (class_exists(\App\Models\RiwayatAktivitas::class)) {
-                        \App\Models\RiwayatAktivitas::create([
-                            'user_id'   => \Illuminate\Support\Facades\Auth::id(),
-                            'aktivitas' => 'Proteksi Anti-Deface: Memblokir unggahan file berbahaya (' . substr(strip_tags($origName), 0, 80) . ')',
-                            'modul'     => 'Keamanan Upload File',
-                            'status'    => 'Peringatan',
-                        ]);
-                    }
-                } catch (\Throwable $e) {
-                }
-                return 'Sistem Keamanan Anti-Deface: File "' . strip_tags($origName) . '" ditolak karena terdeteksi mengandung skrip berbahaya.';
-            }
-        }
-
-        return null;
+        return \App\Support\FileUploadSecurity::validateUploadedFile($file);
     }
 
     public function importExcel(Request $request)
@@ -623,7 +694,20 @@ public function generateSemuaQr()
     $ids = $request->input('ids');
 
     if (!empty($ids)) {
+        $terdampak = DetailAset::whereIn('aset_id', $ids)
+            ->get(['item_id', 'cabang_id', 'Ruangan']);
+
         DetailAset::whereIn('aset_id', $ids)->delete();
+
+        $sudahDisinkron = [];
+        foreach ($terdampak as $row) {
+            $ruangNorm = DetailAset::normalisasiRuangan($row->Ruangan);
+            $kunci = $row->item_id . '|' . ($row->cabang_id ?? 'null') . '|' . ($ruangNorm === '-' ? '__NO_ROOM__' : mb_strtolower($ruangNorm));
+            if (!isset($sudahDisinkron[$kunci])) {
+                $sudahDisinkron[$kunci] = true;
+                DetailAset::sinkronkanUnitKelompok($row->item_id, $row->cabang_id, $row->Ruangan);
+            }
+        }
 
         return redirect()->back()->with('success', count($ids) . ' data aset berhasil dihapus secara massal.');
     }

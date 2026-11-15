@@ -4,7 +4,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Barcode Aset - Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
     <style>
@@ -321,7 +324,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: #64748b; flex-shrink: 0;">
                                 <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
-                            <input type="text" id="input-search-barcode" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode QR, nomor seri, merk, cabang, atau status..." autocomplete="off">
+                            <input type="text" id="input-search-barcode" name="search" value="{{ request('search') }}" placeholder="Cari apapun: kode aset, nama, cabang, ruangan, kategori, merk, seri, PIC, status..." autocomplete="off">
                         </div>
 
                         <button type="submit" class="btn-qr" style="padding: 10px 18px; font-size: 13px; background: var(--primary-color); border-radius: 10px;">
@@ -357,106 +360,82 @@
         </header>
 
         <div class="card-box">
+            <input type="hidden" id="json-katalog-semua-qr" value="{{ json_encode($katalogSemuaQr ?? []) }}">
 
-            <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">Galeri Label QR Aset Fisik</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">
+                <h3 style="font-size: 16px; color: var(--primary-color); margin: 0;">Galeri Label QR Aset Fisik</h3>
+                <span id="info-hasil-search-global" style="display: none; font-size: 12.5px; font-weight: 700; color: var(--primary-color); background: #eff6ff; border: 1px solid #bfdbfe; padding: 5px 12px; border-radius: 999px;"></span>
+            </div>
 
             <div class="asset-grid">
                 @forelse($detailAsets ?? [] as $detail)
-               @php
-                    $warnaBg = '#94a3b8';
-                    if(isset($statuses)) {
-                        $match = $statuses->where('nama_status', $detail->status_aset)->first();
-                        if($match && !empty($match->warna_status)) {
-                            $warnaBg = $match->warna_status;
-                        }
-                    }
-
-                    $hex = ltrim($warnaBg, '#');
-                    $cardBg = 'rgba(148, 163, 184, 0.08)';
-                    if (strlen($hex) == 6) {
-                        $r = hexdec(substr($hex, 0, 2)); $g = hexdec(substr($hex, 2, 2)); $b = hexdec(substr($hex, 4, 2));
-                        $cardBg = "rgba($r, $g, $b, 0.08)";
-                    } elseif (strlen($hex) == 3) {
-                        $r = hexdec(str_repeat(substr($hex, 0, 1), 2)); $g = hexdec(str_repeat(substr($hex, 1, 1), 2)); $b = hexdec(str_repeat(substr($hex, 2, 1), 2));
-                        $cardBg = "rgba($r, $g, $b, 0.08)";
-                    }
-                @endphp
-
-                <div class="asset-card baris-qr-aset" data-bg="{{ $cardBg }}" data-border-top="{{ $warnaBg }}">
+                <div class="asset-card baris-qr-aset" data-bg="{{ $detail->qr_attr['card_bg'] ?? 'rgba(148, 163, 184, 0.08)' }}" data-border-top="{{ $detail->qr_attr['warna_bg'] ?? '#94a3b8' }}" data-search="{{ $detail->qr_attr['search'] ?? '' }}">
                     <div class="card-header">
                         <div>
-                            <div class="card-title">{{ $detail->item->nama_aset ?? 'Tanpa Nama' }}</div>
-                            <div class="card-subtitle">{{ $detail->kategori->nama_kategori ?? $detail->kategori ?? '-' }}</div>
+                            <div class="card-title">{{ $detail->qr_attr['nama'] ?? 'Tanpa Nama' }}</div>
+                            <div class="card-subtitle">{{ $detail->qr_attr['kategori'] ?? '-' }}</div>
                         </div>
-                        <span class="badge" data-bg="{{ $warnaBg }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            {{ $detail->status_aset ?? 'N/A' }}
+                        <span class="badge" data-bg="{{ $detail->qr_attr['warna_bg'] ?? '#94a3b8' }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            {{ $detail->qr_attr['status_aset'] ?? 'N/A' }}
                         </span>
                     </div>
 
                     <div class="card-body">
                         <div class="info-row">
                             <span class="info-label">Kode Aset</span>
-                            <span class="info-value" style="color: var(--primary-color);">{{ $detail->kode_aset ?? '-' }}</span>
+                            <span class="info-value" style="color: var(--primary-color);">{{ $detail->qr_attr['kode_aset'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Nomor Seri</span>
-                            <span class="info-value">{{ $detail->nomor_seri ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['nomor_seri'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Merk</span>
-                            <span class="info-value">{{ $detail->merk ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['merk'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Cabang</span>
-                            <span class="info-value">{{ $detail->cabang->nama_cabang ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['cabang'] ?? '-' }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Ruangan</span>
+                            <span class="info-value">{{ $detail->qr_attr['ruangan'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Tipe Berjalan</span>
                             <span class="label-tipe-berjalan badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);">
-                                {{ $detail->status_berjalan ?? 'Tidak Ada' }}
+                                {{ $detail->qr_attr['status_berjalan'] ?? 'Tidak Ada' }}
                             </span>
                         </div>
                     </div>
 
                     <div class="card-footer">
-                        @php
-
-                        $isiQr = $detail->kode_aset;
-                        $hash = md5($isiQr);
-
-                        $expectedFilename = 'qr_aset_' . $detail->aset_id . '_' .$hash . '.svg';
-                        $isUpToDate = file_exists(storage_path('app/public/qrcodes/' .$expectedFilename));
-
-                        $oldFiles = glob(storage_path('app/public/qrcodes/qr_aset_' .$detail->aset_id . '_*.svg'));
-                        $hasAnyQr = count($oldFiles) > 0;
-
-                        $fileToShow = $isUpToDate ? $expectedFilename : ($hasAnyQr ? basename($oldFiles[0]) : null);
-                        @endphp
-
-                        @if($hasAnyQr)
-
+                        @if(!empty($detail->qr_attr['has_qr']))
                             <button type="button" class="btn-qr btn-lihat-qr" style="background: var(--secondary-color);"
-                                data-url="{{ asset('storage/qrcodes/' . $fileToShow) }}"
-                                data-kode="{{ $detail->kode_aset }}"
-                                data-seri="{{ $detail->nomor_seri }}"
-                                data-nama="{{ $detail->item->nama_aset ?? 'Aset' }}"
-                                onclick="bukaModalQR('{{ asset('storage/qrcodes/' . $fileToShow) }}', '{{ $detail->kode_aset }}', '{{$detail->nomor_seri }}', '{{ $detail->item->nama_aset ?? 'Aset' }}', '{{ $fileToShow }}')">
+                                data-url="{{ $detail->qr_attr['url_qr'] ?? '' }}"
+                                data-kode="{{ $detail->qr_attr['kode_aset'] ?? '' }}"
+                                data-seri="{{ $detail->qr_attr['nomor_seri'] ?? '' }}"
+                                data-nama="{{ $detail->qr_attr['nama'] ?? 'Aset' }}"
+                                data-file="{{ $detail->qr_attr['file_qr'] ?? '' }}"
+                                onclick="bukaModalQRDariTombol(this)">
                                 Lihat QR
                             </button>
 
-                            @if($isUpToDate)
+                            @if(!empty($detail->qr_attr['up_to_date']))
                                 <button type="button" class="btn-qr" style="background: #cbd5e1; color: #64748b; cursor: not-allowed; box-shadow: none;" disabled title="QR sudah versi terbaru">
                                     Update QR
                                 </button>
                             @else
                                 <button type="button" class="btn-qr" style="background: #f59e0b;"
-                                    onclick="prosesBuatQR('{{ $detail->aset_id }}', this)" title="Data berubah, klik untuk memperbarui QR">
+                                    data-id="{{ $detail->aset_id }}"
+                                    onclick="prosesBuatQR(this.dataset.id, this)" title="Data berubah, klik untuk memperbarui QR">
                                     Update QR
                                 </button>
                             @endif
                         @else
                             <button type="button" class="btn-qr" style="width: 100%; background: var(--secondary-color);"
-                                onclick="prosesBuatQR('{{ $detail->aset_id }}', this)">
+                                data-id="{{ $detail->aset_id }}"
+                                onclick="prosesBuatQR(this.dataset.id, this)">
                                 Buat Label QR Baru
                             </button>
                         @endif
@@ -509,20 +488,20 @@
     </div>
 
     <script>
-
         document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.backgroundColor = el.getAttribute('data-bg'); });
         document.querySelectorAll('[data-border-top]').forEach(function(el) { el.style.borderTop = '5px solid ' + el.getAttribute('data-border-top'); });
         let currentQrUrl = '';
         let currentQrFilename = '';
+        const csrfTokenBarcode = (document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content')) || '';
 
         function prosesBuatQR(idAset, btnElement) {
             let originalText = btnElement.innerText;
             btnElement.innerText = 'Memproses...';
             btnElement.disabled = true;
 
-            fetch(`/admin/generate-qr/${idAset}`, {
+            fetch(`/masteradmin/generate-qr/${idAset}`, {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                    headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -534,6 +513,17 @@
                     btnElement.innerText = originalText;
                     btnElement.disabled = false;
                 });
+        }
+
+        function bukaModalQRDariTombol(btnEl) {
+            if (!btnEl) return;
+            bukaModalQR(
+                btnEl.getAttribute('data-url') || '',
+                btnEl.getAttribute('data-kode') || '',
+                btnEl.getAttribute('data-seri') || '',
+                btnEl.getAttribute('data-nama') || 'Aset',
+                btnEl.getAttribute('data-file') || ''
+            );
         }
 
         function bukaModalQR(qrUrl, kodeAset, nomorSeri, namaAset, namaFile) {
@@ -684,9 +674,9 @@
 
             document.getElementById('modalLoadingGenerate').classList.add('show');
 
-            fetch(`/generate-qr-all`, {
+            fetch(`/masteradmin/generate-qr-all`, {
                 method: 'POST',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
             })
             .then(res => res.json())
             .then(data => {
@@ -712,9 +702,9 @@
             loadingModal.querySelector('p').innerText = 'Sistem sedang memindai aset yang berubah dan memperbarui QR Code.';
             loadingModal.classList.add('show');
 
-            fetch(`/generate-qr-all`, {
+            fetch(`/masteradmin/generate-qr-all`, {
                 method: 'POST',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
             })
             .then(res => res.json())
             .then(data => {
@@ -755,38 +745,148 @@
                 });
             }
 
+            function terapkanGayaKartuDinamis(rootEl) {
+                const target = rootEl || document;
+                target.querySelectorAll('[data-bg]').forEach(function(el) {
+                    el.style.backgroundColor = el.getAttribute('data-bg');
+                });
+                target.querySelectorAll('[data-border-top]').forEach(function(el) {
+                    el.style.borderTop = '5px solid ' + el.getAttribute('data-border-top');
+                });
+            }
+
             document.addEventListener('DOMContentLoaded', function () {
                 const inputSearch = document.getElementById('input-search-barcode');
-                const gridEl = document.querySelector('.asset-grid');
-                if (!inputSearch || !gridEl) return;
+                const selectFilterTipe = document.getElementById('filterStatusBerjalan');
+                const formEl = document.getElementById('form-filter-barcode');
+                const cardBoxEl = document.querySelector('.card-box');
+                const gridEl = cardBoxEl ? cardBoxEl.querySelector('.asset-grid') : null;
+                const pagEl = cardBoxEl ? cardBoxEl.querySelector('.custom-pagination-wrap') : null;
+                const infoGlobalEl = document.getElementById('info-hasil-search-global');
+                const rawJsonEl = document.getElementById('json-katalog-semua-qr');
+                if (!inputSearch || !cardBoxEl || !gridEl) return;
 
-                inputSearch.addEventListener('input', function () {
+                let katalogGlobal = [];
+                if (rawJsonEl && rawJsonEl.value) {
+                    try {
+                        katalogGlobal = JSON.parse(rawJsonEl.value) || [];
+                    } catch (e) {
+                        katalogGlobal = [];
+                    }
+                }
+
+                const htmlGridAwal = gridEl.innerHTML;
+                const displayPagAwal = pagEl ? pagEl.style.display : '';
+
+                function escHtml(str) {
+                    return String(str === null || str === undefined ? '' : str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/\x3c/g, '&lt;')
+                        .replace(/\x3e/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                }
+
+                function buatHtmlKartuQr(item) {
+                    let footerHtml = '';
+                    if (item.has_qr) {
+                        const btnUpdate = item.up_to_date
+                            ? '\x3cbutton type="button" class="btn-qr" style="background: #cbd5e1; color: #64748b; cursor: not-allowed; box-shadow: none;" disabled title="QR sudah versi terbaru"\x3eUpdate QR\x3c/button\x3e'
+                            : '\x3cbutton type="button" class="btn-qr" style="background: #f59e0b;" data-id="' + escHtml(item.id) + '" onclick="prosesBuatQR(this.dataset.id, this)" title="Data berubah, klik untuk memperbarui QR"\x3eUpdate QR\x3c/button\x3e';
+                        footerHtml =
+                            '\x3cbutton type="button" class="btn-qr btn-lihat-qr" style="background: var(--secondary-color);"' +
+                            ' data-url="' + escHtml(item.url_qr) + '"' +
+                            ' data-kode="' + escHtml(item.kode_aset) + '"' +
+                            ' data-seri="' + escHtml(item.nomor_seri) + '"' +
+                            ' data-nama="' + escHtml(item.nama) + '"' +
+                            ' data-file="' + escHtml(item.file_qr) + '"' +
+                            ' onclick="bukaModalQRDariTombol(this)"\x3eLihat QR\x3c/button\x3e' +
+                            btnUpdate;
+                    } else {
+                        footerHtml =
+                            '\x3cbutton type="button" class="btn-qr" style="width: 100%; background: var(--secondary-color);"' +
+                            ' data-id="' + escHtml(item.id) + '" onclick="prosesBuatQR(this.dataset.id, this)"\x3eBuat Label QR Baru\x3c/button\x3e';
+                    }
+
+                    return (
+                        '\x3cdiv class="asset-card baris-qr-aset" style="background-color: ' + escHtml(item.card_bg) + '; border-top: 5px solid ' + escHtml(item.warna_bg) + ';" data-search="' + escHtml(item.search) + '"\x3e' +
+                            '\x3cdiv class="card-header"\x3e' +
+                                '\x3cdiv\x3e' +
+                                    '\x3cdiv class="card-title"\x3e' + escHtml(item.nama) + '\x3c/div\x3e' +
+                                    '\x3cdiv class="card-subtitle"\x3e' + escHtml(item.kategori) + '\x3c/div\x3e' +
+                                '\x3c/div\x3e' +
+                                '\x3cspan class="badge" style="background-color: ' + escHtml(item.warna_bg) + '; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"\x3e' + escHtml(item.status_aset) + '\x3c/span\x3e' +
+                            '\x3c/div\x3e' +
+                            '\x3cdiv class="card-body"\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eKode Aset\x3c/span\x3e\x3cspan class="info-value" style="color: var(--primary-color);"\x3e' + escHtml(item.kode_aset) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eNomor Seri\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.nomor_seri) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eMerk\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.merk) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eCabang\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.cabang) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eRuangan\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.ruangan) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eTipe Berjalan\x3c/span\x3e\x3cspan class="label-tipe-berjalan badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);"\x3e' + escHtml(item.status_berjalan) + '\x3c/span\x3e\x3c/div\x3e' +
+                            '\x3c/div\x3e' +
+                            '\x3cdiv class="card-footer"\x3e' + footerHtml + '\x3c/div\x3e' +
+                        '\x3c/div\x3e'
+                    );
+                }
+
+                function jalankanPencarianSemuaHalaman() {
                     const keyword = (inputSearch.value || '').trim().toLowerCase();
-                    const cards = gridEl.querySelectorAll('.asset-card');
-                    if (cards.length === 0) return;
+                    const filterTipe = selectFilterTipe ? (selectFilterTipe.value || 'Semua') : 'Semua';
+                    const words = keyword.split(/\s+/).filter(Boolean);
 
-                    let visibleCount = 0;
-                    cards.forEach(function (card) {
-                        const text = (card.textContent || '').toLowerCase();
-                        const match = keyword === '' || text.indexOf(keyword) !== -1;
-                        card.style.display = match ? '' : 'none';
-                        if (match) visibleCount++;
+                    if (words.length === 0) {
+                        gridEl.innerHTML = htmlGridAwal;
+                        terapkanGayaKartuDinamis(gridEl);
+                        if (pagEl) pagEl.style.display = displayPagAwal;
+                        if (infoGlobalEl) infoGlobalEl.style.display = 'none';
+                        return;
+                    }
+
+                    const hasilCocok = katalogGlobal.filter(function (item) {
+                        if (filterTipe && filterTipe !== 'Semua') {
+                            if (String(item.status_berjalan || '').toLowerCase() !== filterTipe.toLowerCase()) {
+                                return false;
+                            }
+                        }
+                        const haystack = String(item.search || '');
+                        return words.every(function (w) {
+                            return haystack.indexOf(w) !== -1;
+                        });
                     });
 
-                    let emptyLiveEl = document.getElementById('barcode-kosong-live-search');
-                    if (visibleCount === 0 && keyword !== '') {
-                        if (!emptyLiveEl) {
-                            emptyLiveEl = document.createElement('div');
-                            emptyLiveEl.id = 'barcode-kosong-live-search';
-                            emptyLiveEl.style.cssText = 'grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 40px 20px; background: #f8fafc; border-radius: 14px; border: 1px dashed #cbd5e1;';
-                            emptyLiveEl.innerHTML = '<p style="font-size: 14.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">Tidak ada kartu QR di halaman ini yang cocok</p><p style="font-size: 12.5px;">Tekan Enter atau klik tombol <b>Cari QR</b> di navbar untuk mencari di seluruh database.</p>';
-                            gridEl.appendChild(emptyLiveEl);
-                        }
-                        emptyLiveEl.style.display = '';
-                    } else if (emptyLiveEl) {
-                        emptyLiveEl.style.display = 'none';
+                    if (pagEl) pagEl.style.display = 'none';
+
+                    if (infoGlobalEl) {
+                        infoGlobalEl.textContent = 'Menampilkan ' + hasilCocok.length + ' dari ' + katalogGlobal.length + ' aset (Semua Halaman)';
+                        infoGlobalEl.style.display = 'inline-block';
                     }
-                });
+
+                    if (hasilCocok.length === 0) {
+                        gridEl.innerHTML =
+                            '\x3cdiv style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 45px 20px; background: #f8fafc; border-radius: 16px; border: 2px dashed #cbd5e1;"\x3e' +
+                                '\x3cp style="font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 4px;"\x3eTidak ditemukan aset untuk pencarian "' + escHtml(inputSearch.value.trim()) + '"\x3c/p\x3e' +
+                                '\x3cp style="font-size: 13px;"\x3ePencarian telah dilakukan ke seluruh ' + katalogGlobal.length + ' aset di semua halaman paginasi.\x3c/p\x3e' +
+                            '\x3c/div\x3e';
+                    } else {
+                        gridEl.innerHTML = hasilCocok.map(buatHtmlKartuQr).join('');
+                    }
+                }
+
+                inputSearch.addEventListener('input', jalankanPencarianSemuaHalaman);
+                if (formEl) {
+                    formEl.addEventListener('submit', function (e) {
+                        const kw = (inputSearch.value || '').trim();
+                        if (kw !== '' && katalogGlobal.length > 0) {
+                            e.preventDefault();
+                            jalankanPencarianSemuaHalaman();
+                        }
+                    });
+                }
+
+                if ((inputSearch.value || '').trim() !== '') {
+                    jalankanPencarianSemuaHalaman();
+                }
             });
         })();
     </script>

@@ -14,6 +14,13 @@ class RoleMiddleware
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
         if (!Auth::check()) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Silakan login terlebih dahulu untuk mengakses endpoint ini.',
+                ], 401);
+            }
+
             return redirect()->route('login')->withErrors([
                 'email' => 'Silakan login terlebih dahulu untuk mengakses halaman ini.',
             ]);
@@ -43,6 +50,13 @@ class RoleMiddleware
         }
 
         $this->catatPelanggaranAkses($request, $user);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak! Role Anda tidak memiliki izin untuk mengakses resource ini.',
+            ], 403);
+        }
 
         if ($userRole === 'admin') {
             return redirect()->route('admin.dashboard')

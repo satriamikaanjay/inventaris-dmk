@@ -13,8 +13,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\SecurityShieldMiddleware::class . ':edge');
+
         $middleware->web(append: [
-            \App\Http\Middleware\SecurityShieldMiddleware::class,
+            \App\Http\Middleware\SecurityShieldMiddleware::class . ':payload',
+            \App\Http\Middleware\SystemTelemetryMiddleware::class,
+        ]);
+
+        $middleware->api(append: [
+            \App\Http\Middleware\SecurityShieldMiddleware::class . ':payload',
+            \App\Http\Middleware\SystemTelemetryMiddleware::class,
         ]);
 
         $middleware->alias([

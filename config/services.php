@@ -23,4 +23,13 @@ return [
         ],
     ],
 
+    'turnstile' => [
+        'site_key'   => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
+    'developer' => [
+        'access_key' => env('DEV_ACCESS_KEY', 'DMK-DEV-2026-KEY'),
+    ],
+
 ];

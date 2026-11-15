@@ -4,7 +4,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Barcode Aset - Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
     <style>
@@ -157,6 +160,116 @@
         .custom-pagination-wrap nav span[aria-current="page"] > span { background: var(--primary-color) !important; color: #fff !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1) !important; }
         .custom-pagination-wrap nav span[aria-disabled="true"] > span { color: #cbd5e1 !important; background: #f8fafc !important; cursor: not-allowed !important; }
         .custom-pagination-wrap nav svg { width: 16px !important; height: 16px !important; }
+
+        .main-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width, 270px) !important;
+            right: 0 !important;
+            width: calc(100% - var(--sidebar-width, 270px)) !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 16px 25px !important;
+            margin: 0 !important;
+            border-bottom: 2px solid var(--border-color) !important;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06) !important;
+            z-index: 95 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+        }
+
+        .navbar-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .navbar-search-row {
+            width: 100%;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(0, 0, 0, 0.12);
+        }
+
+        .navbar-search-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            margin: 0;
+        }
+
+        .navbar-search-box {
+            position: relative;
+            flex: 1 1 280px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f1f5f9;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 9px 14px;
+            transition: all 0.2s ease;
+        }
+
+        .navbar-search-box:focus-within {
+            background: #ffffff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.12);
+        }
+
+        .navbar-search-box input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-color);
+            outline: none;
+        }
+
+        .navbar-filter-select {
+            padding: 9px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            background: #f8fafc;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+        }
+
+        .navbar-filter-select:focus {
+            background: #ffffff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(26, 79, 145, 0.12);
+        }
+
+        main {
+            padding-top: 165px !important;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                margin-left: 0;
+                width: 100%;
+                padding: 15px;
+            }
+            .main-header {
+                left: 0 !important;
+                width: 100% !important;
+                padding: 14px 16px !important;
+            }
+        }
     </style>
 </head>
 
@@ -165,162 +278,163 @@
     @include('layouts.mastersidebar')
 
     <main>
-        <header class="main-header">
-            <div class="header-title">
-                <h1>Barcode & QR Aset</h1>
-                <p>Pusat pembuatan dan cetak label QR Code aset fisik.</p>
+
+        <header class="main-header" id="navbar-barcode-fixed">
+            <div class="navbar-top-row">
+                <div class="header-title">
+                    <h1 style="display: flex; align-items: center; gap: 10px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                        <span>Barcode & QR Aset</span>
+                    </h1>
+                    <p>Pusat pembuatan dan cetak label QR Code aset fisik.</p>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                    <button type="button" class="btn-qr btn-generate-semua-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
+                        Generate Semua
+                    </button>
+
+                    <button type="button" class="btn-qr btn-update-semua-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Update Semua
+                    </button>
+
+                    <button type="button" class="btn-qr" style="background: var(--primary-color); padding: 10px 18px;" onclick="downloadSemuaQRAsJPG()" id="btn-download-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Download Semua QR
+                    </button>
+                </div>
             </div>
 
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+            <div class="navbar-search-row">
+                <form action="{{ url()->current() }}" method="GET" class="navbar-search-form" id="form-filter-barcode">
+                    @if(request('panel'))
+                        <input type="hidden" name="panel" value="{{ request('panel') }}">
+                    @endif
 
-                <button type="button" class="btn-qr btn-generate-semua-qr" style="background: var(--secondary-color); padding: 10px 18px;" onclick="prosesGenerateSemua()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 8v6h6"></path></svg>
-                    Generate Semua
-                </button>
+                    <div style="display: flex; gap: 10px; flex: 1; min-width: 260px; align-items: center;">
+                        <div class="navbar-search-box">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: #64748b; flex-shrink: 0;">
+                                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="input-search-barcode" name="search" value="{{ request('search') }}" placeholder="Cari apapun: kode aset, nama, cabang, ruangan, kategori, merk, seri, PIC, status..." autocomplete="off">
+                        </div>
 
-                <button type="button" class="btn-qr btn-update-semua-qr" style="background: #f59e0b; padding: 10px 18px;" onclick="prosesUpdateSemua()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    Update Semua
-                </button>
+                        <button type="submit" class="btn-qr" style="padding: 10px 18px; font-size: 13px; background: var(--primary-color); border-radius: 10px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span>Cari QR</span>
+                        </button>
 
-                <button type="button" class="btn-qr" style="background: var(--primary-color); padding: 10px 18px;" onclick="downloadSemuaQRAsJPG()" id="btn-download-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Download Semua QR
-                </button>
+                        @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
+                            <a href="{{ url()->current() }}{{ request('panel') ? '?panel=' . request('panel') : '' }}" class="btn-qr" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; text-decoration: none; padding: 9px 15px; font-size: 13px; border-radius: 10px; box-shadow: none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                                <span>Reset</span>
+                            </a>
+                        @endif
+                    </div>
 
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap;">Filter Tipe:</label>
+                        <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" class="navbar-filter-select">
+                            <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
+                            <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan Saja</option>
+                            <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan Saja</option>
+                            <option value="Aset Tidak Dipakai" {{ strtolower((string) request('filter_tipe')) === 'aset tidak dipakai' ? 'selected' : '' }}>Aset Tidak Dipakai Saja</option>
+                            <option value="Tidak Ada" {{ request('filter_tipe') == 'Tidak Ada' ? 'selected' : '' }}>Tidak Ada</option>
+                        </select>
+                    </div>
+                </form>
             </div>
-
         </header>
 
         <div class="card-box">
-            <form action="{{ url()->current() }}" method="GET" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between; width: 100%;">
-                @if(request('panel'))
-                    <input type="hidden" name="panel" value="{{ request('panel') }}">
-                @endif
+            <input type="hidden" id="json-katalog-semua-qr" value="{{ json_encode($katalogSemuaQr ?? []) }}">
 
-                <div style="display: flex; gap: 10px; flex: 1; min-width: 280px;">
-                    <div style="position: relative; flex: 1;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #94a3b8;">
-                            <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari nama aset, kode qr, seri, merk, status..." autocomplete="off" style="width: 100%; padding: 11px 15px 11px 45px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13px; outline: none; background: #f8fafc; font-weight: 500;">
-                    </div>
-                    <button type="submit" class="btn-qr" style="padding: 11px 20px; font-size: 13px; background: var(--primary-color);">Cari QR</button>
-
-                    @if(request('search') || (request('filter_tipe') && request('filter_tipe') != 'Semua'))
-                        <a href="{{ url()->current() }}{{ request('panel') ? '?panel=' . request('panel') : '' }}" class="btn-qr" style="background: #fee2e2; color: #ef4444; border: none; text-decoration: none; padding: 11px 18px; font-size: 13px; box-shadow: none;">Reset</a>
-                    @endif
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label for="filterStatusBerjalan" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Filter Tipe:</label>
-                    <select name="filter_tipe" id="filterStatusBerjalan" onchange="this.form.submit()" style="padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none; cursor: pointer; background: #f8fafc;">
-                        <option value="Semua" {{ request('filter_tipe') == 'Semua' ? 'selected' : '' }}>Tampilkan Semua</option>
-                        <option value="Aset Berjalan" {{ request('filter_tipe') == 'Aset Berjalan' ? 'selected' : '' }}>Aset Berjalan Saja</option>
-                        <option value="Aset Tidak Berjalan" {{ request('filter_tipe') == 'Aset Tidak Berjalan' ? 'selected' : '' }}>Aset Tidak Berjalan Saja</option>
-                    </select>
-                </div>
-            </form>
-
-            <h3 style="font-size: 16px; color: var(--primary-color); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">Galeri Label QR Aset Fisik</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed var(--border-color);">
+                <h3 style="font-size: 16px; color: var(--primary-color); margin: 0;">Galeri Label QR Aset Fisik</h3>
+                <span id="info-hasil-search-global" style="display: none; font-size: 12.5px; font-weight: 700; color: var(--primary-color); background: #eff6ff; border: 1px solid #bfdbfe; padding: 5px 12px; border-radius: 999px;"></span>
+            </div>
 
             <div class="asset-grid">
                 @forelse($detailAsets ?? [] as $detail)
-               @php
-                    $warnaBg = '#94a3b8';
-                    if(isset($statuses)) {
-                        $match = $statuses->where('nama_status', $detail->status_aset)->first();
-                        if($match && !empty($match->warna_status)) {
-                            $warnaBg = $match->warna_status;
-                        }
-                    }
-
-                    $hex = ltrim($warnaBg, '#');
-                    $cardBg = 'rgba(148, 163, 184, 0.08)';
-                    if (strlen($hex) == 6) {
-                        $r = hexdec(substr($hex, 0, 2)); $g = hexdec(substr($hex, 2, 2)); $b = hexdec(substr($hex, 4, 2));
-                        $cardBg = "rgba($r, $g, $b, 0.08)";
-                    } elseif (strlen($hex) == 3) {
-                        $r = hexdec(str_repeat(substr($hex, 0, 1), 2)); $g = hexdec(str_repeat(substr($hex, 1, 1), 2)); $b = hexdec(str_repeat(substr($hex, 2, 1), 2));
-                        $cardBg = "rgba($r, $g, $b, 0.08)";
-                    }
-                @endphp
-
-                <div class="asset-card baris-qr-aset" data-bg="{{ $cardBg }}" data-border-top="{{ $warnaBg }}">
+                <div class="asset-card baris-qr-aset" data-bg="{{ $detail->qr_attr['card_bg'] ?? 'rgba(148, 163, 184, 0.08)' }}" data-border-top="{{ $detail->qr_attr['warna_bg'] ?? '#94a3b8' }}" data-search="{{ $detail->qr_attr['search'] ?? '' }}">
                     <div class="card-header">
                         <div>
-                            <div class="card-title">{{ $detail->item->nama_aset ?? 'Tanpa Nama' }}</div>
-                            <div class="card-subtitle">{{ $detail->kategori->nama_kategori ?? $detail->kategori ?? '-' }}</div>
+                            <div class="card-title">{{ $detail->qr_attr['nama'] ?? 'Tanpa Nama' }}</div>
+                            <div class="card-subtitle">{{ $detail->qr_attr['kategori'] ?? '-' }}</div>
                         </div>
-                        <span class="badge" data-bg="{{ $warnaBg }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            {{ $detail->status_aset ?? 'N/A' }}
+                        <span class="badge" data-bg="{{ $detail->qr_attr['warna_bg'] ?? '#94a3b8' }}" style="color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            {{ $detail->qr_attr['status_aset'] ?? 'N/A' }}
                         </span>
                     </div>
 
                     <div class="card-body">
                         <div class="info-row">
                             <span class="info-label">Kode Aset</span>
-                            <span class="info-value" style="color: var(--primary-color);">{{ $detail->kode_aset ?? '-' }}</span>
+                            <span class="info-value" style="color: var(--primary-color);">{{ $detail->qr_attr['kode_aset'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Nomor Seri</span>
-                            <span class="info-value">{{ $detail->nomor_seri ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['nomor_seri'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Merk</span>
-                            <span class="info-value">{{ $detail->merk ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['merk'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Cabang</span>
-                            <span class="info-value">{{ $detail->cabang->nama_cabang ?? '-' }}</span>
+                            <span class="info-value">{{ $detail->qr_attr['cabang'] ?? '-' }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Ruangan</span>
+                            <span class="info-value">{{ $detail->qr_attr['ruangan'] ?? '-' }}</span>
                         </div>
                         <div class="info-row">
                             <span class="info-label">Tipe Berjalan</span>
                             <span class="label-tipe-berjalan badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);">
-                                {{ $detail->status_berjalan ?? 'Tidak Ada' }}
+                                {{ $detail->qr_attr['status_berjalan'] ?? 'Tidak Ada' }}
                             </span>
                         </div>
                     </div>
 
                     <div class="card-footer">
-                        @php
-
-                        $isiQr = $detail->kode_aset;
-                        $hash = md5($isiQr);
-
-                        $expectedFilename = 'qr_aset_' . $detail->aset_id . '_' .$hash . '.svg';
-                        $isUpToDate = file_exists(storage_path('app/public/qrcodes/' .$expectedFilename));
-
-                        $oldFiles = glob(storage_path('app/public/qrcodes/qr_aset_' .$detail->aset_id . '_*.svg'));
-                        $hasAnyQr = count($oldFiles) > 0;
-
-                        $fileToShow = $isUpToDate ? $expectedFilename : ($hasAnyQr ? basename($oldFiles[0]) : null);
-                        @endphp
-
-                        @if($hasAnyQr)
-
+                        @if(!empty($detail->qr_attr['has_qr']))
                             <button type="button" class="btn-qr btn-lihat-qr" style="background: var(--secondary-color);"
-                                data-url="{{ asset('storage/qrcodes/' . $fileToShow) }}"
-                                data-kode="{{ $detail->kode_aset }}"
-                                data-seri="{{ $detail->nomor_seri }}"
-                                data-nama="{{ $detail->item->nama_aset ?? 'Aset' }}"
-                                onclick="bukaModalQR('{{ asset('storage/qrcodes/' . $fileToShow) }}', '{{ $detail->kode_aset }}', '{{$detail->nomor_seri }}', '{{ $detail->item->nama_aset ?? 'Aset' }}', '{{ $fileToShow }}')">
+                                data-url="{{ $detail->qr_attr['url_qr'] ?? '' }}"
+                                data-kode="{{ $detail->qr_attr['kode_aset'] ?? '' }}"
+                                data-seri="{{ $detail->qr_attr['nomor_seri'] ?? '' }}"
+                                data-nama="{{ $detail->qr_attr['nama'] ?? 'Aset' }}"
+                                data-file="{{ $detail->qr_attr['file_qr'] ?? '' }}"
+                                onclick="bukaModalQRDariTombol(this)">
                                 Lihat QR
                             </button>
 
-                            @if($isUpToDate)
+                            @if(!empty($detail->qr_attr['up_to_date']))
                                 <button type="button" class="btn-qr" style="background: #cbd5e1; color: #64748b; cursor: not-allowed; box-shadow: none;" disabled title="QR sudah versi terbaru">
                                     Update QR
                                 </button>
                             @else
                                 <button type="button" class="btn-qr" style="background: #f59e0b;"
-                                    onclick="prosesBuatQR('{{ $detail->aset_id }}', this)" title="Data berubah, klik untuk memperbarui QR">
+                                    data-id="{{ $detail->aset_id }}"
+                                    onclick="prosesBuatQR(this.dataset.id, this)" title="Data berubah, klik untuk memperbarui QR">
                                     Update QR
                                 </button>
                             @endif
                         @else
                             <button type="button" class="btn-qr" style="width: 100%; background: var(--secondary-color);"
-                                onclick="prosesBuatQR('{{ $detail->aset_id }}', this)">
+                                data-id="{{ $detail->aset_id }}"
+                                onclick="prosesBuatQR(this.dataset.id, this)">
                                 Buat Label QR Baru
                             </button>
                         @endif
@@ -373,11 +487,11 @@
     </div>
 
     <script>
-
         document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.backgroundColor = el.getAttribute('data-bg'); });
         document.querySelectorAll('[data-border-top]').forEach(function(el) { el.style.borderTop = '5px solid ' + el.getAttribute('data-border-top'); });
         let currentQrUrl = '';
         let currentQrFilename = '';
+        const csrfTokenBarcode = (document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content')) || '';
 
         function prosesBuatQR(idAset, btnElement) {
             let originalText = btnElement.innerText;
@@ -386,7 +500,7 @@
 
             fetch(`/admin/generate-qr/${idAset}`, {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                    headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -398,6 +512,17 @@
                     btnElement.innerText = originalText;
                     btnElement.disabled = false;
                 });
+        }
+
+        function bukaModalQRDariTombol(btnEl) {
+            if (!btnEl) return;
+            bukaModalQR(
+                btnEl.getAttribute('data-url') || '',
+                btnEl.getAttribute('data-kode') || '',
+                btnEl.getAttribute('data-seri') || '',
+                btnEl.getAttribute('data-nama') || 'Aset',
+                btnEl.getAttribute('data-file') || ''
+            );
         }
 
         function bukaModalQR(qrUrl, kodeAset, nomorSeri, namaAset, namaFile) {
@@ -548,9 +673,9 @@
 
             document.getElementById('modalLoadingGenerate').classList.add('show');
 
-            fetch(`/generate-qr-all`, {
+            fetch(`/admin/generate-qr-all`, {
                 method: 'POST',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
             })
             .then(res => res.json())
             .then(data => {
@@ -576,9 +701,9 @@
             loadingModal.querySelector('p').innerText = 'Sistem sedang memindai aset yang berubah dan memperbarui QR Code.';
             loadingModal.classList.add('show');
 
-            fetch(`/generate-qr-all`, {
+            fetch(`/admin/generate-qr-all`, {
                 method: 'POST',
-                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' }
+                headers: { 'X-CSRF-TOKEN': csrfTokenBarcode, 'Accept': 'application/json' }
             })
             .then(res => res.json())
             .then(data => {
@@ -596,6 +721,175 @@
             });
         }
     </script>
+
+    <script>
+        (function () {
+            function sesuaikanPaddingMainDenganHeaderFixed() {
+                const mainEl = document.querySelector('main');
+                const headerEl = document.getElementById('navbar-barcode-fixed') || (mainEl ? mainEl.querySelector('.main-header') : document.querySelector('.main-header'));
+                if (mainEl && headerEl) {
+                    const tinggi = headerEl.offsetHeight || 135;
+                    mainEl.style.setProperty('padding-top', (tinggi + 22) + 'px', 'important');
+                }
+            }
+            document.addEventListener('DOMContentLoaded', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('load', sesuaikanPaddingMainDenganHeaderFixed);
+            window.addEventListener('resize', sesuaikanPaddingMainDenganHeaderFixed);
+            if ('ResizeObserver' in window) {
+                document.addEventListener('DOMContentLoaded', function () {
+                    const headerEl = document.getElementById('navbar-barcode-fixed') || document.querySelector('.main-header');
+                    if (headerEl) {
+                        new ResizeObserver(sesuaikanPaddingMainDenganHeaderFixed).observe(headerEl);
+                    }
+                });
+            }
+
+            function terapkanGayaKartuDinamis(rootEl) {
+                const target = rootEl || document;
+                target.querySelectorAll('[data-bg]').forEach(function(el) {
+                    el.style.backgroundColor = el.getAttribute('data-bg');
+                });
+                target.querySelectorAll('[data-border-top]').forEach(function(el) {
+                    el.style.borderTop = '5px solid ' + el.getAttribute('data-border-top');
+                });
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                const inputSearch = document.getElementById('input-search-barcode');
+                const selectFilterTipe = document.getElementById('filterStatusBerjalan');
+                const formEl = document.getElementById('form-filter-barcode');
+                const cardBoxEl = document.querySelector('.card-box');
+                const gridEl = cardBoxEl ? cardBoxEl.querySelector('.asset-grid') : null;
+                const pagEl = cardBoxEl ? cardBoxEl.querySelector('.custom-pagination-wrap') : null;
+                const infoGlobalEl = document.getElementById('info-hasil-search-global');
+                const rawJsonEl = document.getElementById('json-katalog-semua-qr');
+                if (!inputSearch || !cardBoxEl || !gridEl) return;
+
+                let katalogGlobal = [];
+                if (rawJsonEl && rawJsonEl.value) {
+                    try {
+                        katalogGlobal = JSON.parse(rawJsonEl.value) || [];
+                    } catch (e) {
+                        katalogGlobal = [];
+                    }
+                }
+
+                const htmlGridAwal = gridEl.innerHTML;
+                const displayPagAwal = pagEl ? pagEl.style.display : '';
+
+                function escHtml(str) {
+                    return String(str === null || str === undefined ? '' : str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/\x3c/g, '&lt;')
+                        .replace(/\x3e/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                }
+
+                function buatHtmlKartuQr(item) {
+                    let footerHtml = '';
+                    if (item.has_qr) {
+                        const btnUpdate = item.up_to_date
+                            ? '\x3cbutton type="button" class="btn-qr" style="background: #cbd5e1; color: #64748b; cursor: not-allowed; box-shadow: none;" disabled title="QR sudah versi terbaru"\x3eUpdate QR\x3c/button\x3e'
+                            : '\x3cbutton type="button" class="btn-qr" style="background: #f59e0b;" data-id="' + escHtml(item.id) + '" onclick="prosesBuatQR(this.dataset.id, this)" title="Data berubah, klik untuk memperbarui QR"\x3eUpdate QR\x3c/button\x3e';
+                        footerHtml =
+                            '\x3cbutton type="button" class="btn-qr btn-lihat-qr" style="background: var(--secondary-color);"' +
+                            ' data-url="' + escHtml(item.url_qr) + '"' +
+                            ' data-kode="' + escHtml(item.kode_aset) + '"' +
+                            ' data-seri="' + escHtml(item.nomor_seri) + '"' +
+                            ' data-nama="' + escHtml(item.nama) + '"' +
+                            ' data-file="' + escHtml(item.file_qr) + '"' +
+                            ' onclick="bukaModalQRDariTombol(this)"\x3eLihat QR\x3c/button\x3e' +
+                            btnUpdate;
+                    } else {
+                        footerHtml =
+                            '\x3cbutton type="button" class="btn-qr" style="width: 100%; background: var(--secondary-color);"' +
+                            ' data-id="' + escHtml(item.id) + '" onclick="prosesBuatQR(this.dataset.id, this)"\x3eBuat Label QR Baru\x3c/button\x3e';
+                    }
+
+                    return (
+                        '\x3cdiv class="asset-card baris-qr-aset" style="background-color: ' + escHtml(item.card_bg) + '; border-top: 5px solid ' + escHtml(item.warna_bg) + ';" data-search="' + escHtml(item.search) + '"\x3e' +
+                            '\x3cdiv class="card-header"\x3e' +
+                                '\x3cdiv\x3e' +
+                                    '\x3cdiv class="card-title"\x3e' + escHtml(item.nama) + '\x3c/div\x3e' +
+                                    '\x3cdiv class="card-subtitle"\x3e' + escHtml(item.kategori) + '\x3c/div\x3e' +
+                                '\x3c/div\x3e' +
+                                '\x3cspan class="badge" style="background-color: ' + escHtml(item.warna_bg) + '; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"\x3e' + escHtml(item.status_aset) + '\x3c/span\x3e' +
+                            '\x3c/div\x3e' +
+                            '\x3cdiv class="card-body"\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eKode Aset\x3c/span\x3e\x3cspan class="info-value" style="color: var(--primary-color);"\x3e' + escHtml(item.kode_aset) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eNomor Seri\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.nomor_seri) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eMerk\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.merk) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eCabang\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.cabang) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eRuangan\x3c/span\x3e\x3cspan class="info-value"\x3e' + escHtml(item.ruangan) + '\x3c/span\x3e\x3c/div\x3e' +
+                                '\x3cdiv class="info-row"\x3e\x3cspan class="info-label"\x3eTipe Berjalan\x3c/span\x3e\x3cspan class="label-tipe-berjalan badge" style="background-color: rgba(0,0,0,0.05); color: #1e293b; border: 1px solid rgba(0,0,0,0.1);"\x3e' + escHtml(item.status_berjalan) + '\x3c/span\x3e\x3c/div\x3e' +
+                            '\x3c/div\x3e' +
+                            '\x3cdiv class="card-footer"\x3e' + footerHtml + '\x3c/div\x3e' +
+                        '\x3c/div\x3e'
+                    );
+                }
+
+                function jalankanPencarianSemuaHalaman() {
+                    const keyword = (inputSearch.value || '').trim().toLowerCase();
+                    const filterTipe = selectFilterTipe ? (selectFilterTipe.value || 'Semua') : 'Semua';
+                    const words = keyword.split(/\s+/).filter(Boolean);
+
+                    if (words.length === 0) {
+                        gridEl.innerHTML = htmlGridAwal;
+                        terapkanGayaKartuDinamis(gridEl);
+                        if (pagEl) pagEl.style.display = displayPagAwal;
+                        if (infoGlobalEl) infoGlobalEl.style.display = 'none';
+                        return;
+                    }
+
+                    const hasilCocok = katalogGlobal.filter(function (item) {
+                        if (filterTipe && filterTipe !== 'Semua') {
+                            if (String(item.status_berjalan || '').toLowerCase() !== filterTipe.toLowerCase()) {
+                                return false;
+                            }
+                        }
+                        const haystack = String(item.search || '');
+                        return words.every(function (w) {
+                            return haystack.indexOf(w) !== -1;
+                        });
+                    });
+
+                    if (pagEl) pagEl.style.display = 'none';
+
+                    if (infoGlobalEl) {
+                        infoGlobalEl.textContent = 'Menampilkan ' + hasilCocok.length + ' dari ' + katalogGlobal.length + ' aset (Semua Halaman)';
+                        infoGlobalEl.style.display = 'inline-block';
+                    }
+
+                    if (hasilCocok.length === 0) {
+                        gridEl.innerHTML =
+                            '\x3cdiv style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 45px 20px; background: #f8fafc; border-radius: 16px; border: 2px dashed #cbd5e1;"\x3e' +
+                                '\x3cp style="font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 4px;"\x3eTidak ditemukan aset untuk pencarian "' + escHtml(inputSearch.value.trim()) + '"\x3c/p\x3e' +
+                                '\x3cp style="font-size: 13px;"\x3ePencarian telah dilakukan ke seluruh ' + katalogGlobal.length + ' aset di semua halaman paginasi.\x3c/p\x3e' +
+                            '\x3c/div\x3e';
+                    } else {
+                        gridEl.innerHTML = hasilCocok.map(buatHtmlKartuQr).join('');
+                    }
+                }
+
+                inputSearch.addEventListener('input', jalankanPencarianSemuaHalaman);
+                if (formEl) {
+                    formEl.addEventListener('submit', function (e) {
+                        const kw = (inputSearch.value || '').trim();
+                        if (kw !== '' && katalogGlobal.length > 0) {
+                            e.preventDefault();
+                            jalankanPencarianSemuaHalaman();
+                        }
+                    });
+                }
+
+                if ((inputSearch.value || '').trim() !== '') {
+                    jalankanPencarianSemuaHalaman();
+                }
+            });
+        })();
+    </script>
+
 </body>
 
 </html>

@@ -73,6 +73,8 @@
     $dataLaporanDatabase = [
         'peminjaman'   => [],
         'pengajuan'    => [],
+        'perpindahan'  => [],
+        'permintaan'   => [],
         'pengembalian' => [],
         'peleburan'    => [],
         'servis'       => [],
@@ -114,6 +116,41 @@
 
                         $tglRaw = (string) ($r->tanggal_pinjam ?? $r->tanggal_pengajuan ?? $r->tanggal_kembali ?? $r->tanggal_peleburan ?? $r->tanggal ?? $r->created_at ?? '');
                         $tglYmd = $tglRaw !== '' ? substr($tglRaw, 0, 10) : '';
+                        $jenisRow = strtolower(trim((string) ($r->jenis ?? $r->jenis_pengajuan ?? '')));
+                        $ruangAsalRow = trim((string) ($r->ruangan_asal ?? ''));
+                        $ruangTujuanRow = trim((string) ($r->ruangan_tujuan ?? ''));
+                        $cabAsalRow = trim((string) ($r->cabang_asal ?? ''));
+                        $cabTujuanRow = trim((string) ($r->cabang_tujuan ?? ''));
+
+                        $ruanganTampil = (string) ($r->ruangan ?? '');
+                        if ($ruanganTampil === '') {
+                            if ($jenisRow === 'perpindahan' && ($ruangAsalRow !== '' || $ruangTujuanRow !== '')) {
+                                $ruanganTampil = ($ruangAsalRow ?: '-') . ' -> ' . ($ruangTujuanRow ?: '-');
+                            } else {
+                                $ruanganTampil = $ruangTujuanRow !== '' && $ruangTujuanRow !== '-'
+                                    ? $ruangTujuanRow
+                                    : ($ruangAsalRow !== '' ? $ruangAsalRow : ($asetObj->Ruangan ?? $asetObj->lokasi_saat_ini ?? '-'));
+                            }
+                        }
+
+                        $cabangTampil = (string) ($r->nama_cabang ?? '');
+                        if ($cabangTampil === '') {
+                            if ($jenisRow === 'perpindahan' && $cabAsalRow !== '' && $cabTujuanRow !== '' && $cabAsalRow !== $cabTujuanRow) {
+                                $cabangTampil = $cabAsalRow . ' -> ' . $cabTujuanRow;
+                            } else {
+                                $cabangTampil = $cabTujuanRow !== '' && $cabTujuanRow !== '-'
+                                    ? $cabTujuanRow
+                                    : ($cabAsalRow !== '' ? $cabAsalRow : ($asetObj->cabang->nama_cabang ?? '-'));
+                            }
+                        }
+
+                        $statusRaw = (string) ($r->status ?? $r->status_pengajuan ?? ($asetObj->status_aset ?? '-'));
+                        if ($statusRaw === 'Disetujui') {
+                            $statusRaw = 'Disetujui (ACC)';
+                        }
+                        if ($jenisFilter === '' && $namaTbl === 'pengajuan_asets' && $jenisRow !== '') {
+                            $statusRaw = ucfirst($jenisRow) . ' - ' . $statusRaw;
+                        }
 
                         $hasilBaris[] = [
                             'id'               => (string) ($r->id ?? ($idx + 1)),
@@ -121,16 +158,16 @@
                             'nomor_seri'       => (string) ($r->nomor_seri ?? ($asetObj->nomor_seri ?? '-')),
                             'nama_aset'        => (string) ($r->nama_aset ?? ($asetObj->item->nama_aset ?? '-')),
                             'kategori_id'      => (string) ($r->kategori_id ?? ($asetObj->kategori_id ?? '')),
-                            'nama_kategori'    => (string) ($r->nama_kategori ?? ($asetObj->kategori->nama_kategori ?? '-')),
-                            'cabang_id'        => (string) ($r->cabang_id ?? ($asetObj->cabang_id ?? '')),
-                            'nama_cabang'      => (string) ($r->nama_cabang ?? ($asetObj->cabang->nama_cabang ?? '-')),
-                            'ruangan'          => (string) ($r->ruangan ?? ($asetObj->Ruangan ?? $asetObj->lokasi_saat_ini ?? '-')),
+                            'nama_kategori'    => (string) ($r->nama_kategori ?? $r->kategori_nama ?? ($asetObj->kategori->nama_kategori ?? '-')),
+                            'cabang_id'        => (string) ($r->cabang_id ?? $r->cabang_tujuan_id ?? ($asetObj->cabang_id ?? '')),
+                            'nama_cabang'      => $cabangTampil ?: '-',
+                            'ruangan'          => $ruanganTampil ?: '-',
                             'merk'             => (string) ($r->merk ?? ($asetObj->merk ?? '-')),
-                            'unit'             => max(1, (int) ($r->unit ?? $r->jumlah ?? ($asetObj->unit ?? 1))),
-                            'penanggung_jawab' => (string) ($r->nama_peminjam ?? $r->nama_pemohon ?? $r->penanggung_jawab ?? ($asetObj->penanggung_jawab ?? '-')),
-                            'status_aset'      => (string) ($r->status ?? $r->status_pengajuan ?? ($asetObj->status_aset ?? '-')),
+                            'unit'             => max(1, (int) ($r->unit ?? $r->unit_jumlah ?? $r->jumlah ?? ($asetObj->unit ?? 1))),
+                            'penanggung_jawab' => (string) ($r->pemohon ?? $r->nama_peminjam ?? $r->nama_pemohon ?? $r->penanggung_jawab ?? ($asetObj->penanggung_jawab ?? '-')),
+                            'status_aset'      => $statusRaw,
                             'harga_beli'       => (float) ($r->nilai ?? $r->harga_beli ?? ($asetObj->harga_beli ?? 0)),
-                            'biaya_terkait'    => (float) ($r->biaya_servis ?? $r->nilai_jual ?? ($asetObj->biaya_servis ?? 0)),
+                            'biaya_terkait'    => (float) ($r->nilai_estimasi ?? $r->biaya_servis ?? $r->nilai_jual ?? ($asetObj->biaya_servis ?? 0)),
                             'tanggal'          => $tglYmd,
                         ];
                     }
@@ -140,7 +177,7 @@
             return $hasilBaris;
         };
 
-        $dataLaporanDatabase['peminjaman'] = $ambilDariTabelTransaksi(['peminjamans', 'peminjaman_asets', 'peminjaman', 'transaksi_peminjamans']);
+        $dataLaporanDatabase['peminjaman'] = $ambilDariTabelTransaksi(['peminjamans', 'peminjaman_asets', 'peminjaman', 'transaksi_peminjamans', 'pengajuan_asets'], 'peminjaman');
         if (empty($dataLaporanDatabase['peminjaman'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
@@ -171,7 +208,37 @@
             }
         }
 
-        $dataLaporanDatabase['pengajuan'] = $ambilDariTabelTransaksi(['pengajuans', 'pengajuan_asets', 'pengajuan', 'permohonan_asets']);
+        $dataLaporanDatabase['pengajuan'] = $ambilDariTabelTransaksi(['pengajuan_asets', 'pengajuans', 'pengajuan', 'permohonan_asets']);
+        $dataLaporanDatabase['perpindahan'] = $ambilDariTabelTransaksi(['pengajuan_asets'], 'perpindahan');
+        if (empty($dataLaporanDatabase['perpindahan'])) {
+            foreach ($semuaDetailAset as $idx => $da) {
+                $mutasiTxt = trim((string) ($da->riwayat_mutasi ?? ''));
+                if ($mutasiTxt !== '' && $mutasiTxt !== '-') {
+                    $tglMutasi = (!empty($da->tanggal_mutasi) && $da->tanggal_mutasi !== '-')
+                        ? substr(trim((string) $da->tanggal_mutasi), 0, 10)
+                        : ($da->updated_at ? $da->updated_at->format('Y-m-d') : '');
+                    $dataLaporanDatabase['perpindahan'][] = [
+                        'id'               => (string) ($da->aset_id ?? $da->id ?? ($idx + 1)),
+                        'kode_aset'        => (string) ($da->kode_aset ?? '-'),
+                        'nomor_seri'       => (string) ($da->nomor_seri ?? '-'),
+                        'nama_aset'        => (string) ($da->item->nama_aset ?? '-'),
+                        'kategori_id'      => (string) ($da->kategori_id ?? ''),
+                        'nama_kategori'    => (string) ($da->kategori->nama_kategori ?? '-'),
+                        'cabang_id'        => (string) ($da->cabang_id ?? ''),
+                        'nama_cabang'      => (string) ($da->cabang->nama_cabang ?? '-'),
+                        'ruangan'          => (string) ($da->Ruangan ?? $da->lokasi_saat_ini ?? '-'),
+                        'merk'             => (string) ($da->merk ?? '-'),
+                        'unit'             => max(1, (int) ($da->unit ?? 1)),
+                        'penanggung_jawab' => (string) ($da->penanggung_jawab ?: '-'),
+                        'status_aset'      => $mutasiTxt,
+                        'harga_beli'       => (float) ($da->harga_beli ?? 0),
+                        'biaya_terkait'    => 0,
+                        'tanggal'          => $tglMutasi,
+                    ];
+                }
+            }
+        }
+        $dataLaporanDatabase['permintaan'] = $ambilDariTabelTransaksi(['pengajuan_asets'], 'permintaan');
         if (empty($dataLaporanDatabase['pengajuan'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
@@ -232,7 +299,7 @@
             }
         }
 
-        $dataLaporanDatabase['peleburan'] = $ambilDariTabelTransaksi(['peleburans', 'peleburan_asets', 'peleburan', 'transaksi_peleburans']);
+        $dataLaporanDatabase['peleburan'] = $ambilDariTabelTransaksi(['peleburans', 'peleburan_asets', 'peleburan', 'transaksi_peleburans', 'pengajuan_asets'], 'peleburan');
         if (empty($dataLaporanDatabase['peleburan'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
@@ -264,7 +331,7 @@
             }
         }
 
-        $dataLaporanDatabase['servis'] = $ambilDariTabelTransaksi(['servis_asets', 'maintenance_asets', 'perbaikan_asets']);
+        $dataLaporanDatabase['servis'] = $ambilDariTabelTransaksi(['servis_asets', 'maintenance_asets', 'perbaikan_asets', 'pengajuan_asets'], 'servis');
         if (empty($dataLaporanDatabase['servis'])) {
             foreach ($semuaDetailAset as $idx => $da) {
                 $st = strtolower(trim((string) ($da->status_aset ?? '')));
@@ -333,6 +400,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laporan Resmi Aset - {{ $__isMasterAdminLaporan ? 'Master Admin' : 'Admin' }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -1158,7 +1227,9 @@
                     </label>
                     <select id="select-jenis-laporan" onchange="pilihJenisLaporan(this.value)">
                         <option value="peminjaman" selected>Laporan Peminjaman Aset</option>
-                        <option value="pengajuan">Laporan Pengajuan Aset</option>
+                        <option value="pengajuan">Laporan Semua Pengajuan Aset</option>
+                        <option value="perpindahan">Laporan Perpindahan / Mutasi Aset</option>
+                        <option value="permintaan">Laporan Permintaan Aset</option>
                         <option value="pengembalian">Laporan Pengembalian Aset</option>
                         <option value="peleburan">Laporan Peleburan Aset</option>
                         <option value="servis">Laporan Servis & Pemeliharaan Aset</option>
@@ -1602,11 +1673,27 @@
                 labelSekunder: 'Total Biaya Pemeliharaan'
             },
             pengajuan: {
-                nama: 'Laporan Pengajuan Aset',
+                nama: 'Laporan Semua Pengajuan Aset',
                 judulTabel: 'Daftar Laporan Pengajuan Aset',
                 judulPdf: 'LAPORAN REKAPITULASI PENGAJUAN ASET INVENTARIS',
                 kodeDok: 'PGJ',
                 labelUtama: 'Total Aset Diajukan',
+                labelSekunder: 'Total Estimasi Biaya'
+            },
+            perpindahan: {
+                nama: 'Laporan Perpindahan / Mutasi Aset',
+                judulTabel: 'Daftar Laporan Perpindahan & Mutasi Aset',
+                judulPdf: 'LAPORAN REKAPITULASI PERPINDAHAN & MUTASI ASET',
+                kodeDok: 'PRP',
+                labelUtama: 'Total Aset Dipindahkan',
+                labelSekunder: 'Total Estimasi Biaya'
+            },
+            permintaan: {
+                nama: 'Laporan Permintaan Aset',
+                judulTabel: 'Daftar Laporan Permintaan Aset',
+                judulPdf: 'LAPORAN REKAPITULASI PERMINTAAN ASET INVENTARIS',
+                kodeDok: 'PRM',
+                labelUtama: 'Total Aset Diminta',
                 labelSekunder: 'Total Estimasi Biaya'
             },
             pengembalian: {
@@ -1887,6 +1974,8 @@
                     if (jenis === 'pengembalian') badgeClass = 'badge-kembali';
                     else if (jenis === 'peleburan') badgeClass = 'badge-lebur';
                     else if (jenis === 'pengajuan') badgeClass = 'badge-pengajuan';
+                    else if (jenis === 'perpindahan') badgeClass = 'badge-pengajuan';
+                    else if (jenis === 'permintaan') badgeClass = 'badge-pinjam';
                     else if (jenis === 'servis') badgeClass = 'badge-servis';
                     else if (jenis === 'inventaris') badgeClass = 'badge-inventaris';
 

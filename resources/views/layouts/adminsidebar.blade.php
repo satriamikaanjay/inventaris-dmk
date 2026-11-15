@@ -34,17 +34,22 @@
     }
 
     .brand-logo {
-        background-color: var(--primary-color);
-        color: #fff;
-        font-family: 'Coda Caption', sans-serif;
-        font-size: 24px;
-        font-weight: 800;
+        background-color: transparent;
         width: 48px;
-        height: 40px;
+        height: 44px;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .brand-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
     }
 
     .brand-text span {
@@ -326,6 +331,40 @@
         flex-shrink: 0;
     }
 
+    .submenu-pengajuan-btn.has-pending:not(.active) {
+        border-color: #fecaca;
+        background: #fff5f5;
+        color: #991b1b;
+    }
+
+    .submenu-pengajuan-btn.has-pending:not(.active) .submenu-dot {
+        background: #ef4444;
+    }
+
+    .badge-sub-pengajuan {
+        margin-left: auto;
+        background: #ef4444;
+        color: #ffffff;
+        font-size: 10.5px;
+        font-weight: 800;
+        padding: 1px 6px;
+        border-radius: 999px;
+        min-width: 19px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        box-shadow: 0 2px 5px rgba(239, 68, 68, 0.35);
+        flex-shrink: 0;
+    }
+
+    .submenu-pengajuan-btn.active .badge-sub-pengajuan {
+        background: #ef4444;
+        color: #ffffff;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+    }
+
     .pengajuan-view-container {
         display: none;
         flex-direction: column;
@@ -547,62 +586,6 @@
 </style>
 
 @php
-
-    try {
-        $__webRoutePath = base_path('routes/web.php');
-        if (is_file($__webRoutePath) && is_writable($__webRoutePath)) {
-            $__isiWebRoute = (string) file_get_contents($__webRoutePath);
-            if (!str_contains($__isiWebRoute, "'/pengajuan'") && !str_contains($__isiWebRoute, '"/pengajuan"')) {
-                $__routePengajuanBaru = "\n\Illuminate\Support\Facades\Route::middleware(['auth'])->get('/pengajuan', function () {\n"
-                    . "    if (view()->exists('pengajuan')) {\n"
-                    . "        return view('pengajuan');\n"
-                    . "    }\n"
-                    . "    if (view()->exists('admin.pengajuan')) {\n"
-                    . "        return view('admin.pengajuan');\n"
-                    . "    }\n"
-                    . "    return redirect()->to(url('/admin-dashboard?pengajuan=' . urlencode((string) request('jenis', 'peminjaman'))));\n"
-                    . "})->name('pengajuan.index');\n";
-                file_put_contents($__webRoutePath, $__isiWebRoute . $__routePengajuanBaru);
-            }
-        }
-    } catch (\Throwable $e) {
-    }
-
-    try {
-        $__kandidatFilePatch = array_merge(
-            glob(app_path('Http/Controllers/*.php')) ?: [],
-            glob(app_path('Http/Middleware/*.php')) ?: [],
-            [base_path('routes/web.php')]
-        );
-        foreach ($__kandidatFilePatch as $__filePatch) {
-            if (is_string($__filePatch) && is_file($__filePatch) && is_writable($__filePatch)) {
-                $__isiFilePatch = (string) file_get_contents($__filePatch);
-                if (str_contains($__isiFilePatch, '403') && (str_contains($__isiFilePatch, 'Hanya Master Admin') || str_contains(basename($__filePatch), 'KelolaAkun'))) {
-                    $__kodeRedirectAman = "throw new \\Illuminate\\Http\\Exceptions\\HttpResponseException(redirect(\\Illuminate\\Support\\Facades\\Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin-dashboard'))->with('error', 'Hanya Master Admin yang dapat mengelola akun.'));";
-                    $__isiBaruPatch = preg_replace(
-                        '/(?:return\s+)?abort\s*\(\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        $__kodeRedirectAman,
-                        $__isiFilePatch
-                    );
-                    $__isiBaruPatch = preg_replace(
-                        '/abort_if\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        'if ($1) { ' . $__kodeRedirectAman . ' }',
-                        (string) $__isiBaruPatch
-                    );
-                    $__isiBaruPatch = preg_replace(
-                        '/abort_unless\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        'if (!($1)) { ' . $__kodeRedirectAman . ' }',
-                        (string) $__isiBaruPatch
-                    );
-                    if (is_string($__isiBaruPatch) && $__isiBaruPatch !== $__isiFilePatch) {
-                        file_put_contents($__filePatch, $__isiBaruPatch);
-                    }
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-    }
-
     $__roleCekAdminSb = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -619,7 +602,7 @@
 
     $rolesStoragePath = storage_path('app/roles_permissions.json');
     $semuaModulDefault = [
-        'dashboard', 'pengajuan', 'pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis', 'notifikasi', 'data_aset', 'barcode_aset',
+        'dashboard', 'pengajuan', 'pengajuan_peminjaman', 'pengajuan_permintaan', 'pengajuan_peleburan', 'pengajuan_perpindahan', 'pengajuan_servis', 'notifikasi', 'data_aset', 'barcode_aset',
         'kategori_aset', 'cabang',
         'laporan', 'riwayat_aktivitas',
     ];
@@ -667,6 +650,10 @@
         }
     }
 
+    $ringkasanPengajuanSb = \App\Http\Controllers\AdminPengajuanController::hitungRingkasanPending();
+    $totalPendingPengajuanSb = (int) ($ringkasanPengajuanSb['total_pending'] ?? 0);
+    $pendingPerJenisSb = $ringkasanPengajuanSb['per_jenis'] ?? [];
+
     if (request()->has('_check_permissions_rt')) {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -674,10 +661,11 @@
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         echo json_encode([
-            'success'     => true,
-            'role'        => $roleUserAktif,
-            'updated_at'  => $versiPermissionSaatIni,
-            'permissions' => $permissionsUserSaatIni,
+            'success'           => true,
+            'role'              => $roleUserAktif,
+            'updated_at'        => $versiPermissionSaatIni,
+            'permissions'       => $permissionsUserSaatIni,
+            'pengajuan_pending' => $ringkasanPengajuanSb,
         ]);
         exit;
     }
@@ -801,7 +789,9 @@
 
 <sidebar>
     <div class="sidebar-brand">
-        <div class="brand-logo">SM</div>
+        <div class="brand-logo">
+            <img src="{{ asset('logo.png') }}" alt="Logo DMK">
+        </div>
         <div class="brand-text">
             <span class="sistem">Sistem</span>
             <span class="master-admin">{{ isset(Auth::user()->role) && strtolower(Auth::user()->role) !== 'master_admin' ? str_replace('_', ' ', Str::title(Auth::user()->role)) : 'Admin' }}</span>
@@ -832,44 +822,62 @@
 
                 <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"/></svg>
                 <span>Pengajuan</span>
-                <svg class="chevron-pengajuan" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                <span id="badge-sidebar-pengajuan-total"
+                      class="notif-badge"
+                      style="margin-left: auto; margin-right: 4px; background: #ef4444; color: #fff; {{ $totalPendingPengajuanSb > 0 ? 'display:inline-flex;' : 'display:none;' }}"
+                      title="{{ $totalPendingPengajuanSb }} pengajuan menunggu verifikasi Admin">{{ $totalPendingPengajuanSb }}</span>
+                <svg class="chevron-pengajuan" style="{{ $totalPendingPengajuanSb > 0 ? 'margin-left: 2px;' : '' }}" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
             </button>
             <div class="submenu-pengajuan" id="submenu-pengajuan-list">
                 <button type="button"
-                        class="submenu-pengajuan-btn"
+                        class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['peminjaman'] ?? 0) > 0 ? 'has-pending' : '' }}"
                         data-jenis="peminjaman"
                         data-subperm-key="pengajuan_peminjaman"
                         data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_peminjaman']) && empty($permissionsUserSaatIni['pengajuan_peminjaman']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('peminjaman')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peminjaman</span>
+                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-peminjaman" style="{{ ($pendingPerJenisSb['peminjaman'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['peminjaman'] ?? 0 }}</span>
                 </button>
                 <button type="button"
-                        class="submenu-pengajuan-btn"
-                        data-jenis="pengembalian"
-                        data-subperm-key="pengajuan_pengembalian"
-                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_pengembalian']) && empty($permissionsUserSaatIni['pengajuan_pengembalian']['view'])) ? '1' : '0' }}"
-                        onclick="pilihKategoriPengajuan('pengembalian')">
+                        class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['permintaan'] ?? 0) > 0 ? 'has-pending' : '' }}"
+                        data-jenis="permintaan"
+                        data-subperm-key="pengajuan_permintaan"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_permintaan']) && empty($permissionsUserSaatIni['pengajuan_permintaan']['view'])) ? '1' : '0' }}"
+                        onclick="pilihKategoriPengajuan('permintaan')">
                     <span class="submenu-dot"></span>
-                    <span>Pengajuan Pengembalian</span>
+                    <span>Pengajuan Permintaan</span>
+                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-permintaan" style="{{ ($pendingPerJenisSb['permintaan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['permintaan'] ?? 0 }}</span>
                 </button>
                 <button type="button"
-                        class="submenu-pengajuan-btn"
+                        class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['peleburan'] ?? 0) > 0 ? 'has-pending' : '' }}"
                         data-jenis="peleburan"
                         data-subperm-key="pengajuan_peleburan"
                         data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_peleburan']) && empty($permissionsUserSaatIni['pengajuan_peleburan']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('peleburan')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peleburan</span>
+                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-peleburan" style="{{ ($pendingPerJenisSb['peleburan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['peleburan'] ?? 0 }}</span>
                 </button>
                 <button type="button"
-                        class="submenu-pengajuan-btn"
+                        class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['perpindahan'] ?? 0) > 0 ? 'has-pending' : '' }}"
+                        data-jenis="perpindahan"
+                        data-subperm-key="pengajuan_perpindahan"
+                        data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_perpindahan']) && empty($permissionsUserSaatIni['pengajuan_perpindahan']['view'])) ? '1' : '0' }}"
+                        onclick="pilihKategoriPengajuan('perpindahan')">
+                    <span class="submenu-dot"></span>
+                    <span>Pengajuan Perpindahan</span>
+                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-perpindahan" style="{{ ($pendingPerJenisSb['perpindahan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['perpindahan'] ?? 0 }}</span>
+                </button>
+                <button type="button"
+                        class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['servis'] ?? 0) > 0 ? 'has-pending' : '' }}"
                         data-jenis="servis"
                         data-subperm-key="pengajuan_servis"
                         data-init-hide="{{ (isset($permissionsUserSaatIni['pengajuan_servis']) && empty($permissionsUserSaatIni['pengajuan_servis']['view'])) ? '1' : '0' }}"
                         onclick="pilihKategoriPengajuan('servis')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Servis</span>
+                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-servis" style="{{ ($pendingPerJenisSb['servis'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['servis'] ?? 0 }}</span>
                 </button>
             </div>
         </div>
@@ -996,6 +1004,17 @@
 <input type="hidden" id="json-admin-perms-user" value="{{ json_encode($permissionsUserSaatIni) }}">
 <input type="hidden" id="json-admin-url-pengajuan" value="{{ json_encode(url('/pengajuan')) }}">
 
+<script>
+(function () {
+    var cek = function () {
+        fetch("{{ route('cek_sesi') }}", { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { if (r.status === 401) { window.location.href = "{{ route('login') }}"; } })
+            .catch(function () {});
+    };
+    setInterval(cek, 5000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) cek(); });
+})();
+</script>
 <script>
     (function () {
         document.querySelectorAll('[data-init-hide="1"]').forEach(function (el) {
@@ -1146,7 +1165,7 @@
 
             window.__adminCurrentPerms = perms;
 
-            const subKeysPengajuan = ['pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis'];
+            const subKeysPengajuan = ['pengajuan_peminjaman', 'pengajuan_permintaan', 'pengajuan_peleburan', 'pengajuan_perpindahan', 'pengajuan_servis'];
             let adaSubPengajuanBuka = false;
 
             subKeysPengajuan.forEach(sk => {
@@ -1187,8 +1206,9 @@
                 const isCurrentOpen = mainPengajuanAllowed && (perms[currentSubKey] ? !!perms[currentSubKey].view : true);
                 const labelNamaMap = {
                     peminjaman: 'Pengajuan Peminjaman',
-                    pengembalian: 'Pengajuan Pengembalian',
+                    permintaan: 'Pengajuan Permintaan',
                     peleburan: 'Pengajuan Peleburan',
+                    perpindahan: 'Pengajuan Perpindahan',
                     servis: 'Pengajuan Servis'
                 };
                 const labelAktif = labelNamaMap[currentJenis] || 'Pengajuan';
@@ -1300,7 +1320,7 @@
 
             document.querySelectorAll('main form[method="POST"], main form[method="post"]').forEach(formEl => {
                 const actionUrl = (formEl.getAttribute('action') || '').toLowerCase();
-                if (actionUrl.includes('logout') || formEl.classList.contains('chip-edit-form') || formEl.classList.contains('form-delete-kategori')) return;
+                if (MODUL_HALAMAN_AKTIF === 'pengajuan' || actionUrl.includes('pengajuan') || actionUrl.includes('logout') || formEl.classList.contains('form-verifikasi-pengajuan') || formEl.classList.contains('chip-edit-form') || formEl.classList.contains('form-delete-kategori')) return;
                 const methodInput = formEl.querySelector('input[name="_method"]');
                 const methodVal = methodInput ? (methodInput.value || '').toUpperCase() : 'POST';
 
@@ -1506,6 +1526,31 @@
             }
         }
 
+        window.perbaruiBadgePengajuanSidebar = function (ringkasan) {
+            if (!ringkasan) return;
+            const totalPending = Number(ringkasan.total_pending || 0);
+            const perJenis = ringkasan.per_jenis || {};
+
+            const badgeTotal = document.getElementById('badge-sidebar-pengajuan-total');
+            if (badgeTotal) {
+                badgeTotal.textContent = String(totalPending);
+                badgeTotal.style.display = totalPending > 0 ? 'inline-flex' : 'none';
+                badgeTotal.title = totalPending + ' pengajuan menunggu verifikasi Admin';
+            }
+
+            ['peminjaman', 'permintaan', 'peleburan', 'perpindahan', 'servis'].forEach(function (j) {
+                const cnt = Number(perJenis[j] || 0);
+                const subBadge = document.getElementById('badge-sub-pengajuan-' + j);
+                if (subBadge) {
+                    subBadge.textContent = String(cnt);
+                    subBadge.style.display = cnt > 0 ? 'inline-flex' : 'none';
+                }
+                document.querySelectorAll('.submenu-pengajuan-btn[data-jenis="' + j + '"]').forEach(function (btn) {
+                    btn.classList.toggle('has-pending', cnt > 0);
+                });
+            });
+        };
+
         let sedangCekPerm = false;
         async function cekPerubahanPermissionRealtime() {
             if (sedangCekPerm || document.hidden) return;
@@ -1525,15 +1570,20 @@
 
                 if (res.ok) {
                     const data = await res.json();
-                    if (data && data.success && data.permissions) {
-                        const newVer = data.updated_at || 0;
-                        const prevJson = JSON.stringify(currentPerms);
-                        const nextJson = JSON.stringify(data.permissions);
+                    if (data && data.success) {
+                        if (data.pengajuan_pending) {
+                            window.perbaruiBadgePengajuanSidebar(data.pengajuan_pending);
+                        }
+                        if (data.permissions) {
+                            const newVer = data.updated_at || 0;
+                            const prevJson = JSON.stringify(currentPerms);
+                            const nextJson = JSON.stringify(data.permissions);
 
-                        if (newVer !== currentVersion || prevJson !== nextJson) {
-                            currentVersion = newVer;
-                            currentPerms = data.permissions;
-                            terapkanHakAksesKeLayar(currentPerms, true);
+                            if (newVer !== currentVersion || prevJson !== nextJson) {
+                                currentVersion = newVer;
+                                currentPerms = data.permissions;
+                                terapkanHakAksesKeLayar(currentPerms, true);
+                            }
                         }
                     }
                 }
@@ -1549,15 +1599,20 @@
                 ikon: '',
                 deskripsi: 'Kelola dan ajukan permohonan peminjaman aset inventaris antar cabang atau divisi.'
             },
-            pengembalian: {
-                judul: 'Pengajuan Pengembalian',
+            permintaan: {
+                judul: 'Pengajuan Permintaan',
                 ikon: '',
-                deskripsi: 'Kelola proses pengembalian aset yang telah selesai dipinjam beserta pengecekan kondisinya.'
+                deskripsi: 'Kelola permohonan permintaan pengadaan atau alokasi aset inventaris baru.'
             },
             peleburan: {
                 judul: 'Pengajuan Peleburan',
                 ikon: '',
                 deskripsi: 'Ajukan penghapusan atau peleburan aset fisik yang sudah rusak berat / tidak layak pakai.'
+            },
+            perpindahan: {
+                judul: 'Pengajuan Perpindahan',
+                ikon: '',
+                deskripsi: 'Kelola mutasi dan perpindahan penempatan ruangan atau cabang aset inventaris.'
             },
             servis: {
                 judul: 'Pengajuan Servis',
@@ -1580,23 +1635,26 @@
                         <div class="header-title">
                             <h1 style="font-size: 25px; font-weight: 800; color: var(--primary-color);">Menu Pengajuan Aset</h1>
                             <p style="font-size: 13px; color: var(--text-muted); font-weight: 500; margin-top: 5px;">
-                                Pilih jenis pengajuan aset di bawah ini (Peminjaman, Pengembalian, Peleburan, atau Servis).
+                                Pilih jenis pengajuan aset di bawah ini (Peminjaman, Permintaan, Peleburan, Perpindahan, atau Servis).
                             </p>
                         </div>
                     </header>
 
                     <div class="pengajuan-top-buttons">
                         <button type="button" class="btn-tab-pengajuan active" data-tab-jenis="peminjaman" onclick="pilihKategoriPengajuan('peminjaman')">
-                                                        <span>Pengajuan Peminjaman</span>
+                            <span>Pengajuan Peminjaman</span>
                         </button>
-                        <button type="button" class="btn-tab-pengajuan" data-tab-jenis="pengembalian" onclick="pilihKategoriPengajuan('pengembalian')">
-                                                        <span>Pengajuan Pengembalian</span>
+                        <button type="button" class="btn-tab-pengajuan" data-tab-jenis="permintaan" onclick="pilihKategoriPengajuan('permintaan')">
+                            <span>Pengajuan Permintaan</span>
                         </button>
                         <button type="button" class="btn-tab-pengajuan" data-tab-jenis="peleburan" onclick="pilihKategoriPengajuan('peleburan')">
-                                                        <span>Pengajuan Peleburan</span>
+                            <span>Pengajuan Peleburan</span>
+                        </button>
+                        <button type="button" class="btn-tab-pengajuan" data-tab-jenis="perpindahan" onclick="pilihKategoriPengajuan('perpindahan')">
+                            <span>Pengajuan Perpindahan</span>
                         </button>
                         <button type="button" class="btn-tab-pengajuan" data-tab-jenis="servis" onclick="pilihKategoriPengajuan('servis')">
-                                                        <span>Pengajuan Servis</span>
+                            <span>Pengajuan Servis</span>
                         </button>
                     </div>
 
@@ -1624,7 +1682,7 @@
             const panel = pastikanPanelUtamaPengajuanAda();
             if (!panel) return;
 
-            const listJenis = ['peminjaman', 'pengembalian', 'peleburan', 'servis'];
+            const listJenis = ['peminjaman', 'permintaan', 'peleburan', 'perpindahan', 'servis'];
             listJenis.forEach(j => {
                 const sk = 'pengajuan_' + j;
                 const boleh = currentPerms && currentPerms[sk] ? !!currentPerms[sk].view : true;
@@ -1719,6 +1777,8 @@
 
             if (
                 strUrl.includes('_check_permissions_rt') ||
+                strUrl.includes('_poll_pengajuan_rt') ||
+                strUrl.includes('/pengajuan/') ||
                 strUrl.includes('_perm_sync=') ||
                 strUrl.includes('_poll_riwayat_realtime') ||
                 strUrl.includes('_riwayat_realtime=') ||

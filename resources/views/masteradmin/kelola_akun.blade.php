@@ -1,40 +1,4 @@
 @php
-
-    try {
-        $__kandidatFilePatch = array_merge(
-            glob(app_path('Http/Controllers/*.php')) ?: [],
-            glob(app_path('Http/Middleware/*.php')) ?: [],
-            [base_path('routes/web.php')]
-        );
-        foreach ($__kandidatFilePatch as $__filePatch) {
-            if (is_string($__filePatch) && is_file($__filePatch) && is_writable($__filePatch)) {
-                $__isiFilePatch = (string) file_get_contents($__filePatch);
-                if (str_contains($__isiFilePatch, '403') && (str_contains($__isiFilePatch, 'Hanya Master Admin') || str_contains(basename($__filePatch), 'KelolaAkun'))) {
-                    $__kodeRedirectAman = "throw new \\Illuminate\\Http\\Exceptions\\HttpResponseException(redirect(\\Illuminate\\Support\\Facades\\Route::has('admin.dashboard') ? route('admin.dashboard') : url('/admin-dashboard'))->with('error', 'Hanya Master Admin yang dapat mengelola akun.'));";
-                    $__isiBaruPatch = preg_replace(
-                        '/(?:return\s+)?abort\s*\(\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        $__kodeRedirectAman,
-                        $__isiFilePatch
-                    );
-                    $__isiBaruPatch = preg_replace(
-                        '/abort_if\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        'if ($1) { ' . $__kodeRedirectAman . ' }',
-                        (string) $__isiBaruPatch
-                    );
-                    $__isiBaruPatch = preg_replace(
-                        '/abort_unless\s*\(\s*(.+?)\s*,\s*403\s*,\s*[\'""][^\'""]*Hanya Master Admin[^\'""]*[\'""]\s*\)\s*;/i',
-                        'if (!($1)) { ' . $__kodeRedirectAman . ' }',
-                        (string) $__isiBaruPatch
-                    );
-                    if (is_string($__isiBaruPatch) && $__isiBaruPatch !== $__isiFilePatch) {
-                        file_put_contents($__filePatch, $__isiBaruPatch);
-                    }
-                }
-            }
-        }
-    } catch (\Throwable $e) {
-    }
-
     $__cekRoleUserKelola = \Illuminate\Support\Facades\Auth::check()
         ? strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? ''))))
         : '';
@@ -98,6 +62,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelola Akun - Master Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 

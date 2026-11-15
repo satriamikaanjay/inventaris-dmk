@@ -59,10 +59,10 @@
             'caps'      => ['view'],
             'labels'    => ['view' => 'Buka Pengajuan'],
         ],
-        'pengajuan_pengembalian' => [
-            'nama'      => '↳ Pengajuan Pengembalian',
+        'pengajuan_permintaan' => [
+            'nama'      => '↳ Pengajuan Permintaan',
             'grup'      => 'MENU PENGAJUAN ASET',
-            'deskripsi' => 'Buka atau tutup akses tombol & fitur Pengajuan Pengembalian',
+            'deskripsi' => 'Buka atau tutup akses tombol & fitur Pengajuan Permintaan',
             'caps'      => ['view'],
             'labels'    => ['view' => 'Buka Pengajuan'],
         ],
@@ -70,6 +70,13 @@
             'nama'      => '↳ Pengajuan Peleburan',
             'grup'      => 'MENU PENGAJUAN ASET',
             'deskripsi' => 'Buka atau tutup akses tombol & fitur Pengajuan Peleburan',
+            'caps'      => ['view'],
+            'labels'    => ['view' => 'Buka Pengajuan'],
+        ],
+        'pengajuan_perpindahan' => [
+            'nama'      => '↳ Pengajuan Perpindahan',
+            'grup'      => 'MENU PENGAJUAN ASET',
+            'deskripsi' => 'Buka atau tutup akses tombol & fitur Pengajuan Perpindahan',
             'caps'      => ['view'],
             'labels'    => ['view' => 'Buka Pengajuan'],
         ],
@@ -169,19 +176,34 @@
     }
 
     $perluSimpanBersih = false;
+    $defaultRoleAdmin = [
+        'key'         => 'admin',
+        'name'        => 'Admin',
+        'badge_color' => '#10b981',
+        'desc'        => 'Mengelola operasional aset, master data, dan pemantauan sesuai izin dari Master Admin.',
+        'is_system'   => true,
+        'locked'      => false,
+        'permissions' => $buatDefaultPermission(true, true, true, true),
+    ];
+    $defaultRoleUser = [
+        'key'            => 'user',
+        'name'           => 'User (APK Mobile)',
+        'badge_color'    => '#3b82f6',
+        'desc'           => 'Pengguna aplikasi mobile. Hanya memiliki akses Dashboard (aktif/blokir login APK Mobile).',
+        'is_system'      => true,
+        'locked'         => false,
+        'only_dashboard' => true,
+        'permissions'    => [
+            'dashboard' => ['view' => true, 'create' => false, 'edit' => false, 'delete' => false],
+        ],
+    ];
+
     if (!$configRoles) {
         $configRoles = [
             'updated_at' => round(microtime(true) * 1000),
             'roles' => [
-                'admin' => [
-                    'key'         => 'admin',
-                    'name'        => 'Admin',
-                    'badge_color' => '#10b981',
-                    'desc'        => 'Mengelola operasional aset, master data, dan pemantauan sesuai izin dari Master Admin.',
-                    'is_system'   => true,
-                    'locked'      => false,
-                    'permissions' => $buatDefaultPermission(true, true, true, true),
-                ],
+                'admin' => $defaultRoleAdmin,
+                'user'  => $defaultRoleUser,
             ],
         ];
         $perluSimpanBersih = true;
@@ -195,21 +217,29 @@
         unset($configRoles['roles']['masteradmin']);
         $perluSimpanBersih = true;
     }
-
-    if (empty($configRoles['roles'])) {
-        $configRoles['roles']['admin'] = [
-            'key'         => 'admin',
-            'name'        => 'Admin',
-            'badge_color' => '#10b981',
-            'desc'        => 'Mengelola operasional aset, master data, dan pemantauan sesuai izin dari Master Admin.',
-            'is_system'   => true,
-            'locked'      => false,
-            'permissions' => $buatDefaultPermission(true, true, true, true),
-        ];
+    if (isset($configRoles['roles']['developer'])) {
+        unset($configRoles['roles']['developer']);
         $perluSimpanBersih = true;
     }
 
+    if (!isset($configRoles['roles']['admin'])) {
+        $configRoles['roles']['admin'] = $defaultRoleAdmin;
+        $perluSimpanBersih = true;
+    }
+    if (!isset($configRoles['roles']['user'])) {
+        $configRoles['roles']['user'] = $defaultRoleUser;
+        $perluSimpanBersih = true;
+    }
+    $configRoles['roles']['user']['only_dashboard'] = true;
+
     foreach ($configRoles['roles'] as $rKey => &$rVal) {
+        if ($rKey === 'user') {
+            $dashView = isset($rVal['permissions']['dashboard']['view']) ? !empty($rVal['permissions']['dashboard']['view']) : true;
+            $rVal['permissions'] = [
+                'dashboard' => ['view' => $dashView, 'create' => false, 'edit' => false, 'delete' => false],
+            ];
+            continue;
+        }
         if (!isset($rVal['permissions']) || !is_array($rVal['permissions'])) {
             $rVal['permissions'] = $buatDefaultPermission(true, true, true, true);
         }
@@ -292,16 +322,28 @@
                 exit;
             }
 
-            foreach ($daftarModulSistem as $mKey => $mInfo) {
-                $caps = $mInfo['caps'];
-                if (isset($decodedPerms[$mKey]) && is_array($decodedPerms[$mKey])) {
-                    $v = !empty($decodedPerms[$mKey]['view']);
-                    $configRoles['roles'][$roleKey]['permissions'][$mKey] = [
-                        'view'   => $v,
-                        'create' => ($v && in_array('create', $caps, true)) ? !empty($decodedPerms[$mKey]['create']) : false,
-                        'edit'   => ($v && in_array('edit', $caps, true)) ? !empty($decodedPerms[$mKey]['edit']) : false,
-                        'delete' => ($v && in_array('delete', $caps, true)) ? !empty($decodedPerms[$mKey]['delete']) : false,
-                    ];
+            if ($roleKey === 'user') {
+                $dashView = !empty($decodedPerms['dashboard']['view']);
+                $configRoles['roles']['user']['permissions'] = [
+                    'dashboard' => [
+                        'view'   => $dashView,
+                        'create' => false,
+                        'edit'   => false,
+                        'delete' => false,
+                    ],
+                ];
+            } else {
+                foreach ($daftarModulSistem as $mKey => $mInfo) {
+                    $caps = $mInfo['caps'];
+                    if (isset($decodedPerms[$mKey]) && is_array($decodedPerms[$mKey])) {
+                        $v = !empty($decodedPerms[$mKey]['view']);
+                        $configRoles['roles'][$roleKey]['permissions'][$mKey] = [
+                            'view'   => $v,
+                            'create' => ($v && in_array('create', $caps, true)) ? !empty($decodedPerms[$mKey]['create']) : false,
+                            'edit'   => ($v && in_array('edit', $caps, true)) ? !empty($decodedPerms[$mKey]['edit']) : false,
+                            'delete' => ($v && in_array('delete', $caps, true)) ? !empty($decodedPerms[$mKey]['delete']) : false,
+                        ];
+                    }
                 }
             }
 
@@ -322,85 +364,8 @@
             exit;
         }
 
-        if ($action === 'add_role') {
-            $namaRole = trim((string) request('role_name', ''));
-            $deskripsi = trim((string) request('role_desc', ''));
-            $warna = trim((string) request('badge_color', '#0ea5e9'));
-            $template = trim((string) request('template_mode', 'readonly'));
-
-            if ($namaRole === '') {
-                echo json_encode(['success' => false, 'message' => 'Nama role wajib diisi.']);
-                exit;
-            }
-
-            $slugKey = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $namaRole));
-            $slugKey = trim($slugKey, '_');
-
-            if ($slugKey === 'master_admin' || $slugKey === 'masteradmin') {
-                echo json_encode(['success' => false, 'message' => 'Master Admin adalah pengelola utama sistem dan tidak perlu ditambahkan ke daftar role.']);
-                exit;
-            }
-            if ($slugKey === '' || isset($configRoles['roles'][$slugKey])) {
-                echo json_encode(['success' => false, 'message' => 'Role dengan nama tersebut sudah terdaftar!']);
-                exit;
-            }
-
-            if ($template === 'full') {
-                $permsBaru = $buatDefaultPermission(true, true, true, true);
-            } elseif ($template === 'minimal') {
-                $permsBaru = $buatDefaultPermission(false, false, false, false);
-                $permsBaru['dashboard']['view'] = true;
-            } else {
-                $permsBaru = $buatDefaultPermission(true, false, false, false);
-            }
-
-            $configRoles['roles'][$slugKey] = [
-                'key'         => $slugKey,
-                'name'        => $namaRole,
-                'badge_color' => $warna ?: '#0ea5e9',
-                'desc'        => $deskripsi !== '' ? $deskripsi : ('Role ' . $namaRole . ' dengan pengaturan akses khusus.'),
-                'is_system'   => false,
-                'locked'      => false,
-                'permissions' => $permsBaru,
-            ];
-
-            $configRoles['updated_at'] = round(microtime(true) * 1000);
-            file_put_contents($rolesStoragePath, json_encode($configRoles, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-
-            $catatRiwayatRole('Menambah role baru: ' . $namaRole . ' (' . $slugKey . ')', 'Berhasil');
-
-            echo json_encode([
-                'success'     => true,
-                'message'     => 'Role baru "' . $namaRole . '" berhasil ditambahkan!',
-                'role'        => $configRoles['roles'][$slugKey],
-                'total_roles' => count($configRoles['roles']),
-            ]);
-            exit;
-        }
-
-        if ($action === 'delete_role') {
-            $roleKey = strtolower(trim((string) request('role_key', '')));
-            if ($roleKey === '' || !isset($configRoles['roles'][$roleKey])) {
-                echo json_encode(['success' => false, 'message' => 'Role tidak ditemukan.']);
-                exit;
-            }
-            if ($roleKey === 'master_admin') {
-                echo json_encode(['success' => false, 'message' => 'Role Master Admin tidak dapat dihapus!']);
-                exit;
-            }
-
-            $namaDihapus = $configRoles['roles'][$roleKey]['name'] ?? $roleKey;
-            unset($configRoles['roles'][$roleKey]);
-            $configRoles['updated_at'] = round(microtime(true) * 1000);
-            file_put_contents($rolesStoragePath, json_encode($configRoles, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-
-            $catatRiwayatRole('Menghapus role: ' . $namaDihapus . ' (' . $roleKey . ')', 'Peringatan');
-
-            echo json_encode([
-                'success'     => true,
-                'message'     => 'Role "' . $namaDihapus . '" berhasil dihapus!',
-                'total_roles' => count($configRoles['roles']),
-            ]);
+        if ($action === 'add_role' || $action === 'delete_role') {
+            echo json_encode(['success' => false, 'message' => 'Penambahan atau penghapusan role dinonaktifkan karena role sistem bersifat tetap.']);
             exit;
         }
 
@@ -463,6 +428,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Roles & Permission - Sistem Master Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
     <style>
@@ -1021,7 +988,7 @@
                         <span class="live-dot"></span> Real-Time Sync ke Admin Aktif
                     </span>
                 </h1>
-                <p>Kelola daftar role sistem, tambah/hapus role, serta atur pembatasan menu dan hak akses (Lihat, Tambah, Edit, Hapus) secara langsung.</p>
+                <p>Atur pembatasan menu dan hak akses untuk role sistem (Admin dan User APK Mobile) secara langsung tanpa perlu refresh.</p>
             </div>
         </header>
 
@@ -1104,55 +1071,22 @@
                                 <div class="role-card-desc">{{ $rData['desc'] ?? '-' }}</div>
                                 <div class="role-card-footer">
                                     <span id="role-summary-menu-{{ $rKey }}">
-                                        @if(!empty($rData['locked']))
+                                        @if($rKey === 'user')
+                                            @if(!empty($rData['permissions']['dashboard']['view']))
+                                                <span style="color:#059669; font-weight:700;">Dashboard Aktif (Bisa Akses)</span>
+                                            @else
+                                                <span style="color:#dc2626; font-weight:700;">Diblokir oleh Master Admin</span>
+                                            @endif
+                                        @elseif(!empty($rData['locked']))
                                             Akses Penuh Permanen
                                         @else
                                             {{ $jmlMenuAktif }} / {{ count($daftarModulSistem) }} Menu Aktif
                                         @endif
                                     </span>
-                                    @if(empty($rData['locked']))
-                                        <button type="button" class="btn-delete-role" onclick="hapusRole(event, '{{ $rKey }}', '{{ addslashes($rData['name']) }}')">
-                                            Hapus Role
-                                        </button>
-                                    @endif
                                 </div>
                             </div>
                         @endforeach
                     </div>
-                </div>
-
-                <div class="card-box" style="border-top: 4px solid var(--secondary-color);">
-                    <div class="section-title">
-                        <span>+ Tambah Role Baru</span>
-                    </div>
-                    <form id="form-tambah-role" onsubmit="tambahRoleBaru(event)">
-                        <div class="form-group">
-                            <label>Nama Role Baru <span style="color: var(--danger-color);">*</span></label>
-                            <input type="text" id="input_role_name" required placeholder="Contoh: Staff Gudang / Auditor">
-                        </div>
-                        <div class="form-group">
-                            <label>Deskripsi Singkat</label>
-                            <input type="text" id="input_role_desc" placeholder="Contoh: Hanya melihat data & laporan aset">
-                        </div>
-                        <div class="form-group">
-                            <label>Template Hak Akses Awal</label>
-                            <select id="input_role_template">
-                                <option value="readonly">Hanya Lihat Semua Menu (Read-Only)</option>
-                                <option value="full">Akses Penuh (Lihat, Tambah, Edit, Hapus)</option>
-                                <option value="minimal">Minimal (Hanya Dashboard)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Warna Identitas Role</label>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="color" id="input_role_color" value="#0ea5e9" style="width: 48px; height: 36px; padding: 2px; cursor: pointer;">
-                                <span style="font-size: 11px; color: #64748b;">Warna label pada daftar role</span>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-success" id="btn-submit-role" style="width: 100%; margin-top: 6px; padding: 11px;">
-                            + Simpan Role Baru
-                        </button>
-                    </form>
                 </div>
 
             </div>
@@ -1170,6 +1104,9 @@
                 </div>
 
                 <div id="banner-locked-master" style="display: none;"></div>
+                <div id="banner-role-user-mobile" style="display: none; margin-bottom: 14px; padding: 12px 16px; border-radius: 10px; background: #eff6ff; border: 1.5px solid #93c5fd; color: #1e40af; font-size: 12.5px; line-height: 1.5;">
+                    <strong>Pengaturan Akses User (APK Mobile):</strong> Role User hanya berjalan di APK Mobile sehingga hanya memiliki akses <strong>Dashboard</strong>. Jika saklar Dashboard diaktifkan, User dapat login & mengakses APK Mobile. Jika dimatikan, halaman login akan menampilkan pesan: <strong>"Akses user diblokir oleh master admin"</strong>.
+                </div>
 
                 <div class="perm-toolbar" id="toolbar-preset-global">
                     <div>
@@ -1216,7 +1153,7 @@
                                 @endphp
                                 @if($grupTerakhir !== $mInfo['grup'])
                                     @php $grupTerakhir = $mInfo['grup']; @endphp
-                                    <tr class="perm-group-row">
+                                    <tr class="perm-group-row" data-group="{{ $grupTerakhir }}">
                                         <td colspan="6">{{ $grupTerakhir }}</td>
                                     </tr>
                                 @endif
@@ -1349,10 +1286,22 @@
 
             const roleObj = DATA_ROLES[roleKey];
             const isLocked = !!roleObj.locked;
+            const isUserMobile = (roleKey === 'user');
 
             document.getElementById('judul-role-aktif').textContent = roleObj.name;
             document.getElementById('banner-locked-master').style.display = isLocked ? 'block' : 'none';
-            document.getElementById('toolbar-preset-global').style.display = isLocked ? 'none' : 'flex';
+            const bannerUser = document.getElementById('banner-role-user-mobile');
+            if (bannerUser) bannerUser.style.display = isUserMobile ? 'block' : 'none';
+            document.getElementById('toolbar-preset-global').style.display = (isLocked || isUserMobile) ? 'none' : 'flex';
+
+            document.querySelectorAll('.perm-row').forEach(row => {
+                const mKey = row.getAttribute('data-modul');
+                row.style.display = (isUserMobile && mKey !== 'dashboard') ? 'none' : '';
+            });
+            document.querySelectorAll('.perm-group-row').forEach(gRow => {
+                const gName = gRow.getAttribute('data-group');
+                gRow.style.display = (isUserMobile && gName !== 'MENU UTAMA') ? 'none' : '';
+            });
 
             renderMatriksRole(roleObj);
         }
@@ -1541,7 +1490,7 @@
             roleObj.permissions[mKey] = newPerm;
             perbaruiTampilanBaris(mKey, newPerm, false);
 
-            const subPengajuanKeys = ['pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis'];
+            const subPengajuanKeys = ['pengajuan_peminjaman', 'pengajuan_permintaan', 'pengajuan_peleburan', 'pengajuan_perpindahan', 'pengajuan_servis'];
             if (mKey === 'pengajuan') {
                 if (!v) {
                     subPengajuanKeys.forEach(sk => {
@@ -1605,7 +1554,7 @@
             roleObj.permissions[mKey] = newPerm;
             perbaruiTampilanBaris(mKey, newPerm, false);
 
-            const subPengajuanKeys = ['pengajuan_peminjaman', 'pengajuan_pengembalian', 'pengajuan_peleburan', 'pengajuan_servis'];
+            const subPengajuanKeys = ['pengajuan_peminjaman', 'pengajuan_permintaan', 'pengajuan_peleburan', 'pengajuan_perpindahan', 'pengajuan_servis'];
             if (mKey === 'pengajuan') {
                 subPengajuanKeys.forEach(sk => {
                     roleObj.permissions[sk] = { view: newPerm.view, create: false, edit: false, delete: false };
@@ -1669,10 +1618,17 @@
             const roleObj = DATA_ROLES[roleAktifKey];
             if (!roleObj || roleObj.locked) return;
 
-            const jmlAktif = hitungMenuAktif(roleObj.permissions);
             const summaryEl = document.getElementById('role-summary-menu-' + roleAktifKey);
             if (summaryEl) {
-                summaryEl.textContent = `${jmlAktif} / ${MODUL_KEYS.length} Menu Aktif`;
+                if (roleAktifKey === 'user') {
+                    const dashAktif = !!(roleObj.permissions && roleObj.permissions.dashboard && roleObj.permissions.dashboard.view);
+                    summaryEl.innerHTML = dashAktif
+                        ? '<span style="color:#059669; font-weight:700;">Dashboard Aktif (Bisa Akses)</span>'
+                        : '<span style="color:#dc2626; font-weight:700;">Diblokir oleh Master Admin</span>';
+                } else {
+                    const jmlAktif = hitungMenuAktif(roleObj.permissions);
+                    summaryEl.textContent = `${jmlAktif} / ${MODUL_KEYS.length} Menu Aktif`;
+                }
             }
 
             try {
@@ -1699,125 +1655,6 @@
                 }
             } catch (err) {
                 showToast('Gagal menghubungi server.', 'error');
-            }
-        }
-
-        async function tambahRoleBaru(e) {
-            e.preventDefault();
-            const nameInput = document.getElementById('input_role_name');
-            const descInput = document.getElementById('input_role_desc');
-            const tplInput = document.getElementById('input_role_template');
-            const colorInput = document.getElementById('input_role_color');
-            const btn = document.getElementById('btn-submit-role');
-
-            const roleName = nameInput.value.trim();
-            if (!roleName) return;
-
-            btn.disabled = true;
-            btn.textContent = 'Menyimpan Role...';
-
-            try {
-                const params = new URLSearchParams({
-                    _roles_action: 'add_role',
-                    role_name: roleName,
-                    role_desc: descInput.value.trim(),
-                    template_mode: tplInput.value,
-                    badge_color: colorInput.value
-                });
-
-                const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-
-                const data = await res.json();
-                if (data && data.success && data.role) {
-                    const r = data.role;
-                    DATA_ROLES[r.key] = r;
-
-                    const jmlMenu = hitungMenuAktif(r.permissions);
-                    const container = document.getElementById('role-list-container');
-                    const card = document.createElement('div');
-                    card.className = 'role-card-item';
-                    card.id = 'role-card-' + r.key;
-                    card.setAttribute('data-role-key', r.key);
-                    card.setAttribute('onclick', `pilihRoleUntukDiatur('${r.key}')`);
-                    card.innerHTML = `
-                        <div class="role-card-top">
-                            <span class="role-badge-name">
-                                <span class="role-dot" style="background: ${r.badge_color};"></span>
-                                ${r.name}
-                            </span>
-                            <span class="role-user-pill">0 Akun</span>
-                        </div>
-                        <div class="role-card-desc">${r.desc}</div>
-                        <div class="role-card-footer">
-                            <span id="role-summary-menu-${r.key}">${jmlMenu} / ${MODUL_KEYS.length} Menu Aktif</span>
-                            <button type="button" class="btn-delete-role" onclick="hapusRole(event, '${r.key}', '${r.name.replace(/'/g, "\'")}')">
-                                Hapus Role
-                            </button>
-                        </div>
-                    `;
-                    container.appendChild(card);
-
-                    document.getElementById('kpi-total-roles').textContent = data.total_roles;
-                    document.getElementById('badge-count-role').textContent = data.total_roles + ' Role';
-
-                    nameInput.value = '';
-                    descInput.value = '';
-                    pilihRoleUntukDiatur(r.key);
-                    showToast(data.message, 'success');
-                } else {
-                    showToast(data.message || 'Gagal menambah role.', 'error');
-                }
-            } catch (err) {
-                showToast('Terjadi kesalahan koneksi.', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '+ Simpan Role Baru';
-            }
-        }
-
-        async function hapusRole(e, roleKey, roleName) {
-            e.stopPropagation();
-            if (!confirm(`Yakin ingin menghapus role "${roleName}"?`)) return;
-
-            try {
-                const params = new URLSearchParams({
-                    _roles_action: 'delete_role',
-                    role_key: roleKey
-                });
-
-                const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-
-                const data = await res.json();
-                if (data && data.success) {
-                    delete DATA_ROLES[roleKey];
-                    const card = document.getElementById('role-card-' + roleKey);
-                    if (card) card.remove();
-
-                    document.getElementById('kpi-total-roles').textContent = data.total_roles;
-                    document.getElementById('badge-count-role').textContent = data.total_roles + ' Role';
-
-                    if (roleAktifKey === roleKey) {
-                        const fallbackKey = DATA_ROLES['admin'] ? 'admin' : Object.keys(DATA_ROLES)[0];
-                        if (fallbackKey) pilihRoleUntukDiatur(fallbackKey);
-                    }
-                    showToast(data.message, 'success');
-                } else {
-                    showToast(data.message || 'Gagal menghapus role.', 'error');
-                }
-            } catch (err) {
-                showToast('Terjadi kesalahan koneksi.', 'error');
             }
         }
 

@@ -5,6 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notifikasi - Admin</title>
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('logo.png') }}">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Coda+Caption:wght@800&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
 
@@ -130,7 +132,7 @@
             </div>
         </div>
 
-        <form method="GET" action="{{ route('notifikasi.index') }}" class="notif-filter">
+        <form method="GET" action="{{ route('admin.notifikasi.index') }}" class="notif-filter">
 
             <div class="cari-wrap">
                 <input type="text" name="q" value="{{ request('q') }}" placeholder="Cari kode, nama aset, merk, ruangan..." autocomplete="off">
@@ -153,7 +155,7 @@
 
             <button type="submit" class="btn btn-primary" style="padding: 9px 18px;">Terapkan</button>
             @if($adaFilter)
-                <a href="{{ route('notifikasi.index') }}" class="reset">Reset filter</a>
+                <a href="{{ route('admin.notifikasi.index') }}" class="reset">Reset filter</a>
             @endif
         </form>
 
@@ -229,7 +231,7 @@
                 </div>
 
                 <div class="notif-aksi">
-                    <a class="btn-lihat" href="{{ route('aset.index', ['search' => $aset->kode_aset]) }}">Lihat Data</a>
+                    <a class="btn-lihat" href="{{ route('admin.aset.index', ['search' => $aset->kode_aset]) }}">Lihat Data</a>
                 </div>
             </div>
             @empty

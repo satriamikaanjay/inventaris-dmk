@@ -81,8 +81,14 @@ class AsetImport
 
             $urutan = $this->tentukanUrutanPerCabang($semua);
 
-            foreach ($semua as $i => $baris) {
-                $this->simpanBaris($baris, $urutan[$i], $ringkasan);
+            DetailAset::$autoSinkronUnit = false;
+            try {
+                foreach ($semua as $i => $baris) {
+                    $this->simpanBaris($baris, $urutan[$i], $ringkasan);
+                }
+                DetailAset::sinkronkanSemuaUnit();
+            } finally {
+                DetailAset::$autoSinkronUnit = true;
             }
         });
 

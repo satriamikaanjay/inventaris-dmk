@@ -174,7 +174,10 @@ class KelolaAkunController extends Controller
         }
 
         try {
+            $userId = $user->getKey();
             $user->delete();
+            \Illuminate\Support\Facades\DB::table(config('session.table', 'sessions'))
+                ->where('user_id', $userId)->delete();
         } catch (QueryException $e) {
             $this->catat("Gagal menghapus akun {$info} - masih terhubung dengan data lain", 'Peringatan');
 

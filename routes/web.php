@@ -1,6 +1,9 @@
-    <?php
+<?php
 
-    use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AdminPengajuanController;
+use App\Http\Controllers\DeveloperController;
     use App\Http\Controllers\AdminDashboardController;
     use App\Http\Controllers\AdminAsetController;
     use App\Http\Controllers\AdminBarcodeController;
@@ -22,6 +25,8 @@
     use App\Http\Controllers\KelolaAkunController;
     use App\Http\Controllers\NotifikasiController;
 
+    Route::get('/cek-sesi', fn () => response()->json(['aktif' => \Illuminate\Support\Facades\Auth::check()], \Illuminate\Support\Facades\Auth::check() ? 200 : 401))->name('cek_sesi');
+
     Route::get('/', [AuthController::class, 'index'])->name('login');
 
     Route::post('/login', [AuthController::class, 'login'])
@@ -36,7 +41,7 @@
 
         $totalAset     = \App\Models\DetailAset::count();
         $asetPerCabang = \App\Models\DetailAset::with('cabang')
-                            ->select('cabang_id', \DB::raw('count(*) as total'))
+                            ->select('cabang_id', DB::raw('count(*) as total'))
                             ->groupBy('cabang_id')
                             ->get();
 
@@ -44,9 +49,9 @@
 
         $statusRusak = ['Perbaikan', 'Rusak Ringan', 'Rusak Sedang', 'Rusak Berat', 'Rusak Parah'];
         $totalMendekatiServis = \App\Models\DetailAset::whereIn('status_aset', $statusRusak)->count();
-        
+
         $rawDetailServis = \App\Models\DetailAset::with(['cabang', 'item'])->whereIn('status_aset', $statusRusak)->get();
-                            
+
         $servisDetail = [];
         foreach($rawDetailServis as $aset) {
             $namaCabang = $aset->cabang->nama_cabang ?? 'Tanpa Cabang';
@@ -67,20 +72,20 @@
             'totalMendekatiServis', 'servisDetail',
             'totalKategori', 'totalMasterAset'
         ));
-    })->middleware('auth')->name('masteradmin.dashboard');
+    })->middleware(['auth', 'role:master_admin'])->name('masteradmin.dashboard');
 
-    Route::post('/logout', [App\Http\Controllers\AuthController::class, 'logout'])->name('logout');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-    Route::get('/notifikasi', [NotifikasiController::class, 'index'])->middleware('auth')->name('notifikasi.index');
+    Route::get('/notifikasi', [NotifikasiController::class, 'index'])->middleware(['auth', 'role:master_admin'])->name('notifikasi.index');
 
-    Route::get('/barcode-aset', [\App\Http\Controllers\ItemController::class, 'barcodeIndex'])->middleware('auth')->name('barcode_aset.index');
+    Route::get('/barcode-aset', [\App\Http\Controllers\ItemController::class, 'barcodeIndex'])->middleware(['auth', 'role:master_admin'])->name('barcode_aset.index');
 
     Route::get('/kategori-aset', function (Illuminate\Http\Request $request) {
-        
+
         $kategoris = \App\Models\Kategori::paginate(10, ['*'], 'kategori_page')->withQueryString();
 
         $queryItem = \App\Models\Item::query();
-        
+
         if ($request->filled('search')) {
             $search = $request->search;
             $queryItem->where('nama_aset', 'like', "%{$search}%")
@@ -89,15 +94,15 @@
                         $q->where('nama_kategori', 'like', "%{$search}%");
                     });
         }
-        
+
         $items = $queryItem->paginate(10, ['*'], 'item_page')->withQueryString();
 
-        $statuses = \App\Models\StatusAset::all(); 
+        $statuses = \App\Models\StatusAset::all();
 
         return view('masteradmin.kategori', compact('kategoris', 'items', 'statuses'));
-    })->middleware('auth')->name('kategori_aset.index');
+    })->middleware(['auth', 'role:master_admin'])->name('kategori_aset.index');
 
-    Route::middleware('auth')->group(function () {
+    Route::middleware(['auth', 'role:master_admin'])->group(function () {
         Route::get('/cabang', [CabangController::class, 'index'])->name('cabang.index');
         Route::post('/cabang', [CabangController::class, 'store'])->name('cabang.store');
         Route::put('/cabang/{id}', [CabangController::class, 'update'])->name('cabang.update');
@@ -117,36 +122,34 @@
 
     Route::get('/laporan', function () {
         return view('masteradmin.laporan');
-    })->middleware('auth')->name('laporan.index');
+    })->middleware(['auth', 'role:master_admin'])->name('laporan.index');
 
-    Route::get('/riwayat-aktivitas', [App\Http\Controllers\RiwayatController::class, 'index'])->middleware('auth')->name('riwayat_aktivitas.index');
-    Route::delete('/riwayat-aktivitas/clear', [App\Http\Controllers\RiwayatController::class, 'clear'])->middleware('auth')->name('riwayat_aktivitas.clear');
+    Route::get('/riwayat-aktivitas', [App\Http\Controllers\RiwayatController::class, 'index'])->middleware(['auth', 'role:master_admin'])->name('riwayat_aktivitas.index');
+    Route::delete('/riwayat-aktivitas/clear', [App\Http\Controllers\RiwayatController::class, 'clear'])->middleware(['auth', 'role:master_admin'])->name('riwayat_aktivitas.clear');
 
-    Route::middleware(['auth'])->prefix('masteradmin')->group(function () {
+    Route::middleware(['auth', 'role:master_admin'])->prefix('masteradmin')->group(function () {
         Route::get('/data-aset', [ItemController::class, 'index'])->name('aset.index');
-        Route::post('/data-aset/import', [ItemController::class, 'import'])->name('aset.import');
         Route::delete('/data-aset/bulk-delete', [ItemController::class, 'bulkDelete'])->name('detailaset.bulkDelete');
         Route::get('/view-lampiran/{filename}', [\App\Http\Controllers\ItemController::class, 'viewLampiran']);
         Route::get('/download-lampiran/{filename}', [\App\Http\Controllers\ItemController::class, 'downloadLampiran']);
-        Route::get('/download-lampiran/{filename}', [\App\Http\Controllers\ItemController::class, 'downloadLampiran']);
-        
+
         Route::post('/generate-qr/{id}', [\App\Http\Controllers\ItemController::class, 'generateAndSaveQr'])->name('masteradmin.generate-qr');
 
         Route::post('/generate-qr-all', [\App\Http\Controllers\ItemController::class, 'generateSemuaQr'])->name('masteradmin.generate-qr-all');
-        
+
         Route::post('/kategori/store', [KategoriController::class, 'store'])->name('kategori.store');
         Route::put('/kategori/{id}', [KategoriController::class, 'update']);
         Route::delete('/kategori/{id}', [KategoriController::class, 'destroy']);
 
         Route::post('/data-aset/store', [ItemController::class, 'storeDetail'])->name('detailaset.store');
-        
+
         Route::put('/data-aset/{id}', [ItemController::class, 'updateDetail'])->name('detailaset.update');
         Route::delete('/data-aset/{id}', [ItemController::class, 'destroyDetail'])->name('detailaset.destroy');
-        
+
         Route::resource('items', ItemController::class);
     });
 
-    Route::middleware(['auth'])->group(function () {
+    Route::middleware(['auth', 'role:master_admin'])->group(function () {
         Route::post('/masteradmin/status-aset', [StatusAsetController::class, 'store'])->name('status-aset.store');
         Route::put('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'update']);
         Route::delete('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'destroy']);
@@ -160,19 +163,19 @@
         ->name('login.proses');
 
     Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
-                    
-    Route::get('/admin-dashboard', [AdminDashboardController::class, 'index'])->middleware('auth')->name('admin.dashboard');
 
-    Route::middleware(['auth'])->prefix('admin')->group(function () {
-        
+    Route::get('/admin-dashboard', [AdminDashboardController::class, 'index'])->middleware(['auth', 'role:admin'])->name('admin.dashboard');
+
+    Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
+
         Route::get('/', [AdminDashboardController::class, 'index']);
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
 
         Route::get('/data-aset', [AdminAsetController::class, 'index'])->name('admin.aset.index');
-        Route::post('/data-aset', [AdminAsetController::class, 'store'])->name('detailaset.store');
-        Route::put('/data-aset/{id}', [AdminAsetController::class, 'update'])->name('detailaset.update');
-        Route::delete('/data-aset/{id}', [AdminAsetController::class, 'destroy'])->name('detailaset.destroy');
-        Route::post('/import-aset', [AdminAsetController::class, 'importExcel'])->name('aset.import');
+        Route::post('/data-aset', [AdminAsetController::class, 'store'])->name('admin.detailaset.store');
+        Route::put('/data-aset/{id}', [AdminAsetController::class, 'update'])->name('admin.detailaset.update');
+        Route::delete('/data-aset/{id}', [AdminAsetController::class, 'destroy'])->name('admin.detailaset.destroy');
+        Route::post('/import-aset', [AdminAsetController::class, 'importExcel'])->name('admin.aset.import');
         Route::get('/view-lampiran/{filename}', [AdminAsetController::class, 'viewLampiran']);
         Route::get('/download-lampiran/{filename}', [AdminAsetController::class, 'downloadLampiran']);
 
@@ -181,27 +184,27 @@
         Route::post('/generate-qr-all', [AdminBarcodeController::class, 'generateAllQr']);
 
         Route::get('/master-kategori-aset', [AdminKategoriController::class, 'index'])->name('admin.kategori.index');
-        Route::post('/kategori', [AdminKategoriController::class, 'storeKategori'])->name('kategori.store');
-        Route::put('/kategori/{id}', [AdminKategoriController::class, 'updateKategori'])->name('kategori.update');
-        Route::delete('/kategori/{id}', [AdminKategoriController::class, 'destroyKategori'])->name('kategori.destroy');
+        Route::post('/kategori', [AdminKategoriController::class, 'storeKategori'])->name('admin.kategori.store');
+        Route::put('/kategori/{id}', [AdminKategoriController::class, 'updateKategori'])->name('admin.kategori.update');
+        Route::delete('/kategori/{id}', [AdminKategoriController::class, 'destroyKategori'])->name('admin.kategori.destroy');
 
-        Route::post('/items', [AdminKategoriController::class, 'storeItem'])->name('items.store');
-        Route::put('/items/{id}', [AdminKategoriController::class, 'updateItem'])->name('items.update');
-        Route::delete('/items/{id}', [AdminKategoriController::class, 'destroyItem'])->name('items.destroy');
+        Route::post('/items', [AdminKategoriController::class, 'storeItem'])->name('admin.items.store');
+        Route::put('/items/{id}', [AdminKategoriController::class, 'updateItem'])->name('admin.items.update');
+        Route::delete('/items/{id}', [AdminKategoriController::class, 'destroyItem'])->name('admin.items.destroy');
 
-        Route::post('/status-aset', [AdminKategoriController::class, 'storeStatusAset'])->name('status-aset.store');
-        Route::put('/status-aset/{id}', [AdminKategoriController::class, 'updateStatusAset'])->name('status-aset.update');
-        Route::delete('/status-aset/{id}', [AdminKategoriController::class, 'destroyStatusAset'])->name('status-aset.destroy');
+        Route::post('/status-aset', [AdminKategoriController::class, 'storeStatusAset'])->name('admin.status-aset.store');
+        Route::put('/status-aset/{id}', [AdminKategoriController::class, 'updateStatusAset'])->name('admin.status-aset.update');
+        Route::delete('/status-aset/{id}', [AdminKategoriController::class, 'destroyStatusAset'])->name('admin.status-aset.destroy');
 
         Route::get('/master-cabang', [AdminCabangController::class, 'index'])->name('admin.cabang.index');
-        Route::post('/cabang', [AdminCabangController::class, 'store'])->name('cabang.store');
-        Route::put('/cabang/{id}', [AdminCabangController::class, 'update'])->name('cabang.update');
-        Route::delete('/cabang/{id}', [AdminCabangController::class, 'destroy'])->name('cabang.destroy');
+        Route::post('/cabang', [AdminCabangController::class, 'store'])->name('admin.cabang.store');
+        Route::put('/cabang/{id}', [AdminCabangController::class, 'update'])->name('admin.cabang.update');
+        Route::delete('/cabang/{id}', [AdminCabangController::class, 'destroy'])->name('admin.cabang.destroy');
 
         Route::get('/notifikasi', [AdminNotifikasiController::class, 'index'])->name('admin.notifikasi.index');
 
         Route::get('/riwayat-aktivitas', [AdminRiwayatController::class, 'index'])->name('admin.riwayat_aktivitas.index');
-        Route::delete('/riwayat-aktivitas/clear', [AdminRiwayatController::class, 'clear'])->name('riwayat_aktivitas.clear');
+        Route::delete('/riwayat-aktivitas/clear', [AdminRiwayatController::class, 'clear'])->name('admin.riwayat_aktivitas.clear');
 
         Route::get('/master-lokasi', [AdminLokasiController::class, 'index'])->name('lokasi.index');
         Route::post('/master-lokasi', [AdminLokasiController::class, 'store'])->name('lokasi.store');
@@ -211,13 +214,25 @@
         Route::get('/divisi', [AdminDivisiController::class, 'index'])->name('divisi.index');
         Route::get('/jabatan', [AdminJabatanController::class, 'index'])->name('jabatan.index');
         Route::get('/laporan', [AdminLaporanController::class, 'index'])->name('admin.laporan.index');
+
+        Route::get('/pengajuan', [AdminPengajuanController::class, 'index'])->name('admin.pengajuan.index');
+        Route::post('/pengajuan/{id}/status', [AdminPengajuanController::class, 'updateStatus'])->name('admin.pengajuan.status');
+        Route::get('/pengajuan/lampiran/{filename}', [AdminPengajuanController::class, 'viewLampiran'])->name('admin.pengajuan.lampiran');
     });
-    \Illuminate\Support\Facades\Route::middleware(['auth'])->get('/pengajuan', function () {
-        if (view()->exists('pengajuan')) {
-            return view('pengajuan');
-        }
-        if (view()->exists('admin.pengajuan')) {
-            return view('admin.pengajuan');
-        }
-        return redirect()->to(url('/admin-dashboard?pengajuan=' . urlencode((string) request('jenis', 'peminjaman'))));
-    })->name('pengajuan.index');
+    Route::middleware(['auth', 'role:admin,master_admin'])->get('/pengajuan', [AdminPengajuanController::class, 'index'])->name('pengajuan.index');
+    Route::middleware(['auth', 'role:admin,master_admin'])->post('/pengajuan/{id}/status', [AdminPengajuanController::class, 'updateStatus'])->name('pengajuan.status');
+    Route::middleware(['auth', 'role:admin,master_admin'])->get('/pengajuan/lampiran/{filename}', [AdminPengajuanController::class, 'viewLampiran'])->name('pengajuan.lampiran');
+
+    Route::get('/dev-console/login', [DeveloperController::class, 'showLogin'])->name('developer.login');
+    Route::post('/dev-console/login', [DeveloperController::class, 'login'])->middleware('throttle:15,1')->name('developer.login.proses');
+    Route::middleware(['auth', 'role:developer', 'throttle:240,1'])->prefix('dev-console')->group(function () {
+        Route::get('/', [DeveloperController::class, 'index'])->name('developer.dashboard');
+        Route::get('/aktivitas-akun', [DeveloperController::class, 'aktivitasAkun'])->name('developer.aktivitas');
+        Route::get('/struktur-folder', [DeveloperController::class, 'strukturFolder'])->name('developer.struktur');
+        Route::get('/struktur-folder/tree', [DeveloperController::class, 'strukturTree'])->name('developer.struktur.tree');
+        Route::get('/struktur-folder/file', [DeveloperController::class, 'strukturFile'])->name('developer.struktur.file');
+        Route::post('/struktur-folder/baseline', [DeveloperController::class, 'simpanBaselineFolder'])->name('developer.struktur.baseline');
+        Route::post('/kunci-web', [DeveloperController::class, 'toggleKunciWeb'])->name('developer.kunci_web');
+        Route::post('/reset-master-password', [DeveloperController::class, 'resetMasterPassword'])->name('developer.reset_master_password');
+        Route::post('/logout', [DeveloperController::class, 'logout'])->name('developer.logout');
+    });
