@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme (Light NoActionBar for consistent UI across all devices) -->
+    <style name="Base.Theme.Aplikasi_inventaris_DMK" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#1C4E8F</item>
+        <item name="colorPrimaryVariant">#153B6E</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#1C4E8F</item>
+        <item name="android:statusBarColor">#153B6E</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.Aplikasi_inventaris_DMK" parent="Base.Theme.Aplikasi_inventaris_DMK" />
+</resources>
