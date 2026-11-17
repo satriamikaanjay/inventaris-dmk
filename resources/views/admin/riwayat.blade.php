@@ -87,6 +87,15 @@
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
+        header('Content-Type: application/json; charset=utf-8');
+        if (!\App\Support\RolePermission::can($__roleUserRiwayat, 'riwayat_aktivitas', 'delete')) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Anda tidak memiliki izin menghapus Riwayat Aktivitas. Hubungi Master Admin.',
+            ]);
+            exit;
+        }
         try {
             if ($__isMasterAdminRiwayat) {
                 \App\Models\RiwayatAktivitas::query()->delete();
@@ -95,13 +104,12 @@
                 \App\Models\RiwayatAktivitas::where('user_id', $__userIdRiwayat)->delete();
                 $pesanClear = 'Catatan riwayat aktivitas akun Anda berhasil dibersihkan.';
             }
-            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
                 'success' => true,
                 'message' => $pesanClear,
             ]);
         } catch (\Throwable $e) {
-            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
             echo json_encode([
                 'success' => false,
                 'message' => 'Gagal membersihkan riwayat aktivitas.',
@@ -1012,25 +1020,32 @@
                         }
                     });
 
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data && data.success) {
-                            const tbody = document.getElementById('tbody-riwayat-aktivitas');
-                            if (tbody) {
-                                tbody.innerHTML = `
-                                    <tr id="row-empty-riwayat">
-                                        <td colspan="5" class="empty-state">
-                                            Belum ada catatan riwayat aktivitas yang terekam.
-                                        </td>
-                                    </tr>
-                                `;
-                            }
-                            const labelJumlah = document.getElementById('label-jumlah-riwayat');
-                            if (labelJumlah) labelJumlah.textContent = '0';
-                            tampilkanToastRealtime(data.message || 'Riwayat aktivitas berhasil dibersihkan.');
+                    let data = null;
+                    try {
+                        data = await res.json();
+                    } catch (e) {
+                        data = null;
+                    }
+
+                    if (res.ok && data && data.success) {
+                        const tbody = document.getElementById('tbody-riwayat-aktivitas');
+                        if (tbody) {
+                            tbody.innerHTML = `
+                                <tr id="row-empty-riwayat">
+                                    <td colspan="5" class="empty-state">
+                                        Belum ada catatan riwayat aktivitas yang terekam.
+                                    </td>
+                                </tr>
+                            `;
                         }
+                        const labelJumlah = document.getElementById('label-jumlah-riwayat');
+                        if (labelJumlah) labelJumlah.textContent = '0';
+                        tampilkanToastRealtime(data.message || 'Riwayat aktivitas berhasil dibersihkan.');
+                    } else {
+                        tampilkanToastRealtime((data && data.message) || 'Gagal membersihkan riwayat aktivitas.');
                     }
                 } catch (err) {
+                    tampilkanToastRealtime('Terjadi kesalahan koneksi saat membersihkan riwayat aktivitas.');
                 } finally {
                     if (btn) {
                         btn.disabled = false;

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Struktur Folder &amp; Anti-Deface — Developer Console</title>
     <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
     <style>
@@ -22,6 +23,12 @@
         .alert-ok { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7; padding: 11px 15px; border-radius: 12px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
         .alert-warn { background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.45); color: #fecaca; padding: 11px 15px; border-radius: 12px; margin-bottom: 12px; font-size: 13px; font-weight: 600; }
         .panel { background: #111827; border: 1px solid #1e293b; border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+        .panel-safe { border-top: 3px solid #10b981; }
+        .panel-anomaly { border-top: 3px solid #ef4444; }
+        .dev-hidden { display: none !important; }
+        .web-lock-banner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-width: 2px; }
+        .path-cell-new { font-family: monospace; color: #38bdf8; font-weight: 700; }
+        .path-cell-changed { font-family: monospace; color: #93c5fd; font-weight: 400; }
         .panel-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
         .panel-head h2 { font-size: 14.5px; font-weight: 800; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
         .scroll-box { max-height: 220px; overflow-y: auto; border: 1px solid #1e293b; border-radius: 10px; background: #0b1120; }
@@ -107,83 +114,82 @@
         'pageTitle'      => 'Struktur Folder & Anti-Deface',
         'pageSubtitle'   => 'Explorer dropdown & peninjau kode (Read-Only)',
         'activeNav'      => 'struktur',
-        'refreshOnclick' => 'window.location.reload()',
+        'refreshOnclick' => 'manualRefreshStruktur(this)',
+        'liveText'       => 'Live (3 dtk)',
         'showWebLock'    => true,
         'webLocked'      => !empty($webLocked),
     ])
 
     <div class="container">
-        @if (!empty($webLocked))
-            <div class="alert-warn" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-width:2px;">
-                <span><strong>MODE MAINTENANCE DARURAT AKTIF:</strong> Seluruh akses web &amp; API sedang dikunci sejak {{ $webLockInfo['locked_at'] ?? '-' }}. Pengunjung melihat halaman <em>Web Sedang Maintenance</em>.</span>
-            </div>
-        @endif
-        @if (session('success'))
-            <div class="alert-ok">{{ session('success') }}</div>
-        @endif
+        <div id="web-lock-banner" class="alert-warn web-lock-banner {{ !empty($webLocked) ? '' : 'dev-hidden' }}">
+            <span><strong>MODE MAINTENANCE DARURAT AKTIF:</strong> Seluruh akses web &amp; API sedang dikunci sejak <span id="web-lock-since">{{ $webLockInfo['locked_at'] ?? '-' }}</span>. Pengunjung melihat halaman <em>Web Sedang Maintenance</em>.</span>
+        </div>
+        <div id="struktur-feedback" class="alert-ok {{ session('success') ? '' : 'dev-hidden' }}">{{ session('success') }}</div>
 
-        <section class="panel" style="border-top: 3px solid {{ count($anomalies) > 0 ? '#ef4444' : '#10b981' }};">
+        <section class="panel {{ count($anomalies) > 0 ? 'panel-anomaly' : 'panel-safe' }}" id="panel-anti-deface">
             <div class="panel-head">
                 <h2>
-                    <span class="badge {{ count($anomalies) > 0 ? 'b-err' : 'b-ok' }}">{{ count($anomalies) > 0 ? count($anomalies) . ' TEMUAN' : 'AMAN' }}</span>
+                    <span class="badge {{ count($anomalies) > 0 ? 'b-err' : 'b-ok' }}" id="badge-anti-deface">{{ count($anomalies) > 0 ? count($anomalies) . ' TEMUAN' : 'AMAN' }}</span>
                     Deteksi File Baru &amp; Perubahan Tidak Sah (Anti-Deface)
                 </h2>
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <span style="font-size:11.5px; color:#94a3b8;">Baseline: {{ $baselineCreated }} ({{ $baselineTotal }} file)</span>
-                    <form method="POST" action="{{ route('developer.struktur.baseline') }}" style="margin:0;">
+                    <span id="baseline-meta-text" style="font-size:11.5px; color:#94a3b8;">Baseline: {{ $baselineCreated }} ({{ $baselineTotal }} file)</span>
+                    <form method="POST" action="{{ route('developer.struktur.baseline') }}" style="margin:0;" onsubmit="return perbaruiBaselineAjax(event, this)">
                         @csrf
-                        <button type="submit" class="btn-base">Perbarui Baseline</button>
+                        <button type="submit" id="btn-perbarui-baseline" class="btn-base">Perbarui Baseline</button>
                     </form>
                 </div>
             </div>
 
-            @if (count($anomalies) > 0)
-                <div class="alert-warn">
-                    Terdeteksi {{ count($anomalies) }} file baru atau berubah dibandingkan baseline! Klik <strong>Lihat Isi</strong> untuk memeriksa, lalu hapus lewat cPanel/hosting jika mencurigakan.
-                </div>
-                <div class="scroll-box">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Status</th>
-                                <th>Tipe</th>
-                                <th>Path</th>
-                                <th>Ukuran</th>
-                                <th>Terakhir Diubah</th>
-                                <th>Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($anomalies as $item)
-                                @php
-                                    $stClass = $item['status'] === 'BARU' ? 'b-blue' : ($item['status'] === 'DIUBAH' ? 'b-warn' : 'b-muted');
-                                    $itemType = $item['type'] ?? 'FILE';
-                                @endphp
+            <div id="anti-deface-content">
+                @if (count($anomalies) > 0)
+                    <div class="alert-warn">
+                        Terdeteksi {{ count($anomalies) }} file baru atau berubah dibandingkan baseline! Klik <strong>Lihat Isi</strong> untuk memeriksa, lalu hapus lewat cPanel/hosting jika mencurigakan.
+                    </div>
+                    <div class="scroll-box">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td data-label="Status"><span class="badge {{ $stClass }}">{{ $item['status'] }}</span></td>
-                                    <td data-label="Tipe"><span class="badge b-muted">{{ $itemType }}</span></td>
-                                    <td data-label="Path" style="font-family:monospace; color:{{ $item['status'] === 'BARU' ? '#38bdf8' : '#93c5fd' }}; font-weight:{{ $item['status'] === 'BARU' ? '700' : '400' }};">{{ $item['path'] }}</td>
-                                    <td data-label="Ukuran">{{ $itemType === 'FOLDER' ? '-' : number_format($item['size']) . ' B' }}</td>
-                                    <td data-label="Diubah" style="color:#94a3b8;">{{ $item['mtime'] }}</td>
-                                    <td data-label="Aksi">
-                                        @if ($itemType === 'FOLDER')
-                                            <span style="color:#fca5a5; font-size:11px; font-weight:700;">Folder baru ditambahkan</span>
-                                        @elseif ($item['status'] !== 'DIHAPUS')
-                                            <button type="button" class="btn-view" data-file="{{ $item['path'] }}" onclick="openFileViewer(this.dataset.file)">Lihat Isi</button>
-                                        @else
-                                            <span style="color:#64748b; font-size:11px;">File hilang</span>
-                                        @endif
-                                    </td>
+                                    <th>Status</th>
+                                    <th>Tipe</th>
+                                    <th>Path</th>
+                                    <th>Ukuran</th>
+                                    <th>Terakhir Diubah</th>
+                                    <th>Aksi</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                <div class="alert-ok" style="margin-bottom:0;">
-                    Semua file proyek sesuai dengan baseline ({{ $baselineTotal }} file). Tidak ada file baru atau perubahan tidak sah.
-                </div>
-            @endif
+                            </thead>
+                            <tbody>
+                                @foreach ($anomalies as $item)
+                                    @php
+                                        $stClass = $item['status'] === 'BARU' ? 'b-blue' : ($item['status'] === 'DIUBAH' ? 'b-warn' : 'b-muted');
+                                        $itemType = $item['type'] ?? 'FILE';
+                                    @endphp
+                                    <tr>
+                                        <td data-label="Status"><span class="badge {{ $stClass }}">{{ $item['status'] }}</span></td>
+                                        <td data-label="Tipe"><span class="badge b-muted">{{ $itemType }}</span></td>
+                                        <td data-label="Path" class="{{ $item['status'] === 'BARU' ? 'path-cell-new' : 'path-cell-changed' }}">{{ $item['path'] }}</td>
+                                        <td data-label="Ukuran">{{ $itemType === 'FOLDER' ? '-' : number_format($item['size']) . ' B' }}</td>
+                                        <td data-label="Diubah" style="color:#94a3b8;">{{ $item['mtime'] }}</td>
+                                        <td data-label="Aksi">
+                                            @if ($itemType === 'FOLDER')
+                                                <span style="color:#fca5a5; font-size:11px; font-weight:700;">Folder baru ditambahkan</span>
+                                            @elseif ($item['status'] !== 'DIHAPUS')
+                                                <button type="button" class="btn-view" data-file="{{ $item['path'] }}" onclick="openFileViewer(this.dataset.file)">Lihat Isi</button>
+                                            @else
+                                                <span style="color:#64748b; font-size:11px;">File hilang</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="alert-ok" style="margin-bottom:0;">
+                        Semua file proyek sesuai dengan baseline ({{ $baselineTotal }} file). Tidak ada file baru atau perubahan tidak sah.
+                    </div>
+                @endif
+            </div>
         </section>
 
         <section class="ide-shell">
@@ -246,9 +252,12 @@
         </section>
     </div>
 
+    <input type="hidden" id="struktur-tree-url" value="{{ route('developer.struktur.tree') }}">
+    <input type="hidden" id="struktur-file-url" value="{{ route('developer.struktur.file') }}">
+    <input type="hidden" id="struktur-root-init" value="{{ json_encode(['d' => $rootDirs, 'f' => $rootFiles]) }}">
     <script>
-        const treeEndpoint = @json(route('developer.struktur.tree'));
-        const fileEndpoint = @json(route('developer.struktur.file'));
+        const treeEndpoint = document.getElementById('struktur-tree-url')?.value || '';
+        const fileEndpoint = document.getElementById('struktur-file-url')?.value || '';
 
         function escHtml(str) {
             return String(str ?? '')
@@ -410,6 +419,195 @@
                 bodyEl.innerHTML = '<div class="empty-editor" style="color:#f87171;">Gagal menghubungi server.</div>';
             }
         }
+
+        let lastRootTreeSig = document.getElementById('struktur-root-init')?.value || '{}';
+        let isPollingStruktur = false;
+
+        function tampilkanFeedbackStruktur(msg, isErr = false) {
+            const el = document.getElementById('struktur-feedback');
+            if (!el) return;
+            el.className = isErr ? 'alert-warn' : 'alert-ok';
+            el.textContent = msg;
+            el.classList.remove('dev-hidden');
+            el.style.display = 'block';
+            setTimeout(() => { el.classList.add('dev-hidden'); el.style.display = 'none'; }, 6000);
+        }
+
+        window.onWebLockUpdated = function (isLocked, info, message) {
+            const banner = document.getElementById('web-lock-banner');
+            const sinceEl = document.getElementById('web-lock-since');
+            if (banner) {
+                banner.classList.toggle('dev-hidden', !isLocked);
+                banner.style.display = isLocked ? 'flex' : 'none';
+            }
+            if (sinceEl) {
+                sinceEl.textContent = (info && info.locked_at) ? info.locked_at : '-';
+            }
+            if (message) {
+                tampilkanFeedbackStruktur(message, false);
+            }
+        };
+
+        function renderStrukturSnapshot(d, forceTree = false) {
+            if (!d) return;
+            const anomalies = Array.isArray(d.anomalies) ? d.anomalies : [];
+            const panel = document.getElementById('panel-anti-deface');
+            const badge = document.getElementById('badge-anti-deface');
+            const metaText = document.getElementById('baseline-meta-text');
+            const contentBox = document.getElementById('anti-deface-content');
+
+            if (typeof d.webLocked === 'boolean' && typeof sinkronTombolKunciWeb === 'function') {
+                sinkronTombolKunciWeb(d.webLocked);
+                const banner = document.getElementById('web-lock-banner');
+                const sinceEl = document.getElementById('web-lock-since');
+                if (banner) {
+                    banner.classList.toggle('dev-hidden', !d.webLocked);
+                    banner.style.display = d.webLocked ? 'flex' : 'none';
+                }
+                if (sinceEl) sinceEl.textContent = (d.webLockInfo && d.webLockInfo.locked_at) ? d.webLockInfo.locked_at : '-';
+            }
+
+            if (panel) panel.style.borderTopColor = anomalies.length > 0 ? '#ef4444' : '#10b981';
+            if (badge) {
+                badge.className = 'badge ' + (anomalies.length > 0 ? 'b-err' : 'b-ok');
+                badge.textContent = anomalies.length > 0 ? (anomalies.length + ' TEMUAN') : 'AMAN';
+            }
+            if (metaText) {
+                metaText.textContent = 'Baseline: ' + (d.baselineCreated || '-') + ' (' + (d.baselineTotal ?? 0) + ' file)';
+            }
+
+            if (contentBox) {
+                if (anomalies.length === 0) {
+                    contentBox.innerHTML = '\x3cdiv class="alert-ok" style="margin-bottom:0;"\x3eSemua file proyek sesuai dengan baseline (' + escHtml(d.baselineTotal ?? 0) + ' file). Tidak ada file baru atau perubahan tidak sah.\x3c/div\x3e';
+                } else {
+                    const rowsHtml = anomalies.map(item => {
+                        const st = item.status || 'DIUBAH';
+                        const stClass = st === 'BARU' ? 'b-blue' : (st === 'DIUBAH' ? 'b-warn' : 'b-muted');
+                        const itemType = item.type || 'FILE';
+                        const pathColor = st === 'BARU' ? '#38bdf8' : '#93c5fd';
+                        const pathWeight = st === 'BARU' ? '700' : '400';
+                        const sizeText = itemType === 'FOLDER' ? '-' : (Number(item.size || 0).toLocaleString('en-US') + ' B');
+
+                        let aksiHtml = '\x3cspan style="color:#64748b; font-size:11px;"\x3eFile hilang\x3c/span\x3e';
+                        if (itemType === 'FOLDER') {
+                            aksiHtml = '\x3cspan style="color:#fca5a5; font-size:11px; font-weight:700;"\x3eFolder baru ditambahkan\x3c/span\x3e';
+                        } else if (st !== 'DIHAPUS') {
+                            aksiHtml = '\x3cbutton type="button" class="btn-view" data-file="' + escHtml(item.path) + '" onclick="openFileViewer(this.dataset.file)"\x3eLihat Isi\x3c/button\x3e';
+                        }
+
+                        return '\x3ctr\x3e'
+                            + '\x3ctd data-label="Status"\x3e\x3cspan class="badge ' + stClass + '"\x3e' + escHtml(st) + '\x3c/span\x3e\x3c/td\x3e'
+                            + '\x3ctd data-label="Tipe"\x3e\x3cspan class="badge b-muted"\x3e' + escHtml(itemType) + '\x3c/span\x3e\x3c/td\x3e'
+                            + '\x3ctd data-label="Path" style="font-family:monospace; color:' + pathColor + '; font-weight:' + pathWeight + ';"\x3e' + escHtml(item.path) + '\x3c/td\x3e'
+                            + '\x3ctd data-label="Ukuran"\x3e' + escHtml(sizeText) + '\x3c/td\x3e'
+                            + '\x3ctd data-label="Diubah" style="color:#94a3b8;"\x3e' + escHtml(item.mtime) + '\x3c/td\x3e'
+                            + '\x3ctd data-label="Aksi"\x3e' + aksiHtml + '\x3c/td\x3e'
+                            + '\x3c/tr\x3e';
+                    }).join('');
+
+                    contentBox.innerHTML = '\x3cdiv class="alert-warn"\x3eTerdeteksi ' + anomalies.length + ' file baru atau berubah dibandingkan baseline! Klik \x3cstrong\x3eLihat Isi\x3c/strong\x3e untuk memeriksa, lalu hapus lewat cPanel/hosting jika mencurigakan.\x3c/div\x3e'
+                        + '\x3cdiv class="scroll-box"\x3e\x3ctable\x3e\x3cthead\x3e\x3ctr\x3e\x3cth\x3eStatus\x3c/th\x3e\x3cth\x3eTipe\x3c/th\x3e\x3cth\x3ePath\x3c/th\x3e\x3cth\x3eUkuran\x3c/th\x3e\x3cth\x3eTerakhir Diubah\x3c/th\x3e\x3cth\x3eAksi\x3c/th\x3e\x3c/tr\x3e\x3c/thead\x3e\x3ctbody\x3e'
+                        + rowsHtml + '\x3c/tbody\x3e\x3c/table\x3e\x3c/div\x3e';
+                }
+            }
+
+            const newRootSig = JSON.stringify({ d: d.rootDirs || [], f: d.rootFiles || [] });
+            if (forceTree || newRootSig !== lastRootTreeSig) {
+                lastRootTreeSig = newRootSig;
+                const rootBox = document.getElementById('explorer-root');
+                if (rootBox) {
+                    let html = '';
+                    (d.rootDirs || []).forEach(dir => {
+                        const dirCls = dir.is_new ? 'tree-row tree-row-new' : 'tree-row';
+                        const dirBadge = dir.is_new
+                            ? '\x3cspan class="badge b-blue" style="margin-left:auto;"\x3eBARU\x3c/span\x3e'
+                            : (dir.has_anomaly ? '\x3cspan class="anom-dot" title="Ada file baru/diubah di dalam folder ini"\x3e\x3c/span\x3e' : '');
+                        html += '\x3cdiv class="tree-node" data-dir="' + escHtml(dir.path) + '"\x3e'
+                            + '\x3cdiv class="' + dirCls + '" onclick="toggleFolder(this)"\x3e'
+                            + '\x3cspan class="tree-chevron"\x3e▸\x3c/span\x3e\x3cspan class="tree-icon"\x3e📁\x3c/span\x3e'
+                            + '\x3cspan class="tree-name"\x3e' + escHtml(dir.name) + '\x3c/span\x3e' + dirBadge
+                            + '\x3c/div\x3e\x3cdiv class="tree-children" data-loaded="0"\x3e\x3c/div\x3e\x3c/div\x3e';
+                    });
+                    (d.rootFiles || []).forEach(fl => {
+                        const isNewFile = fl.anomaly === 'BARU';
+                        const fileCls = isNewFile ? 'tree-row tree-file tree-row-new' : 'tree-row tree-file';
+                        const fBadge = fl.anomaly
+                            ? '\x3cspan class="badge ' + (isNewFile ? 'b-blue' : 'b-warn') + '" style="margin-left:auto;"\x3e' + escHtml(fl.anomaly) + '\x3c/span\x3e'
+                            : '';
+                        html += '\x3cdiv class="' + fileCls + '" data-file="' + escHtml(fl.path) + '" onclick="openFileViewer(this.dataset.file, this)"\x3e'
+                            + '\x3cspan class="tree-chevron"\x3e\x3c/span\x3e\x3cspan class="tree-icon"\x3e📄\x3c/span\x3e'
+                            + '\x3cspan class="tree-name"\x3e' + escHtml(fl.name) + '\x3c/span\x3e' + fBadge
+                            + '\x3c/div\x3e';
+                    });
+                    rootBox.innerHTML = html;
+                }
+            }
+        }
+
+        async function perbaruiBaselineAjax(e, formEl) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-perbarui-baseline');
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
+            try {
+                const res = await fetch(formEl.getAttribute('action'), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: new FormData(formEl)
+                });
+                if (res.status === 401) {
+                    window.location.href = '{{ route("developer.login") }}';
+                    return false;
+                }
+                const json = await res.json();
+                if (res.ok && json && json.success) {
+                    renderStrukturSnapshot(json.data, true);
+                    tampilkanFeedbackStruktur(json.message || 'Baseline berhasil diperbarui.', false);
+                } else {
+                    tampilkanFeedbackStruktur(json?.message || 'Gagal memperbarui baseline.', true);
+                }
+            } catch (err) {
+                tampilkanFeedbackStruktur('Terjadi kesalahan koneksi saat memperbarui baseline.', true);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Perbarui Baseline'; }
+            }
+            return false;
+        }
+
+        async function pollStrukturRealtime() {
+            if (isPollingStruktur) return;
+            isPollingStruktur = true;
+            try {
+                const res = await fetch('{{ route("developer.struktur") }}?_poll_dev_struktur=1&_t=' + Date.now(), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+                if (res.status === 401) {
+                    window.location.href = '{{ route("developer.login") }}';
+                    return;
+                }
+                if (!res.ok) return;
+                const json = await res.json();
+                if (json && json.success && json.data) {
+                    renderStrukturSnapshot(json.data, false);
+                }
+            } catch (e) {
+            } finally {
+                isPollingStruktur = false;
+            }
+        }
+
+        async function manualRefreshStruktur(btn) {
+            if (btn) { btn.disabled = true; btn.textContent = 'Memuat...'; }
+            await pollStrukturRealtime();
+            if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+        }
+
+        setInterval(pollStrukturRealtime, 3000);
     </script>
 </body>
 </html>

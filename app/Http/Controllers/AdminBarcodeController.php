@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\AdminDetailAset;
 use App\Models\AdminStatusAset;
+use App\Support\RolePermission;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -188,10 +190,22 @@ class AdminBarcodeController extends Controller
         File::put($directory . '/' . $filename, $svg);
     }
 
-    public function generateSingleQr($id)
+    public function generateSingleQr(Request $request, $id)
     {
+        $role = Auth::check() ? Auth::user()->role : null;
+        $detail = AdminDetailAset::where('aset_id', $id)->first();
+        if (!$detail) {
+            return response()->json(['success' => false, 'message' => 'Data aset tidak ditemukan.'], 404);
+        }
+
+        $directory = storage_path('app/public/qrcodes');
+        $sudahAdaQr = is_dir($directory) && !empty(glob($directory . '/qr_aset_' . $detail->aset_id . '_*.svg'));
+        $aksi = $sudahAdaQr ? 'edit' : 'create';
+        if (!RolePermission::can($role, 'barcode_aset', $aksi)) {
+            return RolePermission::denyResponse($request, 'Anda tidak memiliki izin ' . ($aksi === 'edit' ? 'memperbarui' : 'membuat') . ' QR Code.');
+        }
+
         try {
-            $detail = AdminDetailAset::where('aset_id', $id)->firstOrFail();
             $this->simpanQr($detail);
 
             return response()->json(['success' => true, 'message' => 'QR Code berhasil dibuat.']);
@@ -200,16 +214,27 @@ class AdminBarcodeController extends Controller
         }
     }
 
-    public function generateAllQr()
+    public function generateAllQr(Request $request)
     {
+        $role = Auth::check() ? Auth::user()->role : null;
+        if (!RolePermission::can($role, 'barcode_aset', 'create') && !RolePermission::can($role, 'barcode_aset', 'edit')) {
+            return RolePermission::denyResponse($request, 'Anda tidak memiliki izin memproses QR Code secara massal.');
+        }
+
         try {
             $berhasil = 0;
             $directory = storage_path('app/public/qrcodes');
+            $bolehCreate = RolePermission::can($role, 'barcode_aset', 'create');
+            $bolehEdit = RolePermission::can($role, 'barcode_aset', 'edit');
 
-            AdminDetailAset::chunk(200, function ($asets) use (&$berhasil, $directory) {
+            AdminDetailAset::chunk(200, function ($asets) use (&$berhasil, $directory, $bolehCreate, $bolehEdit) {
                 foreach ($asets as $aset) {
                     $file = $directory . '/qr_aset_' . $aset->aset_id . '_' . md5((string) $aset->kode_aset) . '.svg';
                     if (!file_exists($file)) {
+                        $pernahAda = is_dir($directory) && !empty(glob($directory . '/qr_aset_' . $aset->aset_id . '_*.svg'));
+                        if (($pernahAda && !$bolehEdit) || (!$pernahAda && !$bolehCreate)) {
+                            continue;
+                        }
                         $this->simpanQr($aset);
                         $berhasil++;
                     }

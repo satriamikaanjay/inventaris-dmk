@@ -766,9 +766,9 @@
                         req_id: reqId,
                         new_password: newPassword
                     });
-                    const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                    const res = await fetch(`${window.location.pathname}?${params.toString()}`, {
                         method: 'GET',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
                     });
                     const data = await res.json();
                     if (data && data.success) {
@@ -788,9 +788,9 @@
                         _notif_reset_action: 'dismiss_reset',
                         req_id: reqId
                     });
-                    const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                    const res = await fetch(`${window.location.pathname}?${params.toString()}`, {
                         method: 'GET',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
                     });
                     const data = await res.json();
                     if (data && data.success) {
@@ -841,9 +841,9 @@
             setInterval(async () => {
                 if (document.hidden) return;
                 try {
-                    const res = await fetch(`{{ url()->current() }}?_notif_reset_action=poll_requests&_t=${Date.now()}`, {
+                    const res = await fetch(`${window.location.pathname}?_notif_reset_action=poll_requests&_t=${Date.now()}`, {
                         method: 'GET',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
                     });
                     if (!res.ok) return;
                     const data = await res.json();

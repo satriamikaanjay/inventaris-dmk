@@ -18,14 +18,16 @@ use App\Http\Controllers\DeveloperController;
     use App\Http\Controllers\AdminLaporanController;
     use App\Http\Controllers\AuthController;
     use App\Http\Controllers\ItemController;
-    use App\Http\Controllers\AssetController;
     use App\Http\Controllers\KategoriController;
     use App\Http\Controllers\CabangController;
     use App\Http\Controllers\StatusAsetController;
     use App\Http\Controllers\KelolaAkunController;
     use App\Http\Controllers\NotifikasiController;
+    use App\Http\Controllers\TrackingPengadaanController;
+    use App\Http\Controllers\LiveSyncController;
 
     Route::get('/cek-sesi', fn () => response()->json(['aktif' => \Illuminate\Support\Facades\Auth::check()], \Illuminate\Support\Facades\Auth::check() ? 200 : 401))->name('cek_sesi');
+    Route::middleware(['auth'])->get('/_live-sync/version', [LiveSyncController::class, 'version'])->name('live_sync.version');
 
     Route::get('/', [AuthController::class, 'index'])->name('login');
 
@@ -129,6 +131,7 @@ use App\Http\Controllers\DeveloperController;
 
     Route::middleware(['auth', 'role:master_admin'])->prefix('masteradmin')->group(function () {
         Route::get('/data-aset', [ItemController::class, 'index'])->name('aset.index');
+        Route::get('/tracking-pengadaan', [TrackingPengadaanController::class, 'index'])->name('tracking_pengadaan.index');
         Route::delete('/data-aset/bulk-delete', [ItemController::class, 'bulkDelete'])->name('detailaset.bulkDelete');
         Route::get('/view-lampiran/{filename}', [\App\Http\Controllers\ItemController::class, 'viewLampiran']);
         Route::get('/download-lampiran/{filename}', [\App\Http\Controllers\ItemController::class, 'downloadLampiran']);
@@ -146,7 +149,7 @@ use App\Http\Controllers\DeveloperController;
         Route::put('/data-aset/{id}', [ItemController::class, 'updateDetail'])->name('detailaset.update');
         Route::delete('/data-aset/{id}', [ItemController::class, 'destroyDetail'])->name('detailaset.destroy');
 
-        Route::resource('items', ItemController::class);
+        Route::resource('items', ItemController::class)->only(['index', 'store', 'update', 'destroy']);
     });
 
     Route::middleware(['auth', 'role:master_admin'])->group(function () {
@@ -154,6 +157,7 @@ use App\Http\Controllers\DeveloperController;
         Route::put('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'update']);
         Route::delete('/masteradmin/status-aset/{id}', [StatusAsetController::class, 'destroy']);
         Route::post('/masteradmin/data-aset/import', [\App\Http\Controllers\ItemController::class, 'importExcel'])->name('aset.import');
+        Route::get('/masteradmin/data-aset/template-import/{format?}', [\App\Http\Controllers\ItemController::class, 'downloadTemplateImport'])->name('aset.import.template');
     });
 
     Route::get('/', [AuthController::class, 'index'])->name('login');
@@ -172,14 +176,17 @@ use App\Http\Controllers\DeveloperController;
         Route::get('/dashboard', [AdminDashboardController::class, 'index']);
 
         Route::get('/data-aset', [AdminAsetController::class, 'index'])->name('admin.aset.index');
+        Route::delete('/data-aset/bulk-delete', [AdminAsetController::class, 'bulkDelete'])->name('admin.detailaset.bulkDelete');
         Route::post('/data-aset', [AdminAsetController::class, 'store'])->name('admin.detailaset.store');
         Route::put('/data-aset/{id}', [AdminAsetController::class, 'update'])->name('admin.detailaset.update');
         Route::delete('/data-aset/{id}', [AdminAsetController::class, 'destroy'])->name('admin.detailaset.destroy');
         Route::post('/import-aset', [AdminAsetController::class, 'importExcel'])->name('admin.aset.import');
+        Route::get('/import-aset/template/{format?}', [AdminAsetController::class, 'downloadTemplateImport'])->name('admin.aset.import.template');
         Route::get('/view-lampiran/{filename}', [AdminAsetController::class, 'viewLampiran']);
         Route::get('/download-lampiran/{filename}', [AdminAsetController::class, 'downloadLampiran']);
 
         Route::get('/barcode-aset', [AdminBarcodeController::class, 'index'])->name('admin.barcode.index');
+        Route::get('/tracking-pengadaan', [TrackingPengadaanController::class, 'index'])->name('admin.tracking_pengadaan.index');
         Route::post('/generate-qr/{id}', [AdminBarcodeController::class, 'generateSingleQr']);
         Route::post('/generate-qr-all', [AdminBarcodeController::class, 'generateAllQr']);
 
@@ -234,5 +241,7 @@ use App\Http\Controllers\DeveloperController;
         Route::post('/struktur-folder/baseline', [DeveloperController::class, 'simpanBaselineFolder'])->name('developer.struktur.baseline');
         Route::post('/kunci-web', [DeveloperController::class, 'toggleKunciWeb'])->name('developer.kunci_web');
         Route::post('/reset-master-password', [DeveloperController::class, 'resetMasterPassword'])->name('developer.reset_master_password');
+        Route::post('/buka-blokir-ip', [DeveloperController::class, 'unblockIp'])->name('developer.unblock_ip');
+        Route::post('/buka-semua-blokir', [DeveloperController::class, 'unblockAllIps'])->name('developer.unblock_all_ips');
         Route::post('/logout', [DeveloperController::class, 'logout'])->name('developer.logout');
     });

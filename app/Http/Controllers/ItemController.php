@@ -8,6 +8,7 @@ use App\Models\DetailAset;
 use App\Models\Kategori;
 use App\Models\StatusAset;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use App\Imports\AsetImport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -15,12 +16,12 @@ use App\Models\Cabang;
 
 class ItemController extends Controller
 {
-public function index(Request $request)
+    public function index(Request $request)
     {
-        $kategoris = Kategori::paginate(50, ['*'], 'kategori_page');
-$items = Item::paginate(50, ['*'], 'item_page');
-        $statuses = StatusAset::all(); 
-        $cabangs = Cabang::all(); 
+        $kategoris = Kategori::orderBy('nama_kategori')->get();
+        $items = Item::orderBy('kategori_id')->orderBy('urutan')->get();
+        $statuses = StatusAset::all();
+        $cabangs = Cabang::orderBy('nama_cabang')->get();
 
         $query = \App\Models\DetailAset::with(['item', 'kategori', 'cabang'])->orderBy('aset_id', $request->sort === 'terlama' ? 'asc' : 'desc');
 
@@ -97,9 +98,23 @@ $items = Item::paginate(50, ['*'], 'item_page');
             foreach ($request->file('lampiran') as $fileCheck) {
                 $pesanErrorFile = $this->validasiKeamananFileUpload($fileCheck);
                 if ($pesanErrorFile !== null) {
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['success' => false, 'message' => $pesanErrorFile], 422);
+                    }
                     return redirect()->back()->withErrors(['lampiran' => $pesanErrorFile])->withInput();
                 }
             }
+        }
+
+        [$statusBerjalanValid, $pesanErrorTipe] = $this->validasiTipeAsetSesuaiStatus(
+            $request->input('status_aset'),
+            $request->input('status_berjalan')
+        );
+        if ($pesanErrorTipe !== null) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $pesanErrorTipe], 422);
+            }
+            return redirect()->back()->withErrors(['status_berjalan' => $pesanErrorTipe])->withInput();
         }
 
         $kategoriMaster = \App\Models\Kategori::find($request->kategori_id);
@@ -113,7 +128,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
             'kode_aset' => $request->kode_aset,
             'nomor_seri' => $request->nomor_seri ?? '',
             'merk' => $request->merk ?? '-',
-            'unit' => $request->unit ?? 1,
+            'unit' => 1,
             'tanggal_pengadaan' => $request->tanggal_pengadaan ?? date('Y-m-d'),
             'harga_beli' => $request->harga_beli ?? 0,
             'vendor_pengadaan' => $request->vendor_pengadaan ?? '-',
@@ -122,7 +137,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
             'lokasi_saat_ini' => $request->lokasi_saat_ini ?? '-',
             'penanggung_jawab' => $request->penanggung_jawab ?? '-',
             'status_aset' => $request->status_aset ?? 'Tersedia',
-            'status_berjalan' => $request->status_berjalan ?? 'Tidak Ada',
+            'status_berjalan' => $statusBerjalanValid,
             'status_maintenance' => $request->status_maintenance ?? '-',
             'teknisi' => $request->teknisi ?? '-',
             'biaya_servis' => $request->biaya_servis ?? 0,
@@ -252,9 +267,23 @@ $items = Item::paginate(50, ['*'], 'item_page');
             foreach ($request->file('lampiran') as $fileCheck) {
                 $pesanErrorFile = $this->validasiKeamananFileUpload($fileCheck);
                 if ($pesanErrorFile !== null) {
+                    if ($request->ajax() || $request->wantsJson()) {
+                        return response()->json(['success' => false, 'message' => $pesanErrorFile], 422);
+                    }
                     return redirect()->back()->withErrors(['lampiran' => $pesanErrorFile])->withInput();
                 }
             }
+        }
+
+        [$statusBerjalanValid, $pesanErrorTipe] = $this->validasiTipeAsetSesuaiStatus(
+            $request->input('status_aset'),
+            $request->input('status_berjalan')
+        );
+        if ($pesanErrorTipe !== null) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $pesanErrorTipe], 422);
+            }
+            return redirect()->back()->withErrors(['status_berjalan' => $pesanErrorTipe])->withInput();
         }
 
         $kategoriMaster = \App\Models\Kategori::find($request->kategori_id);
@@ -317,7 +346,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
             'lokasi_saat_ini'     => $request->lokasi_saat_ini ?? '-',
             'penanggung_jawab'    => $request->penanggung_jawab ?? '-',
             'status_aset'         => $request->status_aset ?? 'Tersedia',
-            'status_berjalan'     => $request->status_berjalan ?? 'Tidak Ada',
+            'status_berjalan'     => $statusBerjalanValid,
             'status_maintenance'  => $request->status_maintenance ?? '-',
             'teknisi'             => $request->teknisi ?? '-',
             'biaya_servis'        => $request->biaya_servis ?? 0,
@@ -329,7 +358,7 @@ $items = Item::paginate(50, ['*'], 'item_page');
             'tanggal_peleburan'   => $request->has('tanggal_peleburan')
                             ? ($request->filled('tanggal_peleburan') ? $request->tanggal_peleburan : null)
                             : $detail->tanggal_peleburan,
-            'metode_peleburan'    => $request->metode_peleburan ?? '-',
+            'metode_peleburan'    => $request->has('metode_peleburan') ? ($request->metode_peleburan ?? '-') : $detail->metode_peleburan,
             'nilai_jual'          => $request->nilai_jual ?? 0,
             'lampiran'            => json_encode($existingFiles),
         ]);
@@ -355,18 +384,24 @@ $items = Item::paginate(50, ['*'], 'item_page');
 
     public function destroyDetail(Request $request, $id)
     {
-        $detail = \App\Models\DetailAset::findOrFail($id);
-        $detail->delete();
+        $detail = DetailAset::findOrFail($id);
+
+        DetailAset::$pembersihanTerakhir = ['items' => 0, 'kategoris' => 0, 'cabangs' => 0];
+        DB::transaction(function () use ($detail) {
+            $detail->delete();
+        });
+
+        $pesan = 'Data fisik aset berhasil dihapus!' . DetailAset::formatRingkasanPembersihan(DetailAset::$pembersihanTerakhir);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Data fisik aset berhasil dihapus!'
+                'message' => $pesan,
+                'cleanup' => DetailAset::$pembersihanTerakhir,
             ]);
         }
 
-        return redirect()->back()
-        ->with('success', 'Data fisik aset berhasil dihapus!');
+        return redirect()->back()->with('success', $pesan);
     }
 
     public function barcodeIndex(Request $request)
@@ -625,37 +660,136 @@ $items = Item::paginate(50, ['*'], 'item_page');
         return $realFullPath;
     }
 
-    private function validasiKeamananFileUpload($file): ?string
+    /**
+     * Memastikan Tipe Aset konsisten dengan Status Aset:
+     * "Baik" hanya boleh "Aset Berjalan"; selain "Baik" hanya "Aset Tidak Berjalan" atau "Aset Tidak Dipakai".
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function validasiTipeAsetSesuaiStatus(?string $statusAset, ?string $statusBerjalan): array
     {
-        return \App\Support\FileUploadSecurity::validateUploadedFile($file);
+        $statusNorm = trim((string) $statusAset);
+        $valid = DetailAset::validasiAtauSelaraskanTipeAset($statusNorm, $statusBerjalan, false);
+        if ($valid !== null) {
+            return [$valid, null];
+        }
+
+        if (mb_strtolower($statusNorm, 'UTF-8') === 'baik') {
+            return [null, 'Untuk Status Aset Baik, Tipe Aset hanya boleh diatur ke Aset Berjalan.'];
+        }
+
+        return [null, 'Untuk Status Aset selain Baik, Tipe Aset harus Aset Tidak Berjalan atau Aset Tidak Dipakai.'];
+    }
+
+    private function validasiKeamananFileUpload($file, array $allowedExtensions = \App\Support\FileUploadSecurity::ALLOWED_EXTENSIONS): ?string
+    {
+        return \App\Support\FileUploadSecurity::validateUploadedFile($file, $allowedExtensions);
     }
 
     public function importExcel(Request $request)
 {
     $request->validate([
-        'file_excel' => 'required|file|mimes:xlsx,xls|max:10240',
+        'file_excel' => 'required|file|extensions:xlsx,xls,csv|mimes:xlsx,xls,csv,txt|max:10240',
+    ], [
+        'file_excel.extensions' => 'Format file harus .xlsx, .xls, atau .csv.',
+        'file_excel.mimes'      => 'Format file harus .xlsx, .xls, atau .csv yang valid.',
     ]);
 
     try {
-        $file  = $request->file('file_excel');
-        $pesanErrorExcel = $this->validasiKeamananFileUpload($file);
+        $file     = $request->file('file_excel');
+        $ekstensi = strtolower((string) $file->getClientOriginalExtension());
+        $pesanErrorExcel = $this->validasiKeamananFileUpload($file, ['xlsx', 'xls', 'csv']);
         if ($pesanErrorExcel !== null) {
             return back()->withErrors([$pesanErrorExcel]);
         }
-        $hasil = (new AsetImport)->import($file->getRealPath(), $file->getClientOriginalExtension());
+        $importer = new AsetImport();
+        $hasil = $importer->import(
+            $file->getRealPath(),
+            $ekstensi,
+            $file->getClientOriginalName()
+        );
 
-        if (empty($hasil)) {
-            return back()->withErrors(['Tidak ada sheet inventaris yang dikenali. Judul sheet harus diawali "Inventaris", mis. "Inventaris DMK (Juanda)".']);
+        $notifikasi = self::susunNotifikasiImport($importer, $hasil, $ekstensi);
+        if ($notifikasi['type'] === 'errors') {
+            return back()->withErrors([$notifikasi['message']]);
+        }
+
+        return back()->with($notifikasi['type'], $notifikasi['message']);
+    } catch (\Exception $e) {
+        return back()->withErrors(['Gagal mengimport data: ' . $e->getMessage()]);
+    }
+}
+
+    /**
+     * Menyusun tipe dan pesan flash notifikasi hasil import aset.
+     *
+     * @return array{type: 'errors'|'warning'|'success', message: string}
+     */
+    public static function susunNotifikasiImport(AsetImport $importer, array $hasil, string $ekstensi = 'xlsx'): array
+    {
+        if ($importer->totalDibaca === 0) {
+            $pesanKosong = $ekstensi === 'csv'
+                ? 'Tidak ada baris data aset yang dikenali di file CSV. Unduh Template CSV agar format kolom sesuai.'
+                : 'Tidak ada sheet inventaris yang dikenali. Judul sheet harus diawali "Inventaris", mis. "Inventaris DMK" atau "Inventaris DMK (Juanda)".';
+            return ['type' => 'errors', 'message' => $pesanKosong];
+        }
+
+        $contoh = !empty($importer->contohDuplikat)
+            ? ' (' . implode(', ', $importer->contohDuplikat) . ($importer->totalDuplikat > count($importer->contohDuplikat) ? ', ...' : '') . ')'
+            : '';
+
+        if ($importer->totalMasuk === 0 && $importer->totalDuplikat > 0) {
+            return [
+                'type'    => 'warning',
+                'message' => "Data sudah ada! Seluruh {$importer->totalDuplikat} data pada file tersebut sama persis dengan data yang sudah tersimpan di Data Aset{$contoh}.",
+            ];
         }
 
         $total   = array_sum($hasil);
         $rincian = collect($hasil)->map(fn ($jumlah, $cabang) => "$cabang ($jumlah)")->implode(', ');
 
-        return back()->with('success', "Berhasil mengimport $total aset dari " . count($hasil) . " cabang: $rincian");
-    } catch (\Exception $e) {
-        return back()->withErrors(['Gagal mengimport data: ' . $e->getMessage()]);
+        if ($importer->totalDuplikat > 0) {
+            return [
+                'type'    => 'warning',
+                'message' => "Berhasil mengimport {$total} aset baru ({$rincian}). {$importer->totalDuplikat} baris dilewati karena data sudah ada di Data Aset{$contoh}.",
+            ];
+        }
+
+        return [
+            'type'    => 'success',
+            'message' => "Berhasil mengimport $total aset dari " . count($hasil) . " cabang: $rincian",
+        ];
     }
-}
+
+    public function downloadTemplateImport(string $format = 'xlsx')
+    {
+        $fmt = strtolower(trim($format));
+
+        if ($fmt === 'csv') {
+            $rows = AsetImport::dataTemplateImport();
+            return response()->streamDownload(function () use ($rows) {
+                $out = fopen('php://output', 'w');
+                fwrite($out, "\xEF\xBB\xBF");
+                foreach ($rows as $row) {
+                    fputcsv($out, $row);
+                }
+                fclose($out);
+            }, 'template_import_aset.csv', [
+                'Content-Type'           => 'text/csv; charset=UTF-8',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
+        }
+
+        $spreadsheet = AsetImport::buatTemplateSpreadsheet();
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+            $spreadsheet->disconnectWorksheets();
+        }, 'template_import_aset.xlsx', [
+            'Content-Type'           => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
 
 public function generateSemuaQr()
     {
@@ -690,28 +824,36 @@ public function generateSemuaQr()
     }
 
     public function bulkDelete(Request $request)
-{
-    $ids = $request->input('ids');
+    {
+        $rawIds = $request->input('ids');
+        $ids = is_array($rawIds)
+            ? $rawIds
+            : array_filter(array_map('trim', explode(',', (string) $rawIds)), fn (string $v) => $v !== '');
 
-    if (!empty($ids)) {
-        $terdampak = DetailAset::whereIn('aset_id', $ids)
-            ->get(['item_id', 'cabang_id', 'Ruangan']);
-
-        DetailAset::whereIn('aset_id', $ids)->delete();
-
-        $sudahDisinkron = [];
-        foreach ($terdampak as $row) {
-            $ruangNorm = DetailAset::normalisasiRuangan($row->Ruangan);
-            $kunci = $row->item_id . '|' . ($row->cabang_id ?? 'null') . '|' . ($ruangNorm === '-' ? '__NO_ROOM__' : mb_strtolower($ruangNorm));
-            if (!isset($sudahDisinkron[$kunci])) {
-                $sudahDisinkron[$kunci] = true;
-                DetailAset::sinkronkanUnitKelompok($row->item_id, $row->cabang_id, $row->Ruangan);
+        if (empty($ids)) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pilih minimal satu aset untuk dihapus.',
+                ], 422);
             }
+
+            return redirect()->back()->withErrors(['Pilih minimal satu aset untuk dihapus.']);
         }
 
-        return redirect()->back()->with('success', count($ids) . ' data aset berhasil dihapus secara massal.');
-    }
+        $hasil = DetailAset::hapusMassalDanBersihkan($ids);
+        $pesan = $hasil['deleted'] . ' data aset berhasil dihapus secara massal.'
+            . DetailAset::formatRingkasanPembersihan($hasil['cleanup']);
 
-    return redirect()->back()->withErrors(['Pilih minimal satu aset untuk dihapus.']);
-}
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'deleted' => $hasil['deleted'],
+                'cleanup' => $hasil['cleanup'],
+                'message' => $pesan,
+            ]);
+        }
+
+        return redirect()->back()->with('success', $pesan);
+    }
 }

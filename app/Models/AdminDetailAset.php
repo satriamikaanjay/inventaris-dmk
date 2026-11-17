@@ -10,7 +10,8 @@ class AdminDetailAset extends Model
     use HasFactory;
 
     protected $table = 'detail_aset';
-    protected $guarded = ['id'];
+    protected $primaryKey = 'aset_id';
+    protected $guarded = ['aset_id'];
 
     public function item()
     {

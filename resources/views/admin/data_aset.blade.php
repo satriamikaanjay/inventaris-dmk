@@ -1,5 +1,99 @@
 @php
 
+    if (request()->has('_bulk_delete_aset')) {
+        $__rawIds = (string) request('ids', '');
+        $__idsHapus = array_values(array_filter(array_map('trim', explode(',', $__rawIds)), fn($v) => $v !== ''));
+        $__roleAsetBulk = \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->role : null;
+
+        if (!\App\Support\RolePermission::can($__roleAsetBulk, 'data_aset', 'delete')) {
+            if (request()->ajax() || request()->wantsJson()) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki izin menghapus Data Aset. Hubungi Master Admin.',
+                ]);
+                exit;
+            }
+            session()->flash('error', 'Anda tidak memiliki izin menghapus Data Aset. Hubungi Master Admin.');
+        } elseif (empty($__idsHapus)) {
+            if (request()->ajax() || request()->wantsJson()) {
+                while (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Pilih aset yang mau dihapus',
+                ]);
+                exit;
+            }
+            session()->flash('error', 'Pilih aset yang mau dihapus');
+        } else {
+            try {
+                $__hasilHapus = \App\Models\DetailAset::hapusMassalDanBersihkan($__idsHapus);
+                $__jmlTerhapus = (int) ($__hasilHapus['deleted'] ?? 0);
+                $__kodeList = is_array($__hasilHapus['kodes'] ?? null) ? $__hasilHapus['kodes'] : [];
+                $__infoCleanup = \App\Models\DetailAset::formatRingkasanPembersihan($__hasilHapus['cleanup'] ?? []);
+
+                if ($__jmlTerhapus > 0 && class_exists(\App\Models\RiwayatAktivitas::class)) {
+                    try {
+                        $__ringkasanKode = !empty($__kodeList) ? (' [' . implode(', ', array_slice($__kodeList, 0, 5)) . (count($__kodeList) > 5 ? ', ...' : '') . ']') : '';
+                        $__logDel = new \App\Models\RiwayatAktivitas();
+                        $__tblLogDel = $__logDel->getTable();
+                        $__payloadDel = [];
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'user_id')) {
+                            $__payloadDel['user_id'] = \Illuminate\Support\Facades\Auth::id();
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'aktivitas')) {
+                            $__payloadDel['aktivitas'] = 'Menghapus ' . $__jmlTerhapus . ' data aset melalui checklist' . $__ringkasanKode . $__infoCleanup;
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'modul')) {
+                            $__payloadDel['modul'] = 'Data Aset';
+                        }
+                        if (\Illuminate\Support\Facades\Schema::hasColumn($__tblLogDel, 'status')) {
+                            $__payloadDel['status'] = 'Peringatan';
+                        }
+                        $__logDel->forceFill($__payloadDel)->save();
+                    } catch (\Throwable $e) {
+                    }
+                }
+
+                $__pesanSuksesBulk = $__jmlTerhapus . ' data aset yang dipilih berhasil dihapus permanen.' . $__infoCleanup;
+                session()->flash('success', $__pesanSuksesBulk);
+
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => true,
+                        'deleted' => $__jmlTerhapus,
+                        'cleanup' => $__hasilHapus['cleanup'] ?? [],
+                        'message' => $__pesanSuksesBulk,
+                    ]);
+                    exit;
+                }
+            } catch (\Throwable $e) {
+                if (request()->ajax() || request()->wantsJson()) {
+                    while (ob_get_level() > 0) {
+                        ob_end_clean();
+                    }
+                    header('Content-Type: application/json; charset=utf-8');
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Gagal menghapus data aset yang dipilih.',
+                    ]);
+                    exit;
+                }
+            }
+        }
+    }
+
     $__lampiranMetaPath = storage_path('app/lampiran_aset_meta.json');
     $__lampiranMetaData = [
         'files'          => [],
@@ -427,6 +521,38 @@
         .btn-secondary { background: #64748b; color: #fff; border: none; padding: 10px 20px; }
         .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #f87171; }
         .btn-danger:hover { background: var(--danger-color); color: #fff; }
+        .btn-hapus-checklist {
+            background: #dc2626 !important;
+            color: #ffffff !important;
+            border: 1px solid #b91c1c !important;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+        }
+        .btn-hapus-checklist:hover {
+            background: #b91c1c !important;
+            color: #ffffff !important;
+        }
+        .btn-hapus-checklist svg {
+            color: #ffffff !important;
+        }
+        .aset-checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: #dc2626;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        .data-table tr.row-checked td {
+            background-color: #fee2e2 !important;
+            color: #0f172a !important;
+        }
+        @keyframes pulseCheckboxCol {
+            0%, 100% { transform: scale(1); box-shadow: none; }
+            50% { transform: scale(1.22); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.3); }
+        }
+        .aset-checkbox.highlight-warning {
+            animation: pulseCheckboxCol 0.45s ease-in-out 2;
+            outline: 2px solid #dc2626;
+        }
         .btn:hover { opacity: 0.9; }
 
         .card-box { background: #fff; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); margin-bottom: 20px; }
@@ -482,10 +608,12 @@
         .data-table th.aksi-col { position: sticky; top: 0; right: 0; z-index: 20; background: #f8fafc; }
         .data-table td { font-size: 13px; padding: 12px 15px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); white-space: nowrap; }
         .badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
-        .toast-popup { position: fixed; top: 30px; right: -100%; padding: 14px 20px; border-radius: 10px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28); font-size: 14px; font-weight: 700; z-index: 99999; display: flex; align-items: center; gap: 10px; transition: right 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast-popup { position: fixed; top: 30px; right: -100%; max-width: min(92vw, 560px); line-height: 1.45; padding: 14px 20px; border-radius: 10px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28); font-size: 14px; font-weight: 700; z-index: 99999; display: flex; align-items: center; gap: 10px; transition: right 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
         .toast-popup.show { right: 30px; }
         .toast-success { background-color: #059669 !important; color: #ffffff !important; border: 1px solid #047857 !important; border-left: 5px solid #064e3b !important; }
         .toast-success span, .toast-success svg { color: #ffffff !important; }
+        .toast-warning { background-color: #d97706 !important; color: #ffffff !important; border: 1px solid #b45309 !important; border-left: 5px solid #78350f !important; }
+        .toast-warning span, .toast-warning svg { color: #ffffff !important; }
         .toast-error { background-color: #dc2626 !important; color: #ffffff !important; border: 1px solid #b91c1c !important; border-left: 5px solid #7f1d1d !important; }
         .toast-error span, .toast-error svg { color: #ffffff !important; }
 
@@ -731,7 +859,11 @@
                 <h1>Data Aset Inventaris</h1>
                 <p>Pusat pencatatan perangkat dan fasilitas kantor.</p>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" id="btn-hapus-checklist" class="btn btn-danger btn-hapus-checklist btn-delete-sm" onclick="prosesHapusAsetChecklist()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <span id="teks-btn-hapus-checklist">Hapus Aset</span>
+                </button>
                 <button type="button" class="btn btn-secondary" onclick="openModalImport()" style="background: var(--primary-color);">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     Import dari Excel
@@ -745,7 +877,12 @@
         @if(session('success'))
         <div id="toast-success" class="toast-popup toast-success show"><span>{{ session('success') }}</span></div>
         @endif
-        @if($errors->any())
+        @if(session('warning'))
+        <div id="toast-warning" class="toast-popup toast-warning show"><span>{{ session('warning') }}</span></div>
+        @endif
+        @if(session('error'))
+        <div id="toast-error-flash" class="toast-popup toast-error show"><span>{{ session('error') }}</span></div>
+        @elseif($errors->any())
         <div id="toast-error" class="toast-popup toast-error show"><span>{{ $errors->first() }}</span></div>
         @endif
 
@@ -856,7 +993,7 @@
                             </div>
                             <div class="grid-2">
                                 <div class="form-group"><label>Merk / Brand <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="text" name="merk" placeholder="Contoh: Dell, Acer"></div>
-                                <div class="form-group"><label>Unit/Jumlah <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="number" name="unit" value="1" min="1" required></div>
+                                <div class="form-group"><label>Unit/Jumlah <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="number" id="tambah_unit" name="unit" value="1" min="1" readonly required style="background:#f1f5f9;cursor:not-allowed;"><span style="font-size: 11px; color: var(--text-muted);">Otomatis terisi 1 unit (ditotal otomatis per aset &amp; cabang setelah disimpan).</span></div>
                                 <div class="form-group"><label>Tgl Pengadaan <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="date" name="tanggal_pengadaan" id="input_tanggal_pengadaan" required></div>
                                 <div class="form-group"><label>Harga Beli (Rp) <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="number" name="harga_beli" placeholder="0"></div>
                             </div>
@@ -880,7 +1017,7 @@
                             </div>
                             <div class="grid-2" style="margin-top: 12px;">
                                 <div class="form-group"><label>Status Aset Umum <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label>
-                                    <select name="status_aset" required>
+                                    <select id="tambah_status_aset" name="status_aset" required onchange="sinkronkanPilihanTipeAset('tambah')">
                                         <option value="">-- Pilih Status --</option>
                                         @foreach($statuses ?? [] as $status)
                                         <option value="{{ $status->nama_status }}">{{ $status->nama_status }}</option>
@@ -888,12 +1025,13 @@
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Tipe Aset <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label>
-                                    <select name="status_berjalan" required>
-                                        <option value="Tidak Ada" selected>Tidak Ada</option>
+                                    <select id="tambah_status_berjalan" name="status_berjalan" required>
+                                        <option value="">-- Pilih Status Aset dahulu --</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
                                         <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
+                                    <span id="hint_tambah_tipe_aset" style="font-size: 11px; color: var(--text-muted);"></span>
                                 </div>
                             </div>
                         </div>
@@ -1007,7 +1145,7 @@
                             </div>
                             <div class="grid-3">
                                 <div class="form-group"><label>Merk / Brand <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="text" id="edit_merk" name="merk"></div>
-                                <div class="form-group"><label>Unit/Jumlah <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="number" id="edit_unit" name="unit" min="1" required></div>
+                                <div class="form-group"><label>Unit (Total di Cabang) <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="number" id="edit_unit" name="unit" min="1" readonly required style="background:#f1f5f9;cursor:not-allowed;"><span style="font-size: 11px; color: var(--text-muted);">Otomatis menghitung total aset &amp; kategori ini di cabang terpilih saat disimpan.</span></div>
                                 <div class="form-group"><label>Tgl Pengadaan <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label><input type="date" id="edit_tgl_pengadaan" name="tanggal_pengadaan" required></div>
                                 <div class="form-group"><label>Harga Beli (Rp) <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="number" id="edit_harga_beli" name="harga_beli"></div>
                                 <div class="form-group"><label>Vendor Pengadaan <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="text" id="edit_vendor" name="vendor_pengadaan"></div>
@@ -1024,17 +1162,17 @@
                                 <div class="form-group"><label>Lokasi Spesifik Saat Ini <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="text" id="edit_lokasi_spesifik" name="lokasi_saat_ini"></div>
                                 <div class="form-group"><label>Penanggung Jawab <span style="color: var(--text-muted); font-size: 11px;">(Opsional)</span></label><input type="text" id="edit_pj" name="penanggung_jawab"></div>
                                 <div class="form-group"><label>Status Aset Umum <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label>
-                                    <select id="edit_status_aset" name="status_aset" required>
+                                    <select id="edit_status_aset" name="status_aset" required onchange="sinkronkanPilihanTipeAset('edit')">
                                         @foreach($statuses ?? [] as $status) <option value="{{ $status->nama_status }}">{{ $status->nama_status }}</option> @endforeach
                                     </select>
                                 </div>
                                 <div class="form-group"><label>Tipe Aset <span style="color: var(--danger-color); font-weight: bold; font-size: 14px;">*</span></label>
                                     <select id="edit_status_berjalan" name="status_berjalan" required>
-                                        <option value="Tidak Ada">Tidak Ada</option>
                                         <option value="Aset Berjalan">Aset Berjalan</option>
                                         <option value="Aset Tidak Berjalan">Aset Tidak Berjalan</option>
                                         <option value="Aset Tidak Dipakai">Aset Tidak Dipakai</option>
                                     </select>
+                                    <span id="hint_edit_tipe_aset" style="font-size: 11px; color: var(--text-muted);"></span>
                                 </div>
                             </div>
                         </div>
@@ -1083,11 +1221,19 @@
                     </div>
 
                     <div class="modal-footer" id="footer-view-mode">
-                        <button type="button" class="btn btn-secondary" onclick="closeModalDetail()">Tutup</button>
-                        <button type="button" class="btn btn-primary" onclick="enableEditMode()">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            Edit Data Aset
-                        </button>
+                        <div>
+                            <button type="button" class="btn btn-danger" onclick="submitHapusAset()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                Hapus Aset
+                            </button>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeModalDetail()">Tutup</button>
+                            <button type="button" class="btn btn-primary" onclick="enableEditMode()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                Edit Data Aset
+                            </button>
+                        </div>
                     </div>
 
                     <div class="modal-footer" id="footer-edit-mode" style="display: none;">
@@ -1107,24 +1253,46 @@
         </div>
 
         <div class="modal-backdrop" id="modalImportExcel">
-            <div class="modal-container" style="max-width: 450px;">
+            <div class="modal-container" style="max-width: 540px;">
                 <div class="modal-header">
-                    <h3>Import Data Aset</h3>
+                    <h3>Import Data Aset (Global / Multi-Cabang)</h3>
                     <button type="button" class="btn-close-modal" onclick="closeModalImport()">&times;</button>
                 </div>
 
-                <form action="{{ route('admin.aset.import') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('admin.aset.import') }}" method="POST" enctype="multipart/form-data" onsubmit="const b=this.querySelector('button[type=submit]');if(b){b.innerHTML='<span class=\'spinner-sm\'></span> Memproses...';b.style.opacity='0.7';}">
                     @csrf
                     <div class="modal-body">
                         <div class="form-group">
-                            <label>Unggah File Excel (.xlsx / .xls)</label>
-                            <input type="file" name="file_excel" accept=".xlsx, .xls, .csv" required style="border: 1px dashed #cbd5e1; padding: 25px 15px; cursor: pointer; text-align: center;">
-                            <small style="color: var(--text-muted); font-size: 11px; margin-top: 6px;">Sistem akan otomatis mendeteksi Master Kategori, Master Aset, dan Cabang berdasarkan nama dari kolom Excel Anda.</small>
+                            <label>Unggah File Excel / CSV (.xlsx, .xls, .csv)</label>
+                            <input type="file" name="file_excel" accept=".xlsx, .xls, .csv" required style="border: 1px dashed #cbd5e1; padding: 22px 15px; cursor: pointer; text-align: center;">
+                            <small style="color: var(--text-muted); font-size: 11px; margin-top: 6px;">Mendukung impor banyak cabang sekaligus dalam 1 file lewat kolom <b>Cabang</b>, atau per sheet Excel berawalan <code>Inventaris</code> (mis. <code>Inventaris DMK (Juanda)</code>).</small>
+                        </div>
+
+                        <div style="margin-top: 14px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">
+                            <div style="font-size: 12px; font-weight: 700; color: #1e293b; margin-bottom: 6px;">Template & Panduan Format Import</div>
+                            <div style="font-size: 11px; color: #475569; line-height: 1.5; margin-bottom: 10px;">
+                                Belum tahu format kolomnya? Unduh template resmi di bawah ini (sudah berisi contoh pengisian lintas cabang & panduan lengkap):
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <a href="{{ route('admin.aset.import.template', ['format' => 'xlsx']) }}" download class="btn" style="flex: 1; min-width: 175px; background: #059669; color: #ffffff; border: none; padding: 8px 12px; font-size: 12px; justify-content: center; text-decoration: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    <span>Template Excel (.xlsx)</span>
+                                </a>
+                                <a href="{{ route('admin.aset.import.template', ['format' => 'csv']) }}" download class="btn" style="flex: 1; min-width: 175px; background: #1a4f91; color: #ffffff; border: none; padding: 8px 12px; font-size: 12px; justify-content: center; text-decoration: none;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    <span>Template CSV (.csv)</span>
+                                </a>
+                            </div>
+                            <ul style="margin: 10px 0 0 16px; padding: 0; font-size: 11px; color: #475569; line-height: 1.55;">
+                                <li>Kolom wajib: <b>Kode Aset</b>, <b>Nama Aset</b>, <b>Cabang</b>, <b>Harga</b>, <b>Unit</b>, <b>Tgl Pengadaan</b>, <b>Ruangan</b>, dan status (<b>Baik</b>/<b>Ringan</b>/<b>Sedang</b>/<b>Berat</b>).</li>
+                                <li>Kode Aset diawali huruf kategori + titik + angka (mis. <code>C.01</code>): A=Tanah/Bangunan, B=Furniture, C=Elektronik, D=Kendaraan, E=Alat RT, F=Logistik, G=Dekorasi, H=Alat Kantor.</li>
+                                <li>Pada file Excel multi-sheet, judul sheet wajib diawali <code>Inventaris</code> (mis. <code>Inventaris DMK</code> atau <code>Inventaris DMK (Juanda)</code>).</li>
+                            </ul>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="closeModalImport()">Batal</button>
-                        <button type="submit" class="btn btn-primary" style="background: var(--secondary-color);" onclick="this.innerHTML='<span class=\'spinner-sm\'></span> Memproses...'; this.style.opacity='0.7';">Mulai Import</button>
+                        <button type="submit" class="btn btn-primary" style="background: var(--secondary-color);">Mulai Import</button>
                     </div>
                 </form>
             </div>
@@ -1174,6 +1342,9 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th class="col-checkbox-hapus" style="width: 44px; text-align: center; position: sticky; left: 0; z-index: 21; background: #f8fafc;">
+                                <input type="checkbox" id="checkAllAset" class="aset-checkbox" title="Pilih semua aset di halaman ini" onchange="togglePilihSemuaAset(this)">
+                            </th>
 
                             <th>KODE ASET</th>
                             <th>NAMA ASET</th>
@@ -1225,6 +1396,9 @@
                             }
                         @endphp
                         <tr data-bg="{{ $rowBg }}">
+                            <td class="col-checkbox-hapus" style="text-align: center; position: sticky; left: 0; background: inherit; z-index: 2;" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="aset-checkbox check-item-aset" name="aset_ids[]" value="{{ $detail->aset_id ?? $detail->id }}" data-kode="{{ $detail->kode_aset ?? '-' }}" onchange="perbaruiStatusChecklistAset()">
+                            </td>
                             <td style="font-weight: 700; color: var(--primary-color);">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span>{{ $detail->kode_aset ?? '-' }}</span>
@@ -1325,7 +1499,7 @@
                             </td>
                         </tr>
                         @empty
-                        <tr id="row-empty-table"><td colspan="28" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
+                        <tr id="row-empty-table"><td colspan="29" style="text-align: center; color: var(--text-muted); padding: 25px;">Belum ada data fisik aset.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -1337,11 +1511,60 @@
     </main>
 
     <script>
-        const TOTAL_ASET_GLOBAL = parseInt(document.getElementById('json-total-aset').value) || 0;
-        const DATA_SERI_ITEM = JSON.parse(document.getElementById('json-seri-item').value || '{}');
-        const URUTAN_CABANG = JSON.parse(document.getElementById('json-urutan-cabang').value || '{}');
+        let TOTAL_ASET_GLOBAL = parseInt(document.getElementById('json-total-aset').value) || 0;
+        let DATA_SERI_ITEM = JSON.parse(document.getElementById('json-seri-item').value || '{}');
+        let URUTAN_CABANG = JSON.parse(document.getElementById('json-urutan-cabang').value || '{}');
 
         let currentAsetData = null;
+
+        function normalisasiNilaiTipeAset(val) {
+            const lower = String(val || '').trim().toLowerCase();
+            if (lower === 'aset berjalan') return 'Aset Berjalan';
+            if (lower === 'aset tidak berjalan') return 'Aset Tidak Berjalan';
+            if (lower === 'aset tidak dipakai') return 'Aset Tidak Dipakai';
+            return '';
+        }
+
+        function sinkronkanPilihanTipeAset(mode, nilaiPreferensi = null) {
+            const statusEl = document.getElementById(mode === 'edit' ? 'edit_status_aset' : 'tambah_status_aset');
+            const tipeEl = document.getElementById(mode === 'edit' ? 'edit_status_berjalan' : 'tambah_status_berjalan');
+            const hintEl = document.getElementById(mode === 'edit' ? 'hint_edit_tipe_aset' : 'hint_tambah_tipe_aset');
+            if (!statusEl || !tipeEl) return;
+
+            const statusLower = String(statusEl.value || '').trim().toLowerCase();
+            let allowed = [];
+            let pesanHint = '';
+
+            if (statusLower === '') {
+                allowed = [''];
+                pesanHint = 'Pilih Status Aset Umum terlebih dahulu.';
+            } else if (statusLower === 'baik') {
+                allowed = ['Aset Berjalan'];
+                pesanHint = 'Status Baik hanya boleh menggunakan Aset Berjalan.';
+            } else {
+                allowed = ['Aset Tidak Berjalan', 'Aset Tidak Dipakai'];
+                pesanHint = 'Status selain Baik bisa memilih Aset Tidak Berjalan atau Aset Tidak Dipakai.';
+            }
+
+            Array.from(tipeEl.options).forEach(opt => {
+                const cocok = allowed.includes(opt.value);
+                opt.disabled = !cocok;
+                opt.hidden = !cocok;
+            });
+
+            const kandidat = normalisasiNilaiTipeAset(nilaiPreferensi !== null ? nilaiPreferensi : tipeEl.value);
+            if (statusLower === '') {
+                tipeEl.value = '';
+            } else if (allowed.includes(kandidat)) {
+                tipeEl.value = kandidat;
+            } else {
+                tipeEl.value = allowed[0];
+            }
+
+            if (hintEl) {
+                hintEl.textContent = pesanHint;
+            }
+        }
 
         function openSidebarTambah() {
             const inputTambahLamp = document.getElementById('input_lampiran_tambah');
@@ -1352,6 +1575,7 @@
             document.getElementById('sidebarTambahAset').classList.add('show');
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
+            sinkronkanPilihanTipeAset('tambah');
         }
 
         function closeSidebarTambah() {
@@ -1378,8 +1602,8 @@
             currentAsetData = data;
             let id = data.aset_id || data.id;
 
-            document.getElementById('form-edit-fisik').action = `/masteradmin/data-aset/${id}`;
-            document.getElementById('form-delete-fisik').action = `/masteradmin/data-aset/${id}`;
+            document.getElementById('form-edit-fisik').action = `/admin/data-aset/${id}`;
+            document.getElementById('form-delete-fisik').action = `/admin/data-aset/${id}`;
 
             document.getElementById('edit_kode_aset').value = data.kode_aset || '';
             document.getElementById('edit_nomor_seri').value = '';
@@ -1387,8 +1611,8 @@
             setSelectDenganCadangan('edit_item', data.item_id, data.item && data.item.nama_aset);
             setSelectDenganCadangan('edit_cabang', data.cabang_id, data.cabang && data.cabang.nama_cabang);
             document.getElementById('edit_ruangan').value = data.Ruangan || '';
-            document.getElementById('edit_status_aset').value = data.status_aset || 'Tersedia';
-            document.getElementById('edit_status_berjalan').value = data.status_berjalan || 'Tidak Ada';
+            setSelectDenganCadangan('edit_status_aset', data.status_aset || 'Baik', data.status_aset);
+            sinkronkanPilihanTipeAset('edit', data.status_berjalan);
             document.getElementById('edit_merk').value = data.merk || '';
             document.getElementById('edit_unit').value = data.unit || 1;
             document.getElementById('edit_tgl_pengadaan').value = data.tanggal_pengadaan || '';
@@ -1450,7 +1674,7 @@
                         }
 
                         let previewElement = isImage
-                            ? `<img src="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
+                            ? `<img src="/admin/view-lampiran/${encodeURIComponent(filename)}" style="width: 100%; height: 75px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; border: 1px solid #e2e8f0;">`
                             : `<div style="width: 100%; height: 75px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; font-weight: 800; color: #64748b; font-size: 16px;">${ext.toUpperCase()}</div>`;
 
                         let elementId = `lampiran-card-${index}`;
@@ -1470,8 +1694,8 @@
                                 </div>
 
                                 <div style="display: flex; gap: 4px; width: 100%;">
-                                    <a href="/masteradmin/view-lampiran/${encodeURIComponent(filename)}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
-                                    <a href="/masteradmin/download-lampiran/${encodeURIComponent(filename)}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
+                                    <a href="/admin/view-lampiran/${encodeURIComponent(filename)}" target="_blank" style="flex: 1; background: var(--primary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Lihat</a>
+                                    <a href="/admin/download-lampiran/${encodeURIComponent(filename)}" style="flex: 1; background: var(--secondary-color); color: #fff; padding: 5px 0; border-radius: 4px; font-size: 11px; text-decoration: none; font-weight: 600; text-align: center;">Unduh</a>
                                 </div>
                             </div>
                         `;
@@ -1513,6 +1737,7 @@
                 el.disabled = false;
             });
             document.getElementById('edit_kode_aset').readOnly = false;
+            document.getElementById('edit_unit').readOnly = true;
             document.getElementById('edit_nomor_seri').readOnly = true;
             document.getElementById('edit_nomor_seri').disabled = true;
             document.getElementById('edit-barcode-warning').style.display = 'block';
@@ -1522,6 +1747,7 @@
             document.getElementById('footer-edit-mode').style.display = 'flex';
 
             document.querySelectorAll('.btn-hapus-lampiran').forEach(el => el.style.display = 'flex');
+            sinkronkanPilihanTipeAset('edit');
         }
 
         function cancelEditMode() {
@@ -1583,6 +1809,102 @@
             document.getElementById('modalDetailAset').classList.remove('show');
         }
 
+        function togglePilihSemuaAset(masterChk) {
+            const checkboxes = document.querySelectorAll('.check-item-aset');
+            checkboxes.forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr && tr.style.display === 'none') return;
+                chk.checked = !!masterChk.checked;
+            });
+            perbaruiStatusChecklistAset();
+        }
+
+        function perbaruiStatusChecklistAset() {
+            const semuaChk = Array.from(document.querySelectorAll('.check-item-aset')).filter(c => {
+                const tr = c.closest('tr');
+                return !tr || tr.style.display !== 'none';
+            });
+            const terpilih = semuaChk.filter(c => c.checked);
+
+            document.querySelectorAll('.check-item-aset').forEach(chk => {
+                const tr = chk.closest('tr');
+                if (tr) tr.classList.toggle('row-checked', chk.checked);
+            });
+
+            const masterChk = document.getElementById('checkAllAset');
+            if (masterChk) {
+                masterChk.checked = semuaChk.length > 0 && terpilih.length === semuaChk.length;
+                masterChk.indeterminate = terpilih.length > 0 && terpilih.length < semuaChk.length;
+            }
+
+            const labelBtn = document.getElementById('teks-btn-hapus-checklist');
+            if (labelBtn) {
+                labelBtn.textContent = terpilih.length > 0
+                    ? `Hapus Aset (${terpilih.length} Terpilih)`
+                    : 'Hapus Aset';
+            }
+        }
+
+        async function prosesHapusAsetChecklist() {
+            const terpilih = Array.from(document.querySelectorAll('.check-item-aset:checked'));
+
+            if (terpilih.length === 0) {
+                tampilkanToastPeringatan('Pilih aset yang mau dihapus');
+                document.querySelectorAll('.aset-checkbox').forEach(chk => {
+                    chk.classList.remove('highlight-warning');
+                    void chk.offsetWidth;
+                    chk.classList.add('highlight-warning');
+                    setTimeout(() => chk.classList.remove('highlight-warning'), 1000);
+                });
+                return false;
+            }
+
+            const ids = terpilih.map(chk => chk.value);
+            const kodes = terpilih.map(chk => chk.getAttribute('data-kode') || chk.value).slice(0, 5);
+            const infoKode = kodes.join(', ') + (terpilih.length > 5 ? ', ...' : '');
+
+            if (!confirm(`Apakah Anda yakin ingin menghapus ${terpilih.length} data aset yang dipilih (${infoKode}) secara permanen?`)) {
+                return false;
+            }
+
+            if (typeof window.tampilkanLoadingPindahHalaman === 'function') {
+                window.tampilkanLoadingPindahHalaman(`Menghapus ${terpilih.length} Data Aset...`, 'Mohon tunggu, sedang menghapus data aset terpilih dari server.');
+            }
+
+            try {
+                const delUrl = new URL(window.location.href);
+                delUrl.searchParams.set('_bulk_delete_aset', String(Date.now()));
+                delUrl.searchParams.set('ids', ids.join(','));
+
+                const res = await fetch(delUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (res.ok) {
+                    window.location.reload();
+                    return;
+                } else {
+                    const errJson = await res.json().catch(() => ({}));
+                    if (typeof window.sembunyikanLoadingPindahHalaman === 'function') {
+                        window.sembunyikanLoadingPindahHalaman();
+                    }
+                    tampilkanToastPeringatan(errJson.message || 'Gagal menghapus data aset.');
+                    return;
+                }
+            } catch (err) {
+            }
+
+            const fallbackUrl = new URL(window.location.href);
+            fallbackUrl.searchParams.set('_bulk_delete_aset', '1');
+            fallbackUrl.searchParams.set('ids', ids.join(','));
+            window.location.href = fallbackUrl.toString();
+        }
+
         function submitHapusAset() {
             if(confirm('Peringatan: Yakin ingin menghapus data aset ini secara permanen? Aksi ini tidak dapat dibatalkan.')) {
                 document.getElementById('form-delete-fisik').submit();
@@ -1610,7 +1932,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(() => { document.querySelectorAll('.toast-popup').forEach(el => el.classList.remove('show')); }, 2500);
+            setTimeout(() => { document.querySelectorAll('.toast-popup.toast-success').forEach(el => el.classList.remove('show')); }, 4500);
+            setTimeout(() => { document.querySelectorAll('.toast-popup.toast-error, .toast-popup.toast-warning').forEach(el => el.classList.remove('show')); }, 7000);
 
             let today = new Date();
             let yyyy = today.getFullYear();
@@ -1635,6 +1958,7 @@
 
             kalkulasiUrutanOtomatis();
             updateAutoGenerate();
+            sinkronkanPilihanTipeAset('tambah');
         });
 
         function updateAutoGenerate() {
@@ -1825,7 +2149,7 @@
 
         async function muatUkuranLampiranOtomatis(filename, ukuranElemId, tglElemId, perluUpdateTgl) {
             try {
-                const res = await fetch('/masteradmin/view-lampiran/' + encodeURIComponent(filename), {
+                const res = await fetch('/admin/view-lampiran/' + encodeURIComponent(filename), {
                     method: 'GET',
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
@@ -2073,6 +2397,78 @@
                 });
             }
         });
+
+        window.__refreshDataAsetLive = function (freshDoc) {
+            if (!freshDoc) return false;
+            const modalIds = ['sidebarTambahAset', 'modalDetailAset', 'modalImportExcel'];
+            for (const mId of modalIds) {
+                const el = document.getElementById(mId);
+                if (el && el.classList.contains('show')) return false;
+            }
+            if (document.querySelectorAll('.check-item-aset:checked').length > 0) return false;
+
+            ['json-total-aset', 'json-urutan-cabang', 'json-seri-item', 'json-meta-lampiran'].forEach(id => {
+                const cur = document.getElementById(id);
+                const nw = freshDoc.getElementById(id);
+                if (cur && nw) cur.value = nw.value;
+            });
+
+            try { TOTAL_ASET_GLOBAL = parseInt(document.getElementById('json-total-aset')?.value) || 0; } catch (e) {}
+            try { DATA_SERI_ITEM = JSON.parse(document.getElementById('json-seri-item')?.value || '{}'); } catch (e) {}
+            try { URUTAN_CABANG = JSON.parse(document.getElementById('json-urutan-cabang')?.value || '{}'); } catch (e) {}
+            try { window.DATA_META_LAMPIRAN = JSON.parse(document.getElementById('json-meta-lampiran')?.value || '{}'); } catch (e) {}
+
+            const curDl = document.getElementById('daftar_ruangan_aset');
+            const newDl = freshDoc.getElementById('daftar_ruangan_aset');
+            if (curDl && newDl) curDl.innerHTML = newDl.innerHTML;
+
+            ['pilih_kategori', 'pilih_aset', 'pilih_cabang', 'tambah_status_aset', 'edit_kategori', 'edit_item', 'edit_cabang', 'edit_status_aset'].forEach(selId => {
+                const curSel = document.getElementById(selId);
+                const newSel = freshDoc.getElementById(selId);
+                if (curSel && newSel && document.activeElement !== curSel) {
+                    const prev = curSel.value;
+                    curSel.innerHTML = newSel.innerHTML;
+                    if (Array.from(curSel.options).some(o => o.value === prev)) curSel.value = prev;
+                }
+            });
+            MASTER_ASET_OPTIONS = null;
+            if (typeof filterAsetByKategori === 'function' && (document.getElementById('pilih_kategori')?.value || '') !== '') {
+                const prevItemVal = document.getElementById('pilih_aset')?.value || '';
+                filterAsetByKategori();
+                const selAset = document.getElementById('pilih_aset');
+                if (selAset && Array.from(selAset.options).some(o => o.value === prevItemVal)) selAset.value = prevItemVal;
+            }
+            if (typeof kalkulasiUrutanOtomatis === 'function') kalkulasiUrutanOtomatis();
+            if (typeof updateAutoGenerate === 'function') updateAutoGenerate();
+
+            const tableWrap = document.querySelector('main .table-container');
+            const savedScrollTop = tableWrap ? tableWrap.scrollTop : 0;
+            const savedScrollLeft = tableWrap ? tableWrap.scrollLeft : 0;
+
+            const curTbody = document.querySelector('main table.data-table tbody');
+            const newTbody = freshDoc.querySelector('main table.data-table tbody');
+            if (curTbody && newTbody) {
+                curTbody.innerHTML = newTbody.innerHTML;
+            }
+            if (tableWrap) {
+                tableWrap.scrollTop = savedScrollTop;
+                tableWrap.scrollLeft = savedScrollLeft;
+            }
+
+            const curPag = document.querySelector('main .custom-pagination-wrap');
+            const newPag = freshDoc.querySelector('main .custom-pagination-wrap');
+            if (curPag && newPag) curPag.innerHTML = newPag.innerHTML;
+
+            document.querySelectorAll('[data-bg]').forEach(function (el) {
+                el.style.backgroundColor = el.getAttribute('data-bg');
+            });
+
+            const masterChk = document.getElementById('checkAllAset');
+            if (masterChk) masterChk.checked = false;
+            if (typeof perbaruiStatusChecklistAset === 'function') perbaruiStatusChecklistAset();
+            if (typeof window.terapkanFilterTabel === 'function') window.terapkanFilterTabel();
+            return true;
+        };
     </script>
 
 </body>

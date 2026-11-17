@@ -16,6 +16,9 @@
     @keyframes devPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     .dev-btn-logout { background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5; padding: 6px 12px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
     .dev-btn-logout:hover { background: #dc2626; color: #fff; }
+    .dev-btn-kunci { padding: 6px 12px; border-radius: 8px; font-size: 11.5px; font-weight: 800; cursor: pointer; border: 1px solid rgba(239,68,68,0.6); background: rgba(220,38,38,0.25); color: #fecaca; }
+    .dev-btn-kunci.is-locked { border-color: rgba(16,185,129,0.55); background: rgba(16,185,129,0.2); color: #6ee7b7; }
+    .dev-btn-kunci-mobile { width: 100%; padding: 10px 12px; border-radius: 9px; font-size: 12.5px; }
     .dev-mobile-controls { display: none; align-items: center; gap: 6px; flex-shrink: 0; }
     .dev-burger { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 
@@ -51,17 +54,13 @@
 
     <div class="dev-nav-desktop">
         <a href="{{ route('developer.dashboard') }}" class="dev-nav-link {{ $activeNav === 'dashboard' ? 'active' : '' }}">Dashboard</a>
-        <a href="{{ route('developer.aktivitas') }}" class="dev-nav-link {{ $activeNav === 'aktivitas' ? 'active' : '' }}">Aktivitas Akun</a>
+        <a href="{{ route('developer.aktivitas') }}" class="dev-nav-link {{ $activeNav === 'aktivitas' ? 'active' : '' }}">Aktivitas &amp; Online</a>
         <a href="{{ route('developer.struktur') }}" class="dev-nav-link {{ $activeNav === 'struktur' ? 'active' : '' }}">Struktur Folder</a>
         <button type="button" class="dev-btn-refresh" onclick="{{ $refreshOnclick }}">Refresh</button>
         @if (!empty($showWebLock))
-            <form method="POST" action="{{ route('developer.kunci_web') }}" style="margin:0;" onsubmit="return confirm({{ !empty($webLocked) ? '\'Buka kunci web sekarang? Seluruh pengguna akan kembali bisa mengakses web.\'' : '\'Kunci seluruh akses web sekarang? Semua pengguna (selain Developer Console) akan dialihkan ke halaman Maintenance.\'' }})">
+            <form method="POST" action="{{ route('developer.kunci_web') }}" style="margin:0;" onsubmit="return toggleKunciWebAjax(event, this)">
                 @csrf
-                @if (!empty($webLocked))
-                    <button type="submit" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(16,185,129,0.55); background:rgba(16,185,129,0.2); color:#6ee7b7; font-size:11.5px; font-weight:800; cursor:pointer;">Buka Kunci Web</button>
-                @else
-                    <button type="submit" style="padding:6px 12px; border-radius:8px; border:1px solid rgba(239,68,68,0.6); background:rgba(220,38,38,0.25); color:#fecaca; font-size:11.5px; font-weight:800; cursor:pointer;">Kunci Web</button>
-                @endif
+                <button type="submit" id="btn-kunci-web-desktop" data-locked="{{ !empty($webLocked) ? '1' : '0' }}" class="dev-btn-kunci {{ !empty($webLocked) ? 'is-locked' : '' }}">{{ !empty($webLocked) ? 'Buka Kunci Web' : 'Kunci Web' }}</button>
             </form>
         @endif
         @if (!empty($liveText))
@@ -91,17 +90,13 @@
     @endif
 
     <a href="{{ route('developer.dashboard') }}" class="dev-drawer-link {{ $activeNav === 'dashboard' ? 'active' : '' }}">Dashboard Kesehatan</a>
-    <a href="{{ route('developer.aktivitas') }}" class="dev-drawer-link {{ $activeNav === 'aktivitas' ? 'active' : '' }}">Aktivitas Akun (3 Role)</a>
+    <a href="{{ route('developer.aktivitas') }}" class="dev-drawer-link {{ $activeNav === 'aktivitas' ? 'active' : '' }}">Aktivitas &amp; Online Akun</a>
     <a href="{{ route('developer.struktur') }}" class="dev-drawer-link {{ $activeNav === 'struktur' ? 'active' : '' }}">Struktur Folder &amp; Anti-Deface</a>
 
     @if (!empty($showWebLock))
-        <form method="POST" action="{{ route('developer.kunci_web') }}" style="margin:4px 0 0;" onsubmit="return confirm({{ !empty($webLocked) ? '\'Buka kunci web sekarang? Seluruh pengguna akan kembali bisa mengakses web.\'' : '\'Kunci seluruh akses web sekarang? Semua pengguna (selain Developer Console) akan dialihkan ke halaman Maintenance.\'' }})">
+        <form method="POST" action="{{ route('developer.kunci_web') }}" style="margin:4px 0 0;" onsubmit="return toggleKunciWebAjax(event, this)">
             @csrf
-            @if (!empty($webLocked))
-                <button type="submit" style="width:100%; padding:10px 12px; border-radius:9px; border:1px solid rgba(16,185,129,0.55); background:rgba(16,185,129,0.2); color:#6ee7b7; font-size:12.5px; font-weight:800; cursor:pointer;">Buka Kunci Web</button>
-            @else
-                <button type="submit" style="width:100%; padding:10px 12px; border-radius:9px; border:1px solid rgba(239,68,68,0.6); background:rgba(220,38,38,0.25); color:#fecaca; font-size:12.5px; font-weight:800; cursor:pointer;">Kunci Web (Maintenance)</button>
-            @endif
+            <button type="submit" id="btn-kunci-web-mobile" data-locked="{{ !empty($webLocked) ? '1' : '0' }}" class="dev-btn-kunci dev-btn-kunci-mobile {{ !empty($webLocked) ? 'is-locked' : '' }}">{{ !empty($webLocked) ? 'Buka Kunci Web' : 'Kunci Web (Maintenance)' }}</button>
         </form>
     @endif
 
@@ -118,5 +113,61 @@
         if (!d || !b) return;
         d.classList.toggle('open', !!open);
         b.classList.toggle('open', !!open);
+    }
+
+    function sinkronTombolKunciWeb(isLocked) {
+        const btnDesk = document.getElementById('btn-kunci-web-desktop');
+        const btnMob = document.getElementById('btn-kunci-web-mobile');
+        [
+            { el: btnDesk, labelLock: 'Kunci Web', labelUnlock: 'Buka Kunci Web' },
+            { el: btnMob, labelLock: 'Kunci Web (Maintenance)', labelUnlock: 'Buka Kunci Web' },
+        ].forEach(cfg => {
+            if (!cfg.el) return;
+            cfg.el.setAttribute('data-locked', isLocked ? '1' : '0');
+            cfg.el.textContent = isLocked ? cfg.labelUnlock : cfg.labelLock;
+            cfg.el.classList.toggle('is-locked', !!isLocked);
+        });
+    }
+
+    async function toggleKunciWebAjax(e, formEl) {
+        e.preventDefault();
+        const btnDesk = document.getElementById('btn-kunci-web-desktop');
+        const curLocked = (btnDesk?.getAttribute('data-locked') === '1');
+        const msgKonfirm = curLocked
+            ? 'Buka kunci web sekarang? Seluruh pengguna akan kembali bisa mengakses web.'
+            : 'Kunci seluruh akses web sekarang? Semua pengguna (selain Developer Console) akan dialihkan ke halaman Maintenance.';
+        if (!confirm(msgKonfirm)) return false;
+
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || formEl.querySelector('input[name="_token"]')?.value || '';
+        const submitBtn = formEl.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+            const res = await fetch(formEl.getAttribute('action'), {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': csrf
+                },
+                body: new FormData(formEl)
+            });
+            if (res.status === 401) {
+                window.location.href = '{{ route("developer.login") }}';
+                return false;
+            }
+            const json = await res.json();
+            if (res.ok && json && json.success) {
+                sinkronTombolKunciWeb(!!json.webLocked);
+                if (typeof window.onWebLockUpdated === 'function') {
+                    window.onWebLockUpdated(!!json.webLocked, json.webLockInfo || {}, json.message || '');
+                }
+            }
+        } catch (err) {
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+        return false;
     }
 </script>

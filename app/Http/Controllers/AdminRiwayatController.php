@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\RiwayatAktivitas;
+use App\Support\RolePermission;
+use Illuminate\Support\Facades\Auth;
+
 class AdminRiwayatController extends Controller
 {
     public function index(Request $request)
@@ -25,9 +28,25 @@ class AdminRiwayatController extends Controller
         return view('admin.riwayat', compact('riwayats', 'tahunList'));
     }
 
-    public function clear()
+    public function clear(Request $request)
     {
-        RiwayatAktivitas::truncate();
-        return back()->with('success', 'Log riwayat aktivitas berhasil dibersihkan.');
+        $role = Auth::check() ? Auth::user()->role : null;
+        if (!RolePermission::can($role, 'riwayat_aktivitas', 'delete')) {
+            return RolePermission::denyResponse($request, 'Anda tidak memiliki izin membersihkan log riwayat aktivitas.');
+        }
+
+        if (RolePermission::isMasterAdmin($role)) {
+            RiwayatAktivitas::query()->delete();
+            $pesan = 'Seluruh log riwayat aktivitas berhasil dibersihkan.';
+        } else {
+            RiwayatAktivitas::where('user_id', Auth::id())->delete();
+            $pesan = 'Log riwayat aktivitas akun Anda berhasil dibersihkan.';
+        }
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $pesan]);
+        }
+
+        return back()->with('success', $pesan);
     }
 }

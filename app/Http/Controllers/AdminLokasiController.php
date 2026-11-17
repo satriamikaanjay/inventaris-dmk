@@ -38,8 +38,12 @@ class AdminLokasiController extends Controller
 
     public function destroy($id)
     {
-        $lokasi = AdminLokasi::findOrFail($id);
-        $lokasi->delete();
-        return response()->json(['success' => true, 'message' => 'Lokasi berhasil dihapus.']);
+        try {
+            $lokasi = AdminLokasi::findOrFail($id);
+            $lokasi->delete();
+            return response()->json(['success' => true, 'message' => 'Lokasi berhasil dihapus.']);
+        } catch (\Throwable $e) {
+            return response()->json(['success' => false, 'message' => 'Lokasi gagal dihapus atau masih dipakai data lain.'], 422);
+        }
     }
 }

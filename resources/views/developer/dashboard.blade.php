@@ -53,6 +53,9 @@
         .dot-off { width: 7px; height: 7px; border-radius: 50%; background: #64748b; display: inline-block; }
         .btn-sim { padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.15); color: #fca5a5; font-size: 11.5px; font-weight: 700; cursor: pointer; }
         .btn-sim:hover { background: #dc2626; color: #fff; }
+        .btn-unblock { padding: 5px 11px; border-radius: 7px; border: 1px solid rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.18); color: #6ee7b7; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .btn-unblock:hover:not(:disabled) { background: #059669; color: #fff; border-color: #059669; }
+        .btn-unblock:disabled { opacity: 0.55; cursor: not-allowed; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
         .fg label { display: block; font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; }
         .fg input, .fg select { width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid #334155; background: #020617; color: #f8fafc; font-size: 13px; }
@@ -90,10 +93,10 @@
 <body>
     @include('developer.partials.topbar', [
         'pageTitle'      => 'Developer Health & Observability Console',
-        'pageSubtitle'   => 'Web & Mobile APK, Status Online Live, Error Log & Reset Master Admin',
+        'pageSubtitle'   => 'Web & Mobile APK Telemetry, Error Log, IP Terblokir & Reset Master Admin',
         'activeNav'      => 'dashboard',
         'refreshOnclick' => 'manualRefreshDeveloper(this)',
-        'liveText'       => 'Live (3 dtk)',
+        'liveText'       => 'Live (2 dtk)',
     ])
 
     <div class="container">
@@ -216,35 +219,28 @@
             </div>
         </section>
 
-        <section class="panel" style="border-top: 3px solid #10b981;">
+        <section class="panel" style="border-top: 3px solid #ef4444;">
             <div class="panel-head">
-                <h2>Data Semua Role &amp; Status Online Live (Privasi Terjaga)</h2>
+                <h2>Daftar IP Diblokir &amp; Aktivitas Mencurigakan (WAF)</h2>
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <span class="badge b-ok" id="badge-online-count">0 Online</span>
-                    <span class="badge b-role">Email &amp; Password Disembunyikan</span>
-                    <select id="filter-role-select" onchange="renderTabelRoles()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 12px;">
-                        <option value="all">Semua Role</option>
-                        <option value="master_admin">Master Admin</option>
-                        <option value="admin">Admin</option>
-                        <option value="user">User (Mobile)</option>
-                        <option value="developer">Developer</option>
-                    </select>
+                    <span class="badge b-ok" id="badge-count-blocked-ips">0 Terblokir</span>
+                    <button type="button" id="btn-unblock-all-ips" class="btn-unblock" style="display:none;" onclick="bukaSemuaBlokirIp(this)">Buka Semua Blokir</button>
                 </div>
             </div>
-            <div class="scroll-box" style="max-height: 300px;">
+            <div id="waf-unblock-feedback" style="display:none; margin-bottom:10px;" class="alert-ok"></div>
+            <div class="scroll-box" style="max-height: 290px;">
                 <table>
                     <thead>
                         <tr>
-                            <th>No</th>
-                            <th>Username</th>
-                            <th>Role</th>
-                            <th>Status Live</th>
-                            <th>Email</th>
-                            <th>Password</th>
-                            <th>Terdaftar</th>
+                            <th>IP Address</th>
+                            <th>Nama Device</th>
+                            <th>Aktivitas Mencurigakan / Penyebab</th>
+                            <th>Waktu &amp; Durasi</th>
+                            <th>Status</th>
+                            <th style="text-align:right;">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-roles"></tbody>
+                    <tbody id="tbody-blocked-ips"></tbody>
                 </table>
             </div>
         </section>
@@ -282,7 +278,9 @@
                 @endif
             </div>
 
-            <form method="POST" action="{{ route('developer.reset_master_password') }}">
+            <div id="master-reset-feedback" style="display:none; margin-bottom:14px;" class="alert-ok"></div>
+
+            <form id="form-reset-master-pw" method="POST" action="{{ route('developer.reset_master_password') }}" onsubmit="return submitResetMasterPassword(event, this)">
                 @csrf
                 <div class="form-grid">
                     <div class="fg">
@@ -304,7 +302,7 @@
                         <input type="password" name="new_password_confirmation" placeholder="Ulangi kata sandi baru" required minlength="6">
                     </div>
                 </div>
-                <button type="submit" class="btn-primary">Reset Kata Sandi &amp; Buka Blokir Master Admin</button>
+                <button type="submit" id="btn-submit-reset-master" class="btn-primary">Reset Kata Sandi &amp; Buka Blokir Master Admin</button>
             </form>
         </section>
     </div>
@@ -313,16 +311,16 @@
     <input type="hidden" id="init-mobile-telemetry" value="{{ json_encode($mobileTelemetry) }}">
     <input type="hidden" id="init-error-reqs" value="{{ json_encode($recentErrorReqs) }}">
     <input type="hidden" id="init-errors" value="{{ json_encode($logErrors) }}">
-    <input type="hidden" id="init-roles" value="{{ json_encode($allRolesUsers) }}">
     <input type="hidden" id="init-master-reqs" value="{{ json_encode($masterResetRequests ?? []) }}">
+    <input type="hidden" id="init-blocked-ips" value="{{ json_encode($blockedIps ?? []) }}">
 
     <script>
         let webTelemetryList = JSON.parse(document.getElementById('init-web-telemetry').value || '[]');
         let mobileTelemetryList = JSON.parse(document.getElementById('init-mobile-telemetry').value || '[]');
         let errorReqList = JSON.parse(document.getElementById('init-error-reqs').value || '[]');
         let errorLogList = JSON.parse(document.getElementById('init-errors').value || '[]');
-        let rolesList = JSON.parse(document.getElementById('init-roles').value || '[]');
         let masterResetReqList = JSON.parse(document.getElementById('init-master-reqs').value || '[]');
+        let blockedIpList = JSON.parse(document.getElementById('init-blocked-ips').value || '[]');
 
         function esc(str) {
             return String(str ?? '')
@@ -407,40 +405,6 @@
             }).join('');
         }
 
-        function renderTabelRoles() {
-            const tbody = document.getElementById('tbody-roles');
-            const filterVal = document.getElementById('filter-role-select')?.value || 'all';
-            const badgeOn = document.getElementById('badge-online-count');
-
-            const totalOnline = rolesList.filter(r => !!r.is_online).length;
-            if (badgeOn) badgeOn.textContent = totalOnline + ' Akun Online';
-            if (!tbody) return;
-
-            const filtered = rolesList.filter(r => filterVal === 'all' || r.role === filterVal);
-            if (filtered.length === 0) {
-                tbody.innerHTML = '\x3ctr\x3e\x3ctd colspan="7" style="text-align:center; color:#64748b; padding:22px;"\x3eTidak ada akun pada role ini.\x3c/td\x3e\x3c/tr\x3e';
-                return;
-            }
-
-            tbody.innerHTML = filtered.map((r, i) => {
-                let statusHtml = '\x3cspan class="badge b-offline"\x3e\x3cspan class="dot-off"\x3e\x3c/span\x3e Offline\x3c/span\x3e';
-                if (r.is_online) {
-                    const via = r.online_channel === 'mobile' ? 'Mobile APK' : 'Web';
-                    statusHtml = '\x3cspan class="badge b-ok"\x3e\x3cspan class="dot-on"\x3e\x3c/span\x3e Online (' + via + ')\x3c/span\x3e';
-                }
-
-                return '\x3ctr\x3e'
-                    + '\x3ctd data-label="No"\x3e' + (i + 1) + '\x3c/td\x3e'
-                    + '\x3ctd data-label="Username" style="font-weight:700; color:#f8fafc;"\x3e' + esc(r.username) + '\x3c/td\x3e'
-                    + '\x3ctd data-label="Role"\x3e\x3cspan class="badge b-role"\x3e' + esc(r.role) + '\x3c/span\x3e\x3c/td\x3e'
-                    + '\x3ctd data-label="Status"\x3e' + statusHtml + '\x3c/td\x3e'
-                    + '\x3ctd data-label="Email" style="color:#64748b; font-style:italic;"\x3e[Dilindungi]\x3c/td\x3e'
-                    + '\x3ctd data-label="Password" style="color:#64748b; font-style:italic;"\x3e[Dilindungi]\x3c/td\x3e'
-                    + '\x3ctd data-label="Dibuat" style="color:#94a3b8;"\x3e' + esc(r.created_at) + '\x3c/td\x3e'
-                    + '\x3c/tr\x3e';
-            }).join('');
-        }
-
         function fokusFormResetMaster() {
             const inputPw = document.querySelector('input[name="new_password"]');
             if (inputPw) {
@@ -484,63 +448,289 @@
             }).join('');
         }
 
+        function renderTabelBlockedIps() {
+            const tbody = document.getElementById('tbody-blocked-ips');
+            const badge = document.getElementById('badge-count-blocked-ips');
+            const btnAll = document.getElementById('btn-unblock-all-ips');
+
+            const activeList = blockedIpList.filter(x => x.status === 'blocked' || x.status === 'warning');
+            const blockedCount = blockedIpList.filter(x => x.status === 'blocked').length;
+
+            if (badge) {
+                badge.textContent = blockedCount > 0 ? (blockedCount + ' Terblokir') : '0 Terblokir';
+                badge.className = 'badge ' + (blockedCount > 0 ? 'b-err' : 'b-ok');
+            }
+            if (btnAll) {
+                btnAll.style.display = activeList.length > 0 ? 'inline-block' : 'none';
+            }
+            if (!tbody) return;
+
+            if (blockedIpList.length === 0) {
+                tbody.innerHTML = '\x3ctr\x3e\x3ctd colspan="6" style="text-align:center; color:#34d399; padding:22px;"\x3eAman — belum ada IP yang diblokir atau melakukan aktivitas mencurigakan.\x3c/td\x3e\x3c/tr\x3e';
+                return;
+            }
+
+            tbody.innerHTML = blockedIpList.map(item => {
+                const st = item.status || 'expired';
+                let stBadge = '\x3cspan class="badge b-offline"\x3eKedaluwarsa\x3c/span\x3e';
+                let waktuKet = esc(item.blocked_at || '-');
+                let aksiHtml = '\x3cspan style="color:#64748b; font-size:11px;"\x3e-\x3c/span\x3e';
+
+                if (st === 'blocked') {
+                    stBadge = '\x3cspan class="badge b-err"\x3eTERBLOKIR\x3c/span\x3e';
+                    const remMin = Math.max(1, Math.ceil(Number(item.remaining_sec || 0) / 60));
+                    waktuKet = esc(item.blocked_at || '-') + '\x3cdiv style="font-size:10.5px; color:#fca5a5;"\x3eSisa ~' + remMin + ' mnt\x3c/div\x3e';
+                    aksiHtml = '\x3cbutton type="button" class="btn-unblock" onclick="bukaBlokirIp(\'' + esc(item.ip) + '\', this)"\x3eBuka Blokir\x3c/button\x3e';
+                } else if (st === 'warning') {
+                    stBadge = '\x3cspan class="badge b-warn"\x3ePERINGATAN (' + esc(item.strikes || 1) + '/3)\x3c/span\x3e';
+                    aksiHtml = '\x3cbutton type="button" class="btn-unblock" onclick="bukaBlokirIp(\'' + esc(item.ip) + '\', this)"\x3eBuka Blokir / Reset\x3c/button\x3e';
+                } else if (st === 'unblocked') {
+                    stBadge = '\x3cspan class="badge b-ok"\x3eDibuka\x3c/span\x3e';
+                    waktuKet = esc(item.unblocked_at || item.blocked_at || '-');
+                    aksiHtml = '\x3cspan style="color:#34d399; font-size:11px;"\x3eDibuka (' + esc(item.unblocked_by || 'Dev') + ')\x3c/span\x3e';
+                }
+
+                const uaShort = item.user_agent && item.user_agent !== '-'
+                    ? '\x3cdiv style="font-size:10px; color:#64748b; max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + esc(item.user_agent) + '"\x3e' + esc(item.user_agent) + '\x3c/div\x3e'
+                    : '';
+
+                const pathKet = item.path && item.path !== '-'
+                    ? '\x3cdiv style="font-size:10.5px; color:#93c5fd; font-family:monospace;"\x3e' + esc(item.path) + '\x3c/div\x3e'
+                    : '';
+
+                return '\x3ctr\x3e'
+                    + '\x3ctd data-label="IP Address" style="font-family:monospace; font-weight:700; color:#f8fafc;"\x3e' + esc(item.ip) + '\x3c/td\x3e'
+                    + '\x3ctd data-label="Nama Device"\x3e\x3cdiv style="font-weight:600; color:#e2e8f0;"\x3e' + esc(item.device_name || 'Perangkat Tidak Dikenal') + '\x3c/div\x3e' + uaShort + '\x3c/td\x3e'
+                    + '\x3ctd data-label="Aktivitas / Alasan"\x3e\x3cdiv\x3e' + esc(item.reason || '-') + '\x3c/div\x3e' + pathKet + '\x3c/td\x3e'
+                    + '\x3ctd data-label="Waktu"\x3e' + waktuKet + '\x3c/td\x3e'
+                    + '\x3ctd data-label="Status"\x3e' + stBadge + '\x3c/td\x3e'
+                    + '\x3ctd data-label="Aksi" style="text-align:right;"\x3e' + aksiHtml + '\x3c/td\x3e'
+                    + '\x3c/tr\x3e';
+            }).join('');
+        }
+
+        function tampilkanFeedbackUnblock(pesan, isErr = false) {
+            const box = document.getElementById('waf-unblock-feedback');
+            if (!box) return;
+            box.className = isErr ? 'alert-err' : 'alert-ok';
+            box.textContent = pesan;
+            box.style.display = 'block';
+            setTimeout(() => { box.style.display = 'none'; }, 5000);
+        }
+
+        async function bukaBlokirIp(ip, btn) {
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Membuka...';
+            }
+            try {
+                const res = await fetch('{{ route("developer.unblock_ip") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: JSON.stringify({ ip: ip })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) {
+                    tampilkanFeedbackUnblock(json?.message || 'Gagal membuka blokir IP.', true);
+                    if (btn) { btn.disabled = false; btn.textContent = 'Buka Blokir'; }
+                    return;
+                }
+                if (Array.isArray(json.blockedIps)) {
+                    blockedIpList = json.blockedIps;
+                    renderTabelBlockedIps();
+                }
+                tampilkanFeedbackUnblock(json.message || ('Blokir IP ' + ip + ' berhasil dibuka.'));
+            } catch (e) {
+                tampilkanFeedbackUnblock('Terjadi kesalahan koneksi saat membuka blokir.', true);
+                if (btn) { btn.disabled = false; btn.textContent = 'Buka Blokir'; }
+            }
+        }
+
+        async function bukaSemuaBlokirIp(btn) {
+            if (!confirm('Buka seluruh blokir IP WAF yang sedang aktif?')) return;
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Membuka...';
+            }
+            try {
+                const res = await fetch('{{ route("developer.unblock_all_ips") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: JSON.stringify({})
+                });
+                const json = await res.json();
+                if (res.ok && json.success) {
+                    if (Array.isArray(json.blockedIps)) {
+                        blockedIpList = json.blockedIps;
+                        renderTabelBlockedIps();
+                    }
+                    tampilkanFeedbackUnblock(json.message || 'Semua blokir IP berhasil dibuka.');
+                } else {
+                    tampilkanFeedbackUnblock(json?.message || 'Gagal membuka semua blokir.', true);
+                }
+            } catch (e) {
+                tampilkanFeedbackUnblock('Terjadi kesalahan koneksi.', true);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Buka Semua Blokir';
+                }
+            }
+        }
+
+        let isPollingDev = false;
+
+        function terapkanSnapshotDashboard(d) {
+            if (!d) return;
+            webTelemetryList = d.webTelemetry || [];
+            mobileTelemetryList = d.mobileTelemetry || [];
+            errorReqList = d.recentErrorReqs || [];
+            errorLogList = d.logErrors || [];
+            masterResetReqList = d.masterResetRequests || [];
+            blockedIpList = d.blockedIps || [];
+
+            document.getElementById('kpi-web-avg').textContent = (d.webStats?.avg_ms ?? 0) + ' ms';
+            document.getElementById('kpi-web-sub').textContent = (d.webStats?.count ?? 0) + ' req • Max ' + (d.webStats?.max_ms ?? 0) + ' ms • ' + (d.webStats?.errors ?? 0) + ' error';
+            document.getElementById('kpi-mob-avg').textContent = (d.mobileStats?.avg_ms ?? 0) + ' ms';
+            document.getElementById('kpi-mob-sub').textContent = (d.mobileStats?.count ?? 0) + ' req • Max ' + (d.mobileStats?.max_ms ?? 0) + ' ms • ' + (d.mobileStats?.errors ?? 0) + ' error';
+
+            const mobStatus = d.mobileApiStatus || {};
+            const mobState = mobStatus.state || 'disconnected';
+            const mobConnEl = document.getElementById('kpi-mob-conn');
+            const mobConnSubEl = document.getElementById('kpi-mob-conn-sub');
+            const mobConnBadgeEl = document.getElementById('badge-mobile-conn');
+            if (mobConnEl) {
+                mobConnEl.textContent = mobStatus.label || 'Belum Terhubung';
+                mobConnEl.className = 'kpi-val ' + (mobState === 'active' ? 'kpi-safe' : (mobState === 'idle' ? '' : 'kpi-danger'));
+                mobConnEl.style.color = mobState === 'idle' ? '#fbbf24' : '';
+            }
+            if (mobConnSubEl) {
+                mobConnSubEl.textContent = mobStatus.connected
+                    ? 'Aktif: ' + (mobStatus.active_devices ?? 0) + ' perangkat • ' + (mobStatus.last_endpoint || '-') + ' (' + (mobStatus.last_seen_at || '-') + ')'
+                    : 'Belum ada request masuk dari Mobile APK ke /api';
+            }
+            if (mobConnBadgeEl) {
+                mobConnBadgeEl.textContent = mobStatus.label || 'Belum Terhubung';
+                mobConnBadgeEl.className = 'badge ' + (mobState === 'active' ? 'b-ok' : (mobState === 'idle' ? 'b-warn' : 'b-err'));
+            }
+
+            document.getElementById('kpi-db-status').textContent = (d.health?.db_status || '-') + ' (' + (d.health?.db_latency_ms ?? 0) + ' ms)';
+            document.getElementById('kpi-srv-sub').textContent = 'PHP ' + (d.health?.php_version || '') + ' • RAM ' + (d.health?.memory_mb ?? 0) + ' MB • Disk Terpakai ' + (d.health?.disk_used_pct ?? 0) + '%';
+
+            const isBlocked = !!(d.masterLockState && d.masterLockState.is_blocked);
+            const failedCount = d.masterLockState?.failed_count ?? 0;
+            const lockEl = document.getElementById('kpi-master-lock');
+            if (lockEl) {
+                lockEl.textContent = isBlocked ? 'TERBLOKIR (3/3)' : 'Normal / Aktif';
+                lockEl.className = 'kpi-val ' + (isBlocked ? 'kpi-danger' : 'kpi-safe');
+            }
+            const masterSub = document.getElementById('kpi-master-sub');
+            if (masterSub) {
+                masterSub.textContent = 'Percobaan gagal: ' + failedCount + ' / 3';
+            }
+            const lockBanner = document.getElementById('master-lock-banner');
+            if (lockBanner) {
+                lockBanner.className = 'lock-banner ' + (isBlocked ? 'lock-danger' : 'lock-safe');
+                if (isBlocked) {
+                    lockBanner.innerHTML = '\x3cstrong\x3ePERINGATAN:\x3c/strong\x3e Akun Master Admin sedang \x3cstrong\x3eTERBLOKIR\x3c/strong\x3e karena salah data login 3 kali berturut-turut (terakhir: '
+                        + esc(d.masterLockState?.last_email || '-') + ' pada ' + esc(d.masterLockState?.blocked_at || '-') + '). Gunakan form di bawah untuk mereset kata sandi &amp; membuka blokir.';
+                } else {
+                    lockBanner.innerHTML = 'Status login Master Admin saat ini \x3cstrong\x3eNormal\x3c/strong\x3e (percobaan gagal: ' + esc(failedCount) + ' / 3). Anda tetap dapat melakukan reset darurat jika Master Admin lupa kata sandi.';
+                }
+            }
+
+            renderBoxTelemetry('tbody-web-telemetry', 'badge-count-web', webTelemetryList, 'Belum ada traffic Web.');
+            renderBoxTelemetry('tbody-mobile-telemetry', 'badge-count-mobile', mobileTelemetryList, 'Belum ada traffic Mobile APK API.');
+            renderKotakError();
+            renderTabelBlockedIps();
+            renderPermintaanResetMaster();
+        }
+
+        async function submitResetMasterPassword(e, formEl) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-submit-reset-master');
+            const fb = document.getElementById('master-reset-feedback');
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Memproses Reset...'; }
+
+            try {
+                const formData = new FormData(formEl);
+                const res = await fetch(formEl.getAttribute('action'), {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': csrf
+                    },
+                    body: formData
+                });
+                if (res.status === 401) {
+                    window.location.href = '{{ route("developer.login") }}';
+                    return false;
+                }
+                const json = await res.json();
+                if (!res.ok || !json.success) {
+                    if (fb) {
+                        fb.className = 'alert-err';
+                        fb.textContent = json?.message || 'Gagal mereset kata sandi Master Admin.';
+                        fb.style.display = 'block';
+                    }
+                    return false;
+                }
+                if (json.data) {
+                    terapkanSnapshotDashboard(json.data);
+                }
+                formEl.querySelectorAll('input[type="password"]').forEach(inp => { inp.value = ''; });
+                if (fb) {
+                    fb.className = 'alert-ok';
+                    fb.textContent = json.message || 'Kata sandi Master Admin berhasil direset.';
+                    fb.style.display = 'block';
+                    setTimeout(() => { fb.style.display = 'none'; }, 6000);
+                }
+            } catch (err) {
+                if (fb) {
+                    fb.className = 'alert-err';
+                    fb.textContent = 'Terjadi kesalahan koneksi saat mereset kata sandi.';
+                    fb.style.display = 'block';
+                }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Reset Kata Sandi & Buka Blokir Master Admin'; }
+            }
+            return false;
+        }
+
         async function pollDeveloperRealtime() {
+            if (isPollingDev) return;
+            isPollingDev = true;
             try {
                 const res = await fetch('{{ route("developer.dashboard") }}?_poll_dev_rt=1&_t=' + Date.now(), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    cache: 'no-store'
                 });
+                if (res.status === 401) {
+                    window.location.href = '{{ route("developer.login") }}';
+                    return;
+                }
                 if (!res.ok) return;
                 const json = await res.json();
                 if (!json || !json.success || !json.data) return;
 
-                const d = json.data;
-                webTelemetryList = d.webTelemetry || [];
-                mobileTelemetryList = d.mobileTelemetry || [];
-                errorReqList = d.recentErrorReqs || [];
-                errorLogList = d.logErrors || [];
-                rolesList = d.allRolesUsers || [];
-                masterResetReqList = d.masterResetRequests || [];
-
-                document.getElementById('kpi-web-avg').textContent = (d.webStats?.avg_ms ?? 0) + ' ms';
-                document.getElementById('kpi-web-sub').textContent = (d.webStats?.count ?? 0) + ' req • Max ' + (d.webStats?.max_ms ?? 0) + ' ms • ' + (d.webStats?.errors ?? 0) + ' error';
-                document.getElementById('kpi-mob-avg').textContent = (d.mobileStats?.avg_ms ?? 0) + ' ms';
-                document.getElementById('kpi-mob-sub').textContent = (d.mobileStats?.count ?? 0) + ' req • Max ' + (d.mobileStats?.max_ms ?? 0) + ' ms • ' + (d.mobileStats?.errors ?? 0) + ' error';
-
-                const mobStatus = d.mobileApiStatus || {};
-                const mobState = mobStatus.state || 'disconnected';
-                const mobConnEl = document.getElementById('kpi-mob-conn');
-                const mobConnSubEl = document.getElementById('kpi-mob-conn-sub');
-                const mobConnBadgeEl = document.getElementById('badge-mobile-conn');
-                if (mobConnEl) {
-                    mobConnEl.textContent = mobStatus.label || 'Belum Terhubung';
-                    mobConnEl.className = 'kpi-val ' + (mobState === 'active' ? 'kpi-safe' : (mobState === 'idle' ? '' : 'kpi-danger'));
-                    mobConnEl.style.color = mobState === 'idle' ? '#fbbf24' : '';
-                }
-                if (mobConnSubEl) {
-                    mobConnSubEl.textContent = mobStatus.connected
-                        ? 'Aktif: ' + (mobStatus.active_devices ?? 0) + ' perangkat • ' + (mobStatus.last_endpoint || '-') + ' (' + (mobStatus.last_seen_at || '-') + ')'
-                        : 'Belum ada request masuk dari Mobile APK ke /api';
-                }
-                if (mobConnBadgeEl) {
-                    mobConnBadgeEl.textContent = mobStatus.label || 'Belum Terhubung';
-                    mobConnBadgeEl.className = 'badge ' + (mobState === 'active' ? 'b-ok' : (mobState === 'idle' ? 'b-warn' : 'b-err'));
-                }
-
-                document.getElementById('kpi-db-status').textContent = (d.health?.db_status || '-') + ' (' + (d.health?.db_latency_ms ?? 0) + ' ms)';
-                document.getElementById('kpi-srv-sub').textContent = 'PHP ' + (d.health?.php_version || '') + ' • RAM ' + (d.health?.memory_mb ?? 0) + ' MB • Disk Terpakai ' + (d.health?.disk_used_pct ?? 0) + '%';
-
-                const isBlocked = !!(d.masterLockState && d.masterLockState.is_blocked);
-                const lockEl = document.getElementById('kpi-master-lock');
-                lockEl.textContent = isBlocked ? 'TERBLOKIR (3/3)' : 'Normal / Aktif';
-                lockEl.className = 'kpi-val ' + (isBlocked ? 'kpi-danger' : 'kpi-safe');
-                document.getElementById('kpi-master-sub').textContent = 'Percobaan gagal: ' + (d.masterLockState?.failed_count ?? 0) + ' / 3';
-
-                renderBoxTelemetry('tbody-web-telemetry', 'badge-count-web', webTelemetryList, 'Belum ada traffic Web.');
-                renderBoxTelemetry('tbody-mobile-telemetry', 'badge-count-mobile', mobileTelemetryList, 'Belum ada traffic Mobile APK API.');
-                renderKotakError();
-                renderTabelRoles();
-                renderPermintaanResetMaster();
+                terapkanSnapshotDashboard(json.data);
             } catch (e) {
+            } finally {
+                isPollingDev = false;
             }
         }
 
@@ -559,9 +749,9 @@
         renderBoxTelemetry('tbody-web-telemetry', 'badge-count-web', webTelemetryList, 'Belum ada traffic Web.');
         renderBoxTelemetry('tbody-mobile-telemetry', 'badge-count-mobile', mobileTelemetryList, 'Belum ada traffic Mobile APK API.');
         renderKotakError();
-        renderTabelRoles();
+        renderTabelBlockedIps();
         renderPermintaanResetMaster();
-        setInterval(pollDeveloperRealtime, 3000);
+        setInterval(pollDeveloperRealtime, 2000);
     </script>
 </body>
 </html>

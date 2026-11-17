@@ -3,20 +3,22 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Cabang;
 use App\Models\Kategori;
 use App\Models\Item;
 use App\Models\DetailAset;
 use App\Models\StatusAset;
+use App\Support\RolePermission;
 
 class AdminAsetController extends Controller
 {
     public function index(Request $request)
     {
-        $kategoris = Kategori::paginate(50, ['*'], 'kategori_page');
-        $items = Item::paginate(50, ['*'], 'item_page');
+        $kategoris = Kategori::orderBy('nama_kategori')->get();
+        $items = Item::orderBy('kategori_id')->orderBy('urutan')->get();
         $statuses = StatusAset::all();
-        $cabangs = Cabang::withCount('asets')->get();
+        $cabangs = Cabang::withCount('asets')->orderBy('nama_cabang')->get();
 
         $query = DetailAset::with(['item', 'kategori', 'cabang'])->orderBy('aset_id', $request->sort === 'terlama' ? 'asc' : 'desc');
 
@@ -51,24 +53,61 @@ class AdminAsetController extends Controller
         return view('admin.data_aset', compact('detailAsets', 'kategoris', 'items', 'cabangs', 'statuses'));
     }
 
+    private function cekIzin(Request $request, string $aksi, string $pesan)
+    {
+        $role = Auth::check() ? Auth::user()->role : null;
+        if (!RolePermission::can($role, 'data_aset', $aksi)) {
+            return RolePermission::denyResponse($request, $pesan);
+        }
+        return null;
+    }
+
     public function store(Request $request)
     {
+        if ($resp = $this->cekIzin($request, 'create', 'Anda tidak memiliki izin menambah Data Aset. Hubungi Master Admin.')) {
+            return $resp;
+        }
         return app(ItemController::class)->storeDetail($request);
     }
 
     public function update(Request $request, $id)
     {
+        if ($resp = $this->cekIzin($request, 'edit', 'Anda tidak memiliki izin mengubah Data Aset. Hubungi Master Admin.')) {
+            return $resp;
+        }
         return app(ItemController::class)->updateDetail($request, $id);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        return app(ItemController::class)->destroyDetail($id);
+        if ($resp = $this->cekIzin($request, 'delete', 'Anda tidak memiliki izin menghapus Data Aset. Hubungi Master Admin.')) {
+            return $resp;
+        }
+        return app(ItemController::class)->destroyDetail($request, $id);
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        if ($resp = $this->cekIzin($request, 'delete', 'Anda tidak memiliki izin menghapus Data Aset. Hubungi Master Admin.')) {
+            return $resp;
+        }
+        return app(ItemController::class)->bulkDelete($request);
     }
 
     public function importExcel(Request $request)
     {
+        if ($resp = $this->cekIzin($request, 'create', 'Anda tidak memiliki izin mengimpor Data Aset. Hubungi Master Admin.')) {
+            return $resp;
+        }
         return app(ItemController::class)->importExcel($request);
+    }
+
+    public function downloadTemplateImport(Request $request, string $format = 'xlsx')
+    {
+        if ($resp = $this->cekIzin($request, 'create', 'Anda tidak memiliki izin mengunduh template import Data Aset.')) {
+            return $resp;
+        }
+        return app(ItemController::class)->downloadTemplateImport($format);
     }
 
     public function viewLampiran($filename)

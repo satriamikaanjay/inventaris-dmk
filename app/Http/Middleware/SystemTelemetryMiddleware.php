@@ -245,7 +245,15 @@ class SystemTelemetryMiddleware
 
     private function shouldSkipTelemetry(Request $request, string $path): bool
     {
-        if ($request->has('_poll_dev_rt') || $request->has('_poll_pengajuan_rt') || $request->has('_check_permissions_rt')) {
+        if (
+            $request->has('_poll_dev_rt')
+            || $request->has('_poll_dev_act')
+            || $request->has('_poll_dev_struktur')
+            || $request->has('_poll_pengajuan_rt')
+            || $request->has('_check_permissions_rt')
+            || $request->has('_live_sync_page')
+            || $request->is('_live-sync*')
+        ) {
             return true;
         }
         return in_array($path, ['/cek-sesi', '/up'], true);

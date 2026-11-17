@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cabang;
 use App\Models\DetailAset;
 use App\Models\RiwayatAktivitas;
+use App\Support\RolePermission;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -232,6 +233,12 @@ class AdminPengajuanController extends Controller
             return redirect()->back()->withErrors(['Data pengajuan tidak ditemukan.']);
         }
 
+        $roleUser = Auth::check() ? Auth::user()->role : null;
+        $jenisKey = 'pengajuan_' . strtolower((string) ($row->jenis ?? 'peminjaman'));
+        if (!RolePermission::can($roleUser, 'pengajuan', 'view') || !RolePermission::can($roleUser, $jenisKey, 'view')) {
+            return RolePermission::denyResponse($request, 'Hak akses verifikasi pengajuan ini telah ditutup oleh Master Admin.');
+        }
+
         $statusBaru = ucfirst(strtolower(trim((string) $request->input('status', 'Disetujui'))));
         if (!in_array($statusBaru, ['Menunggu', 'Disetujui', 'Ditolak', 'Selesai'], true)) {
             $statusBaru = 'Disetujui';
@@ -285,6 +292,7 @@ class AdminPengajuanController extends Controller
                     if ($statusBaru === 'Selesai') {
                         $updateServis['status_maintenance'] = 'Selesai Servis';
                         $updateServis['status_aset'] = 'Baik';
+                        $updateServis['status_berjalan'] = 'Aset Berjalan';
                         $updateServis['servis_terakhir'] = date('Y-m-d');
                         if (!empty($row->tanggal_selesai)) {
                             $updateServis['servis_berikutnya'] = $row->tanggal_selesai;
@@ -296,7 +304,8 @@ class AdminPengajuanController extends Controller
                 } elseif ($jenis === 'peminjaman') {
                     if ($statusBaru === 'Selesai') {
                         $aset->update([
-                            'status_aset' => 'Baik',
+                            'status_aset'     => 'Baik',
+                            'status_berjalan' => 'Aset Berjalan',
                         ]);
                     } else {
                         $aset->update([

@@ -10,8 +10,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\Csv;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class AsetImport
@@ -57,34 +62,172 @@ class AsetImport
 
     private bool $modelSudahDicek = false;
 
-    public function import(string $path, string $ekstensi = 'xlsx'): array
+    public int $totalDibaca = 0;
+
+    public int $totalMasuk = 0;
+
+    public int $totalDuplikat = 0;
+
+    /** @var array<int, string> */
+    public array $contohDuplikat = [];
+
+    public static function dataTemplateImport(): array
+    {
+        return [
+            ['Kode Aset', 'Nama Aset', 'Kategori', 'Cabang', 'Merk / Tipe', 'Harga Beli (IDR)', 'Unit', 'Tgl Pengadaan', 'Status Aset', '', '', '', 'Ruangan', 'No. Berita Acara (B.A)'],
+            ['', '', '', '', '', '', '', '', 'Baik', 'Rusak', '', '', '', ''],
+            ['', '', '', '', '', '', '', '', '', 'Ringan', 'Sedang', 'Berat', '', ''],
+            ['C.01', 'Laptop Operasional', 'Elektronik', 'Juanda', 'Lenovo ThinkPad', 8500000, 1, '2026-11-16', 'V', '', '', '', 'Ruang IT', 'BA.001'],
+            ['B.01', 'Meja Kerja Staff', 'Furniture', 'Sidoarjo', 'Olympic', 1500000, 1, '2026-11-16', 'V', '', '', '', 'Ruang Admin', 'BA.002'],
+        ];
+    }
+
+    public static function buatTemplateSpreadsheet(): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Inventaris DMK');
+
+        $rows = self::dataTemplateImport();
+        $sheet->fromArray($rows, null, 'A1');
+
+        $sheet->mergeCells('A1:A3');
+        $sheet->mergeCells('B1:B3');
+        $sheet->mergeCells('C1:C3');
+        $sheet->mergeCells('D1:D3');
+        $sheet->mergeCells('E1:E3');
+        $sheet->mergeCells('F1:F3');
+        $sheet->mergeCells('G1:G3');
+        $sheet->mergeCells('H1:H3');
+        $sheet->mergeCells('I1:L1');
+        $sheet->mergeCells('I2:I3');
+        $sheet->mergeCells('J2:L2');
+        $sheet->mergeCells('M1:M3');
+        $sheet->mergeCells('N1:N3');
+
+        $sheet->getStyle('A1:N3')->applyFromArray([
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 10],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1A4F91']],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical'   => Alignment::VERTICAL_CENTER,
+                'wrapText'   => true,
+            ],
+            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
+        ]);
+
+        $sheet->getStyle('A4:N5')->applyFromArray([
+            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'CBD5E1']]],
+        ]);
+        $sheet->getStyle('F4:F5')->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle('G4:L5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $lebarKolom = [
+            'A' => 18, 'B' => 24, 'C' => 18, 'D' => 16, 'E' => 18,
+            'F' => 18, 'G' => 9, 'H' => 15, 'I' => 9, 'J' => 9,
+            'K' => 9, 'L' => 9, 'M' => 16, 'N' => 22,
+        ];
+        foreach ($lebarKolom as $kol => $lebar) {
+            $sheet->getColumnDimension($kol)->setWidth($lebar);
+        }
+        $sheet->getRowDimension(1)->setRowHeight(24);
+        $sheet->getRowDimension(2)->setRowHeight(20);
+        $sheet->getRowDimension(3)->setRowHeight(20);
+
+        $panduan = $spreadsheet->createSheet();
+        $panduan->setTitle('Panduan Pengisian');
+        $panduan->fromArray([
+            ['PANDUAN IMPORT DATA ASET (MULTI-CABANG / GLOBAL)'],
+            ['1. Anda bisa mengimport seluruh cabang dalam 1 file sekaligus dengan mengisi kolom "Cabang" di setiap baris.'],
+            ['2. Khusus Excel (.xlsx/.xls), jika ingin memisah per tab/sheet, beri nama sheet berawalan "Inventaris", misal: "Inventaris DMK (Juanda)".'],
+            ['3. Kolom wajib: Kode Aset, Nama Aset, Cabang (jika nama sheet tidak memakai tanda kurung), Harga Beli, Unit, Tgl Pengadaan, Ruangan, serta kolom status (Baik / Ringan / Sedang / Berat).'],
+            ['4. Format Kode Aset diawali huruf kategori + titik + nomor urut (contoh: C.01 atau C.01/20261116/1).'],
+            ['5. Pemetaan huruf kategori otomatis: A=Tanah dan Bangunan, B=Furniture, C=Elektronik, D=Kendaraan Operasional, E=Alat Rumah Tangga, F=Alat Logistik, G=Dekorasi, H=Alat Kantor. Huruf lain mengambil dari kolom "Kategori".'],
+            ['6. Isi huruf "V" atau angka "1" pada salah satu kolom status (Baik, Ringan, Sedang, atau Berat).'],
+            ['7. Format Tgl Pengadaan: YYYY-MM-DD (contoh: 2026-11-16) atau tanggal Excel standar.'],
+            ['8. Hapus atau timpa 2 baris contoh pada sheet "Inventaris DMK" sebelum mengunggah data asli (sheet panduan ini otomatis diabaikan sistem).'],
+        ], null, 'A1');
+        $panduan->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+        $panduan->getColumnDimension('A')->setWidth(115);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return $spreadsheet;
+    }
+
+    public function import(string $path, string $ekstensi = 'xlsx', ?string $namaFileAsli = null): array
     {
         @ini_set('memory_limit', '512M');
         @set_time_limit(300);
 
-        $reader = IOFactory::createReader(strtolower($ekstensi) === 'xls' ? 'Xls' : 'Xlsx');
+        $ext   = strtolower(trim($ekstensi));
+        $isCsv = ($ext === 'csv');
+
+        if ($isCsv) {
+            $reader = IOFactory::createReader('Csv');
+            if ($reader instanceof Csv) {
+                $reader->setInputEncoding(Csv::GUESS_ENCODING);
+            }
+        } else {
+            $reader = IOFactory::createReader($ext === 'xls' ? 'Xls' : 'Xlsx');
+        }
         $reader->setReadEmptyCells(false);
         $spreadsheet = $reader->load($path);
 
-        $ringkasan = [];
+        $cabangDariNamaFile = $isCsv && $namaFileAsli !== null
+            ? $this->namaCabangDariSheet(pathinfo($namaFileAsli, PATHINFO_FILENAME))
+            : null;
 
-        DB::transaction(function () use ($spreadsheet, &$ringkasan) {
+        try {
+            return $this->importSpreadsheet($spreadsheet, $isCsv, $cabangDariNamaFile);
+        } finally {
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+        }
+    }
+
+    /**
+     * Memproses objek Spreadsheet yang sudah dimuat ke database dengan deteksi data duplikat.
+     *
+     * @return array<string, int>
+     */
+    public function importSpreadsheet(Spreadsheet $spreadsheet, bool $isCsv = false, ?string $cabangDariNamaFile = null): array
+    {
+        $ringkasan = [];
+        $this->totalDibaca = 0;
+        $this->totalMasuk = 0;
+        $this->totalDuplikat = 0;
+        $this->contohDuplikat = [];
+
+        DB::transaction(function () use ($spreadsheet, $isCsv, $cabangDariNamaFile, &$ringkasan) {
             $semua = [];
             foreach ($spreadsheet->getAllSheets() as $sheet) {
-                if (!preg_match('/^\s*Inventaris\b/i', $sheet->getTitle())) {
+                if (!$isCsv && !preg_match('/^\s*Inventaris\b/i', $sheet->getTitle())) {
                     continue;
                 }
-                foreach ($this->bacaSheet($sheet) as $baris) {
+                foreach ($this->bacaSheet($sheet, $cabangDariNamaFile, $isCsv) as $baris) {
                     $semua[] = $baris;
                 }
             }
 
-            $urutan = $this->tentukanUrutanPerCabang($semua);
+            $this->totalDibaca = count($semua);
+            if (empty($semua)) {
+                return;
+            }
+
+            $baru = $this->saringBarisBaruDanTandaiDuplikat($semua);
+            if (empty($baru)) {
+                return;
+            }
+
+            $urutan = $this->tentukanUrutanPerCabang($baru);
 
             DetailAset::$autoSinkronUnit = false;
             try {
-                foreach ($semua as $i => $baris) {
+                foreach ($baru as $i => $baris) {
                     $this->simpanBaris($baris, $urutan[$i], $ringkasan);
+                    $this->totalMasuk++;
                 }
                 DetailAset::sinkronkanSemuaUnit();
             } finally {
@@ -92,17 +235,14 @@ class AsetImport
             }
         });
 
-        $spreadsheet->disconnectWorksheets();
-        unset($spreadsheet);
-
         return $ringkasan;
     }
 
-    private function bacaSheet(Worksheet $sheet): array
+    private function bacaSheet(Worksheet $sheet, ?string $cabangDariNamaFile = null, bool $isCsv = false): array
     {
         $hasil = [];
         $peta  = $this->petaKolom($sheet);
-        $cabangSheet   = $this->namaCabangDariSheet($sheet->getTitle());
+        $cabangSheet   = $isCsv ? $cabangDariNamaFile : $this->namaCabangDariSheet($sheet->getTitle());
         $barisTerakhir = $sheet->getHighestDataRow();
 
         for ($baris = $peta['_header'] + 1; $baris <= $barisTerakhir; $baris++) {
@@ -126,7 +266,9 @@ class AsetImport
             $namaCabang = $this->rapikanNamaCabang($r['cabang'] ?? null) ?? $cabangSheet;
             if ($namaCabang === null) {
                 throw new \RuntimeException(
-                    'Sheet "' . $sheet->getTitle() . '" baris ' . $baris . ': kolom Cabang masih kosong.'
+                    $isCsv
+                        ? 'File CSV baris ' . $baris . ': kolom Cabang kosong. Tambahkan kolom "Cabang" pada file CSV.'
+                        : 'Sheet "' . $sheet->getTitle() . '" baris ' . $baris . ': kolom Cabang masih kosong.'
                 );
             }
 
@@ -260,16 +402,7 @@ class AsetImport
             ]
         );
 
-        $statusAset = 'Tersedia';
-        if (!empty($r['baik'])) {
-            $statusAset = 'Baik';
-        } elseif (!empty($r['ringan'])) {
-            $statusAset = 'Rusak Ringan';
-        } elseif (!empty($r['sedang'])) {
-            $statusAset = 'Rusak Sedang';
-        } elseif (!empty($r['berat'])) {
-            $statusAset = 'Rusak Berat';
-        }
+        $statusAset = $this->resolveStatusAset($r);
 
         $tanggal = $this->parseTanggal($r['tgl']);
         $kodeLengkap = sprintf(
@@ -296,7 +429,7 @@ class AsetImport
             'vendor_pengadaan'   => '-',
             'lokasi_saat_ini'    => $cabang->nama_cabang,
             'penanggung_jawab'   => '-',
-            'status_berjalan'    => 'Tidak Ada',
+            'status_berjalan'    => DetailAset::validasiAtauSelaraskanTipeAset($statusAset, null, true),
             'status_maintenance' => '-',
             'teknisi'            => '-',
             'biaya_servis'       => 0,
@@ -315,6 +448,127 @@ class AsetImport
             $this->modelSudahDicek = true;
             $this->pastikanCabangTersimpan($detail);
         }
+    }
+
+    private function resolveStatusAset(array $r): string
+    {
+        if (!empty($r['baik'])) {
+            return 'Baik';
+        }
+        if (!empty($r['ringan'])) {
+            return 'Rusak Ringan';
+        }
+        if (!empty($r['sedang'])) {
+            return 'Rusak Sedang';
+        }
+        if (!empty($r['berat'])) {
+            return 'Rusak Berat';
+        }
+        return 'Tersedia';
+    }
+
+    /**
+     * Membandingkan baris file import terhadap data aset yang sudah ada di database.
+     * Menggunakan hitung kemunculan per sidik jari lengkap agar file dengan N unit identik tetap masuk
+     * saat import pertama, namun langsung ditandai duplikat ("data sudah ada") jika diimport ulang.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function saringBarisBaruDanTandaiDuplikat(array $semua): array
+    {
+        $dbCounts = [];
+        $rowsDb = DB::table('detail_aset as da')
+            ->leftJoin('items as it', 'da.item_id', '=', 'it.id')
+            ->leftJoin('cabangs as cb', 'da.cabang_id', '=', 'cb.id')
+            ->select([
+                'da.kode_aset',
+                'da.merk',
+                'da.harga_beli',
+                'da.tanggal_pengadaan',
+                'da.Ruangan',
+                'da.no_berita_acara',
+                'da.status_aset',
+                'it.nama_aset',
+                'cb.nama_cabang',
+            ])
+            ->get();
+
+        foreach ($rowsDb as $row) {
+            $kodeBagian = explode('/', (string) ($row->kode_aset ?? ''))[0];
+            $kodeParsed = $this->parseKode($kodeBagian);
+            $kodeDasar = $kodeParsed ? $kodeParsed['dasar'] : strtoupper(trim($kodeBagian));
+
+            $sig = $this->formatSidikJariAset(
+                $kodeDasar,
+                (string) ($row->nama_aset ?? ''),
+                $this->rapikanNamaCabang($row->nama_cabang ?? '') ?? (string) ($row->nama_cabang ?? ''),
+                (string) ($row->merk ?? ''),
+                (float) ($row->harga_beli ?? 0),
+                $row->tanggal_pengadaan ? substr((string) $row->tanggal_pengadaan, 0, 10) : '',
+                (string) ($row->Ruangan ?? ''),
+                (string) ($row->no_berita_acara ?? ''),
+                (string) ($row->status_aset ?? 'Tersedia')
+            );
+            $dbCounts[$sig] = ($dbCounts[$sig] ?? 0) + 1;
+        }
+
+        $baru = [];
+        $kemunculanFile = [];
+
+        foreach ($semua as $baris) {
+            $r = $baris['r'];
+            $sig = $this->formatSidikJariAset(
+                $baris['kode']['dasar'],
+                $baris['nama_aset'],
+                $baris['nama_cabang'],
+                $this->rapikanSpasi($r['merk'] ?? null) ?: '-',
+                (float) $this->parseAngka($r['harga']),
+                $this->parseTanggal($r['tgl']) ?? '',
+                DetailAset::normalisasiRuangan($this->rapikanSpasi($r['ruangan'])),
+                $this->parseBeritaAcara($r['ba'] ?? null),
+                $this->resolveStatusAset($r)
+            );
+
+            $kemunculanFile[$sig] = ($kemunculanFile[$sig] ?? 0) + 1;
+            if ($kemunculanFile[$sig] <= ($dbCounts[$sig] ?? 0)) {
+                $this->totalDuplikat++;
+                $label = $baris['nama_aset'] . ' - ' . $baris['nama_cabang'];
+                if (count($this->contohDuplikat) < 5 && !in_array($label, $this->contohDuplikat, true)) {
+                    $this->contohDuplikat[] = $label;
+                }
+                continue;
+            }
+
+            $baru[] = $baris;
+        }
+
+        return $baru;
+    }
+
+    private function formatSidikJariAset(
+        string $kodeDasar,
+        string $namaAset,
+        string $namaCabang,
+        string $merk,
+        float $hargaBeli,
+        string $tanggalPengadaan,
+        string $ruangan,
+        string $noBeritaAcara,
+        string $statusAset
+    ): string {
+        $norm = fn (string $s): string => mb_strtolower($this->rapikanSpasi($s), 'UTF-8');
+
+        return implode('|', [
+            strtoupper(trim($kodeDasar)),
+            $norm($namaAset),
+            $norm($namaCabang),
+            $norm($merk !== '' ? $merk : '-'),
+            number_format($hargaBeli, 2, '.', ''),
+            trim($tanggalPengadaan),
+            mb_strtolower(DetailAset::normalisasiRuangan($this->rapikanSpasi($ruangan)), 'UTF-8'),
+            $norm($noBeritaAcara !== '' ? $noBeritaAcara : '-'),
+            $norm($statusAset !== '' ? $statusAset : 'Tersedia'),
+        ]);
     }
 
     private function ambilCabang(string $nama): Cabang

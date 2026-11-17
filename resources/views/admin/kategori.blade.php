@@ -795,18 +795,7 @@
             </div>
         </div>
     </main>
-    @php
-    $maxUrutanData = $kategoris->mapWithKeys(function($kat) use ($items) {
-        return [$kat->id => (int) $items->where('kategori_id', $kat->id)->max('urutan')];
-    });
-    @endphp
-    <input type="hidden" id="json-max-urutan-kat" value="{{ json_encode($maxUrutanData) }}">
-
-    @php
-    $maxUrutanData = $kategoris->mapWithKeys(function($kat) use ($items) {
-    return [$kat->id => (int) $items->where('kategori_id', $kat->id)->max('urutan')];
-    });
-    @endphp
+    <input type="hidden" id="json-max-urutan-kat" value="{{ json_encode($maxUrutanMap ?? []) }}">
 
     <script>
         document.querySelectorAll('[data-bg]').forEach(function(el) { el.style.background = el.getAttribute('data-bg'); });
@@ -967,33 +956,54 @@
             }
         }
 
+        function extractApiError(body, fallback) {
+            if (body && body.errors) {
+                const keys = Object.keys(body.errors);
+                if (keys.length && Array.isArray(body.errors[keys[0]]) && body.errors[keys[0]].length) {
+                    return body.errors[keys[0]][0];
+                }
+            }
+            return (body && body.message) ? body.message : fallback;
+        }
+
+        const apiHeaders = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        };
+
+        async function parseJsonResponse(res) {
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (e) {
+                data = {};
+            }
+            return { status: res.status, body: data };
+        }
+
         document.getElementById('form-kategori').addEventListener('submit', function(e) {
             e.preventDefault();
             let btnSubmit = document.getElementById('btn-simpan-kategori');
             btnSubmit.classList.add('btn-loading');
+            btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
 
             fetch(this.action, {
                     method: 'POST',
                     body: new FormData(this),
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                }).then(res => res.json().then(data => ({
-                    status: res.status,
-                    body: data
-                })))
+                    headers: apiHeaders
+                }).then(parseJsonResponse)
                 .then(res => {
                     if (res.status === 200 && res.body.success) {
                         showCustomToast(res.body.message, 'success');
                         setTimeout(() => location.reload(), 800);
                     } else {
-                        showCustomToast('Gagal menyimpan kategori.', 'error');
+                        showCustomToast(extractApiError(res.body, 'Gagal menyimpan kategori.'), 'error');
                         resetBtn(btnSubmit, 'Simpan Kategori');
                     }
                 }).catch(err => {
-                    showCustomToast('Terjadi kesalahan.', 'error');
+                    showCustomToast('Terjadi kesalahan koneksi.', 'error');
                     resetBtn(btnSubmit, 'Simpan Kategori');
                 });
         });
@@ -1014,39 +1024,20 @@
 
             let btnSubmit = document.getElementById('btn-simpan-aset');
             btnSubmit.classList.add('btn-loading');
+            btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
 
             fetch(this.action, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    }
-                }).then(res => res.json().then(data => ({
-                    status: res.status,
-                    body: data
-                })))
+                    headers: apiHeaders
+                }).then(parseJsonResponse)
                 .then(res => {
-
                     if (res.status === 200 && res.body.success) {
                         showCustomToast(res.body.message, 'success');
                         setTimeout(() => location.reload(), 800);
-                    }
-
-                    else if (res.status === 422) {
-                        let errorMsg = 'Data tidak valid.';
-
-                        if (res.body.errors) {
-                            let firstErrorKey = Object.keys(res.body.errors)[0];
-                            errorMsg = res.body.errors[firstErrorKey][0];
-                        }
-                        showCustomToast(errorMsg, 'error');
-                        resetBtn(btnSubmit, 'Simpan Master Aset');
-                    }
-
-                    else {
-                        showCustomToast(res.body.message || 'Gagal menyimpan aset.', 'error');
+                    } else {
+                        showCustomToast(extractApiError(res.body, 'Gagal menyimpan aset.'), 'error');
                         resetBtn(btnSubmit, 'Simpan Master Aset');
                     }
                 }).catch(err => {
@@ -1055,77 +1046,147 @@
                 });
         });
 
-        document.querySelectorAll('.chip-edit-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
+        const formStatusAset = document.getElementById('form-status-aset');
+        if (formStatusAset) {
+            formStatusAset.addEventListener('submit', function(e) {
                 e.preventDefault();
-                let fullId = this.id.replace('form-edit-', '');
-                let btnUpdate = document.getElementById('btn-update-' + fullId);
+                let btnSubmit = document.getElementById('btn-simpan-status');
+                if (btnSubmit) {
+                    btnSubmit.classList.add('btn-loading');
+                    btnSubmit.disabled = true;
+                    btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
+                }
 
                 fetch(this.action, {
                         method: 'POST',
                         body: new FormData(this),
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        headers: apiHeaders
+                    }).then(parseJsonResponse)
+                    .then(res => {
+                        if (res.status === 200 && res.body.success) {
+                            showCustomToast(res.body.message, 'success');
+                            setTimeout(() => location.reload(), 800);
+                        } else {
+                            showCustomToast(extractApiError(res.body, 'Gagal menyimpan status aset.'), 'error');
+                            resetBtn(btnSubmit, '<span>Simpan Status Aset</span>');
                         }
-                    }).then(res => res.json().then(data => ({
-                        status: res.status,
-                        body: data
-                    })))
+                    }).catch(err => {
+                        showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                        resetBtn(btnSubmit, '<span>Simpan Status Aset</span>');
+                    });
+            });
+        }
+
+        document.addEventListener('submit', function(e) {
+            const editForm = e.target.closest('.chip-edit-form');
+            if (editForm) {
+                e.preventDefault();
+                let fullId = editForm.id.replace('form-edit-', '');
+                let btnUpdate = document.getElementById('btn-update-' + fullId);
+
+                fetch(editForm.action, {
+                        method: 'POST',
+                        body: new FormData(editForm),
+                        headers: apiHeaders
+                    }).then(parseJsonResponse)
                     .then(res => {
                         document.body.classList.remove('is-updating-global');
                         if (res.status === 200 && res.body.success) {
                             showCustomToast(res.body.message, 'success');
                             setTimeout(() => location.reload(), 500);
                         } else {
-                            showCustomToast('Gagal update.', 'error');
+                            showCustomToast(extractApiError(res.body, 'Gagal update.'), 'error');
                             resetBtn(btnUpdate, 'Update');
                         }
                     }).catch(err => {
                         document.body.classList.remove('is-updating-global');
+                        showCustomToast('Terjadi kesalahan koneksi.', 'error');
                         resetBtn(btnUpdate, 'Update');
                     });
-            });
-        });
+                return;
+            }
 
-        document.querySelectorAll('.form-delete-kategori').forEach(form => {
-            form.addEventListener('submit', function(e) {
+            const delForm = e.target.closest('.form-delete-kategori');
+            if (delForm) {
                 e.preventDefault();
                 if (!confirm('Yakin ingin menghapus data ini?')) return;
-                let btnDelete = this.querySelector('.btn-delete-sm');
-                let chipWrapper = this.closest('.chip-wrapper');
+                let btnDelete = delForm.querySelector('.btn-delete-sm');
+                let chipWrapper = delForm.closest('.chip-wrapper');
 
                 document.body.classList.add('is-updating-global');
-                if (btnDelete) btnDelete.innerHTML = '<span class="spinner-sm"></span>';
+                if (btnDelete) {
+                    btnDelete.disabled = true;
+                    btnDelete.innerHTML = '<span class="spinner-sm"></span>';
+                }
 
-                fetch(this.action, {
+                fetch(delForm.action, {
                         method: 'POST',
-                        body: new FormData(this),
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                        }
-                    }).then(res => res.json().then(data => ({
-                        status: res.status,
-                        body: data
-                    })))
+                        body: new FormData(delForm),
+                        headers: apiHeaders
+                    }).then(parseJsonResponse)
                     .then(res => {
                         document.body.classList.remove('is-updating-global');
                         if (res.status === 200 && res.body.success) {
                             showCustomToast(res.body.message, 'success');
-                            chipWrapper.style.transform = 'scale(0.8)';
-                            chipWrapper.style.opacity = '0';
-                            setTimeout(() => chipWrapper.remove(), 300);
+                            if (chipWrapper) {
+                                chipWrapper.style.transform = 'scale(0.8)';
+                                chipWrapper.style.opacity = '0';
+                                setTimeout(() => chipWrapper.remove(), 300);
+                            }
                         } else {
-                            showCustomToast((res.body && res.body.message) || 'Gagal menghapus.', 'error');
-                            if (btnDelete) btnDelete.innerHTML = 'Hapus';
+                            showCustomToast(extractApiError(res.body, 'Gagal menghapus.'), 'error');
+                            if (btnDelete) {
+                                btnDelete.disabled = false;
+                                btnDelete.innerHTML = 'Hapus';
+                            }
                         }
                     }).catch(err => {
                         document.body.classList.remove('is-updating-global');
-                        if (btnDelete) btnDelete.innerHTML = 'Hapus';
+                        showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                        if (btnDelete) {
+                            btnDelete.disabled = false;
+                            btnDelete.innerHTML = 'Hapus';
+                        }
                     });
-            });
+            }
         });
+
+        window.__refreshKategoriLive = function(freshDoc) {
+            if (!freshDoc) return false;
+            if (document.querySelector('.chip-wrapper.is-editing, .chip-wrapper.active')) return false;
+
+            const curLists = document.querySelectorAll('main .layout-grid .card-box .category-chips');
+            const newLists = freshDoc.querySelectorAll('main .layout-grid .card-box .category-chips');
+            if (curLists.length === newLists.length) {
+                curLists.forEach((curEl, idx) => {
+                    curEl.innerHTML = newLists[idx].innerHTML;
+                    const curCard = curEl.closest('.card-box');
+                    const newCard = newLists[idx].closest('.card-box');
+                    const curPag = curCard ? curCard.querySelector('.custom-pagination-wrap') : null;
+                    const newPag = newCard ? newCard.querySelector('.custom-pagination-wrap') : null;
+                    if (curPag && newPag) curPag.innerHTML = newPag.innerHTML;
+                    else if (curPag && !newPag) curPag.remove();
+                    else if (!curPag && newPag && curCard) curCard.appendChild(newPag.cloneNode(true));
+                });
+            }
+
+            const curSelKat = document.getElementById('input_kategori_aset');
+            const newSelKat = freshDoc.getElementById('input_kategori_aset');
+            if (curSelKat && newSelKat && document.activeElement !== curSelKat) {
+                const prev = curSelKat.value;
+                curSelKat.innerHTML = newSelKat.innerHTML;
+                if (Array.from(curSelKat.options).some(o => o.value === prev)) curSelKat.value = prev;
+                if (typeof kategoriBerubah === 'function') kategoriBerubah();
+            }
+
+            document.querySelectorAll('[data-bg]').forEach(el => {
+                el.style.background = el.getAttribute('data-bg');
+            });
+            document.querySelectorAll('.chip-code[data-color]').forEach(el => {
+                el.style.setProperty('background', el.getAttribute('data-color'), 'important');
+            });
+            return true;
+        };
     </script>
 </body>
 

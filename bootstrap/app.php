@@ -13,7 +13,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->prepend(\App\Http\Middleware\SecurityShieldMiddleware::class . ':edge');
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
+        $middleware->prepend([
+            \Illuminate\Http\Middleware\TrustProxies::class,
+            \App\Http\Middleware\SecurityShieldMiddleware::class . ':edge',
+        ]);
 
         $middleware->web(append: [
             \App\Http\Middleware\SecurityShieldMiddleware::class . ':payload',

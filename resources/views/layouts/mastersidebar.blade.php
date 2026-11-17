@@ -493,6 +493,11 @@
     <svg viewBox="0 0 24 24"><path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h3v14H9V5zm4 0h2v14h-2V5zm3 0h1v14h-1V5zm3 0h2v14h-2V5z"/></svg>
     Barcode Aset
 </a>
+      			<a href="{{ route('tracking_pengadaan.index') }}" class="menu-item {{ Request::is('masteradmin/tracking-pengadaan*') || request()->routeIs('tracking_pengadaan.*') ? 'active' : '' }}">
+
+    <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7v-5z"/></svg>
+    Tracking Pengadaan
+</a>
 
       			<div class="menu-section-title">MASTER DATA</div>
       			<a href="{{ route('kategori_aset.index') }}" class="menu-item {{ Request::is('kategori-aset') ? 'active' : '' }}">
@@ -746,7 +751,9 @@
                 strUrl.includes('_sync_lampiran_meta') ||
                 strUrl.includes('view-lampiran') ||
                 strUrl.includes('_log_cetak_laporan') ||
-                strUrl.includes('_roles_action=save_permissions')
+                strUrl.includes('_roles_action=save_permissions') ||
+                strUrl.includes('_live-sync') ||
+                strUrl.includes('_live_sync_page')
             ) {
                 return false;
             }
@@ -974,4 +981,5 @@
         });
     })();
 </script>
+@include('layouts.realtime_sync')
 @endif

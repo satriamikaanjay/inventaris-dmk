@@ -365,6 +365,22 @@
         box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
     }
 
+    .badge-pengajuan-total {
+        margin-left: auto;
+        margin-right: 4px;
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .badge-pengajuan-total.is-hidden,
+    .badge-sub-pengajuan.is-hidden {
+        display: none;
+    }
+
+    .chevron-pengajuan.has-badge {
+        margin-left: 2px;
+    }
+
     .pengajuan-view-container {
         display: none;
         flex-direction: column;
@@ -600,55 +616,16 @@
 
     session(['active_sidebar_panel' => 'admin']);
 
-    $rolesStoragePath = storage_path('app/roles_permissions.json');
-    $semuaModulDefault = [
-        'dashboard', 'pengajuan', 'pengajuan_peminjaman', 'pengajuan_permintaan', 'pengajuan_peleburan', 'pengajuan_perpindahan', 'pengajuan_servis', 'notifikasi', 'data_aset', 'barcode_aset',
-        'kategori_aset', 'cabang',
-        'laporan', 'riwayat_aktivitas',
-    ];
-
-    $defaultPermsRole = [];
-    foreach ($semuaModulDefault as $mKey) {
-        $defaultPermsRole[$mKey] = [
-            'view'   => true,
-            'create' => true,
-            'edit'   => true,
-            'delete' => true,
-        ];
-    }
-
     $roleUserAktif = 'admin';
     if (\Illuminate\Support\Facades\Auth::check()) {
-        $rawRoleUser = strtolower(str_replace(' ', '_', trim((string) (\Illuminate\Support\Facades\Auth::user()->role ?? 'admin'))));
-        if ($rawRoleUser !== '' && $rawRoleUser !== 'master_admin' && $rawRoleUser !== 'masteradmin') {
-            $roleUserAktif = $rawRoleUser;
+        $roleUserAktif = \App\Support\RolePermission::normalizeRole(\Illuminate\Support\Facades\Auth::user()->role ?? 'admin');
+        if ($roleUserAktif === 'master_admin') {
+            $roleUserAktif = 'admin';
         }
     }
 
-    $permissionsUserSaatIni = $defaultPermsRole;
-    $versiPermissionSaatIni = 0;
-
-    if (is_file($rolesStoragePath)) {
-        $decodedRoles = json_decode((string) file_get_contents($rolesStoragePath), true);
-        if (is_array($decodedRoles)) {
-            $versiPermissionSaatIni = $decodedRoles['updated_at'] ?? 0;
-            $dataRoleTarget = $decodedRoles['roles'][$roleUserAktif] ?? ($decodedRoles['roles']['admin'] ?? null);
-            if (is_array($dataRoleTarget) && isset($dataRoleTarget['permissions']) && is_array($dataRoleTarget['permissions'])) {
-                foreach ($semuaModulDefault as $mKey) {
-                    if (isset($dataRoleTarget['permissions'][$mKey])) {
-                        $p = $dataRoleTarget['permissions'][$mKey];
-                        $v = !empty($p['view']);
-                        $permissionsUserSaatIni[$mKey] = [
-                            'view'   => $v,
-                            'create' => $v ? !empty($p['create']) : false,
-                            'edit'   => $v ? !empty($p['edit']) : false,
-                            'delete' => $v ? !empty($p['delete']) : false,
-                        ];
-                    }
-                }
-            }
-        }
-    }
+    $permissionsUserSaatIni = \App\Support\RolePermission::forRole($roleUserAktif);
+    $versiPermissionSaatIni = \App\Support\RolePermission::version();
 
     $ringkasanPengajuanSb = \App\Http\Controllers\AdminPengajuanController::hitungRingkasanPending();
     $totalPendingPengajuanSb = (int) ($ringkasanPengajuanSb['total_pending'] ?? 0);
@@ -677,14 +654,22 @@
         $modulHalamanAktif = 'pengajuan';
     } elseif (str_contains($currentUriPath, 'notifikasi') || request()->routeIs('notifikasi.*', 'admin.notifikasi.*')) {
         $modulHalamanAktif = 'notifikasi';
-    } elseif (str_contains($currentUriPath, 'barcode-aset') || str_contains($currentUriPath, 'barcode_aset') || request()->routeIs('barcode_aset.*', 'admin.barcode_aset.*')) {
+    } elseif (str_contains($currentUriPath, 'barcode-aset') || str_contains($currentUriPath, 'barcode_aset') || request()->routeIs('barcode_aset.*', 'admin.barcode_aset.*', 'admin.barcode.*')) {
         $modulHalamanAktif = 'barcode_aset';
-    } elseif (str_contains($currentUriPath, 'kategori-aset') || str_contains($currentUriPath, 'kategori_aset') || request()->routeIs('kategori_aset.*', 'admin.kategori_aset.*')) {
+    } elseif (str_contains($currentUriPath, 'tracking-pengadaan') || str_contains($currentUriPath, 'tracking_pengadaan') || request()->routeIs('tracking_pengadaan.*', 'admin.tracking_pengadaan.*')) {
+        $modulHalamanAktif = 'tracking_pengadaan';
+    } elseif (str_contains($currentUriPath, 'kategori-aset') || str_contains($currentUriPath, 'kategori_aset') || request()->routeIs('kategori_aset.*', 'admin.kategori_aset.*', 'admin.kategori.*')) {
         $modulHalamanAktif = 'kategori_aset';
-    } elseif (str_contains($currentUriPath, 'data-aset') || str_contains($currentUriPath, 'data_aset') || request()->routeIs('aset.index', 'admin.aset.index', 'detailaset.*')) {
+    } elseif (str_contains($currentUriPath, 'data-aset') || str_contains($currentUriPath, 'data_aset') || request()->routeIs('aset.index', 'admin.aset.index', 'detailaset.*', 'admin.detailaset.*')) {
         $modulHalamanAktif = 'data_aset';
     } elseif (str_contains($currentUriPath, 'cabang') || request()->routeIs('cabang.*', 'admin.cabang.*')) {
         $modulHalamanAktif = 'cabang';
+    } elseif (str_contains($currentUriPath, 'divisi') || request()->routeIs('divisi.*')) {
+        $modulHalamanAktif = 'divisi';
+    } elseif (str_contains($currentUriPath, 'jabatan') || request()->routeIs('jabatan.*')) {
+        $modulHalamanAktif = 'jabatan';
+    } elseif (str_contains($currentUriPath, 'master-lokasi') || str_contains($currentUriPath, 'lokasi') || request()->routeIs('lokasi.*')) {
+        $modulHalamanAktif = 'lokasi';
     } elseif (str_contains($currentUriPath, 'laporan') || request()->routeIs('laporan.*', 'admin.laporan.*')) {
         $modulHalamanAktif = 'laporan';
     } elseif (str_contains($currentUriPath, 'riwayat') || request()->routeIs('riwayat_aktivitas.*', 'admin.riwayat_aktivitas.*')) {
@@ -823,10 +808,9 @@
                 <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"/></svg>
                 <span>Pengajuan</span>
                 <span id="badge-sidebar-pengajuan-total"
-                      class="notif-badge"
-                      style="margin-left: auto; margin-right: 4px; background: #ef4444; color: #fff; {{ $totalPendingPengajuanSb > 0 ? 'display:inline-flex;' : 'display:none;' }}"
+                      class="notif-badge badge-pengajuan-total {{ $totalPendingPengajuanSb > 0 ? '' : 'is-hidden' }}"
                       title="{{ $totalPendingPengajuanSb }} pengajuan menunggu verifikasi Admin">{{ $totalPendingPengajuanSb }}</span>
-                <svg class="chevron-pengajuan" style="{{ $totalPendingPengajuanSb > 0 ? 'margin-left: 2px;' : '' }}" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                <svg class="chevron-pengajuan {{ $totalPendingPengajuanSb > 0 ? 'has-badge' : '' }}" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
             </button>
             <div class="submenu-pengajuan" id="submenu-pengajuan-list">
                 <button type="button"
@@ -837,7 +821,7 @@
                         onclick="pilihKategoriPengajuan('peminjaman')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peminjaman</span>
-                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-peminjaman" style="{{ ($pendingPerJenisSb['peminjaman'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['peminjaman'] ?? 0 }}</span>
+                    <span class="badge-sub-pengajuan {{ ($pendingPerJenisSb['peminjaman'] ?? 0) > 0 ? '' : 'is-hidden' }}" id="badge-sub-pengajuan-peminjaman">{{ $pendingPerJenisSb['peminjaman'] ?? 0 }}</span>
                 </button>
                 <button type="button"
                         class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['permintaan'] ?? 0) > 0 ? 'has-pending' : '' }}"
@@ -847,7 +831,7 @@
                         onclick="pilihKategoriPengajuan('permintaan')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Permintaan</span>
-                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-permintaan" style="{{ ($pendingPerJenisSb['permintaan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['permintaan'] ?? 0 }}</span>
+                    <span class="badge-sub-pengajuan {{ ($pendingPerJenisSb['permintaan'] ?? 0) > 0 ? '' : 'is-hidden' }}" id="badge-sub-pengajuan-permintaan">{{ $pendingPerJenisSb['permintaan'] ?? 0 }}</span>
                 </button>
                 <button type="button"
                         class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['peleburan'] ?? 0) > 0 ? 'has-pending' : '' }}"
@@ -857,7 +841,7 @@
                         onclick="pilihKategoriPengajuan('peleburan')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Peleburan</span>
-                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-peleburan" style="{{ ($pendingPerJenisSb['peleburan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['peleburan'] ?? 0 }}</span>
+                    <span class="badge-sub-pengajuan {{ ($pendingPerJenisSb['peleburan'] ?? 0) > 0 ? '' : 'is-hidden' }}" id="badge-sub-pengajuan-peleburan">{{ $pendingPerJenisSb['peleburan'] ?? 0 }}</span>
                 </button>
                 <button type="button"
                         class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['perpindahan'] ?? 0) > 0 ? 'has-pending' : '' }}"
@@ -867,7 +851,7 @@
                         onclick="pilihKategoriPengajuan('perpindahan')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Perpindahan</span>
-                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-perpindahan" style="{{ ($pendingPerJenisSb['perpindahan'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['perpindahan'] ?? 0 }}</span>
+                    <span class="badge-sub-pengajuan {{ ($pendingPerJenisSb['perpindahan'] ?? 0) > 0 ? '' : 'is-hidden' }}" id="badge-sub-pengajuan-perpindahan">{{ $pendingPerJenisSb['perpindahan'] ?? 0 }}</span>
                 </button>
                 <button type="button"
                         class="submenu-pengajuan-btn {{ ($pendingPerJenisSb['servis'] ?? 0) > 0 ? 'has-pending' : '' }}"
@@ -877,7 +861,7 @@
                         onclick="pilihKategoriPengajuan('servis')">
                     <span class="submenu-dot"></span>
                     <span>Pengajuan Servis</span>
-                    <span class="badge-sub-pengajuan" id="badge-sub-pengajuan-servis" style="{{ ($pendingPerJenisSb['servis'] ?? 0) > 0 ? 'display:inline-flex;' : 'display:none;' }}">{{ $pendingPerJenisSb['servis'] ?? 0 }}</span>
+                    <span class="badge-sub-pengajuan {{ ($pendingPerJenisSb['servis'] ?? 0) > 0 ? '' : 'is-hidden' }}" id="badge-sub-pengajuan-servis">{{ $pendingPerJenisSb['servis'] ?? 0 }}</span>
                 </button>
             </div>
         </div>
@@ -909,6 +893,14 @@
            class="menu-item {{ $modulHalamanAktif === 'barcode_aset' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24"><path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h3v14H9V5zm4 0h2v14h-2V5zm3 0h1v14h-1V5zm3 0h2v14h-2V5z"/></svg>
             Barcode Aset
+        </a>
+        <a href="{{ $resolveAdminMenuUrl(['admin.tracking_pengadaan.index'], 'tracking_pengadaan.index') }}"
+           data-menu-key="tracking_pengadaan"
+           data-menu-group="aset"
+           data-init-hide="{{ empty($permissionsUserSaatIni['tracking_pengadaan']['view']) ? '1' : '0' }}"
+           class="menu-item {{ $modulHalamanAktif === 'tracking_pengadaan' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7v-5z"/></svg>
+            Tracking Pengadaan
         </a>
 
         <div class="menu-section-title" data-section-group="master">MASTER DATA</div>
@@ -1335,8 +1327,10 @@
                         if (btnSub) btnSub.style.display = bolehCreate ? '' : 'none';
                         formEl.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(inp => {
                             if (!bolehCreate) {
-                                inp.setAttribute('data-perm-disabled', '1');
-                                inp.disabled = true;
+                                if (!inp.disabled) {
+                                    inp.setAttribute('data-perm-disabled', '1');
+                                    inp.disabled = true;
+                                }
                             } else if (inp.getAttribute('data-perm-disabled') === '1') {
                                 inp.removeAttribute('data-perm-disabled');
                                 inp.disabled = false;
@@ -1383,6 +1377,8 @@
 
             setElemenVisible([
                 '.btn-delete-sm',
+                '.btn-hapus-checklist',
+                '.col-checkbox-hapus',
                 '.form-delete-kategori',
                 'button[onclick*="submitHapusAset"]',
                 'form[action*="clear"]',
@@ -1390,6 +1386,7 @@
             ], bolehDelete);
 
             document.querySelectorAll('main form').forEach(formEl => {
+                if (formEl.id === 'form-delete-fisik') return;
                 const methodInput = formEl.querySelector('input[name="_method"]');
                 if (methodInput && (methodInput.value || '').toUpperCase() === 'DELETE') {
                     formEl.style.display = bolehDelete ? '' : 'none';
@@ -1446,6 +1443,8 @@
             if (!bolehDelete) {
                 cssRules.push(`
                     .btn-delete-sm,
+                    .btn-hapus-checklist,
+                    .col-checkbox-hapus,
                     .form-delete-kategori,
                     button[onclick*="submitHapusAset"],
                     .btn-hapus-lampiran,
@@ -1471,8 +1470,12 @@
                 notifikasi: ['view'],
                 data_aset: ['view', 'create', 'edit', 'delete'],
                 barcode_aset: ['view', 'create', 'edit'],
+                tracking_pengadaan: ['view'],
                 kategori_aset: ['view', 'create', 'edit', 'delete'],
                 cabang: ['view', 'create', 'edit', 'delete'],
+                divisi: ['view', 'create', 'edit', 'delete'],
+                jabatan: ['view', 'create', 'edit', 'delete'],
+                lokasi: ['view', 'create', 'edit', 'delete'],
                 laporan: ['view', 'create'],
                 riwayat_aktivitas: ['view', 'delete']
             };
@@ -1532,10 +1535,15 @@
             const perJenis = ringkasan.per_jenis || {};
 
             const badgeTotal = document.getElementById('badge-sidebar-pengajuan-total');
+            const chevron = document.querySelector('#btn-sidebar-pengajuan .chevron-pengajuan');
             if (badgeTotal) {
                 badgeTotal.textContent = String(totalPending);
+                badgeTotal.classList.toggle('is-hidden', totalPending <= 0);
                 badgeTotal.style.display = totalPending > 0 ? 'inline-flex' : 'none';
                 badgeTotal.title = totalPending + ' pengajuan menunggu verifikasi Admin';
+            }
+            if (chevron) {
+                chevron.classList.toggle('has-badge', totalPending > 0);
             }
 
             ['peminjaman', 'permintaan', 'peleburan', 'perpindahan', 'servis'].forEach(function (j) {
@@ -1543,6 +1551,7 @@
                 const subBadge = document.getElementById('badge-sub-pengajuan-' + j);
                 if (subBadge) {
                     subBadge.textContent = String(cnt);
+                    subBadge.classList.toggle('is-hidden', cnt <= 0);
                     subBadge.style.display = cnt > 0 ? 'inline-flex' : 'none';
                 }
                 document.querySelectorAll('.submenu-pengajuan-btn[data-jenis="' + j + '"]').forEach(function (btn) {
@@ -1789,7 +1798,9 @@
                 strUrl.includes('_sync_lampiran_meta') ||
                 strUrl.includes('view-lampiran') ||
                 strUrl.includes('_log_cetak_laporan') ||
-                strUrl.includes('_roles_action=save_permissions')
+                strUrl.includes('_roles_action=save_permissions') ||
+                strUrl.includes('_live-sync') ||
+                strUrl.includes('_live_sync_page')
             ) {
                 return false;
             }
@@ -2056,3 +2067,4 @@
         });
     })();
 </script>
+@include('layouts.realtime_sync')

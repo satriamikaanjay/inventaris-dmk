@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use App\Models\Kategori;
 use App\Models\RiwayatAktivitas;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class KategoriController extends Controller
 {
@@ -80,13 +82,18 @@ class KategoriController extends Controller
     public function update(Request $request, $id)
     {
         $kategori = Kategori::findOrFail($id);
+        $validated = $request->validate([
+            'nama_kategori' => ['required', 'string', 'max:255', Rule::unique('kategoris', 'nama_kategori')->ignore($kategori->id)],
+            'kode_kategori' => ['required', 'string', 'max:50', Rule::unique('kategoris', 'kode_kategori')->ignore($kategori->id)],
+        ], [
+            'nama_kategori.unique' => 'Nama kategori sudah digunakan.',
+            'kode_kategori.unique' => 'Kode kategori sudah digunakan.',
+        ]);
+
         $namaLama = $kategori->nama_kategori;
         $kodeLama = $kategori->kode_kategori;
 
-        $kategori->update([
-            'nama_kategori' => $request->nama_kategori,
-            'kode_kategori' => $request->kode_kategori,
-        ]);
+        $kategori->update($validated);
 
         $this->catatRiwayat(
             'Memperbarui kategori aset: ' . $namaLama . ' (' . $kodeLama . ') menjadi ' . $kategori->nama_kategori . ' (' . $kategori->kode_kategori . ')',
@@ -109,7 +116,16 @@ class KategoriController extends Controller
         $kategori = Kategori::findOrFail($id);
         $namaKat = $kategori->nama_kategori;
         $kodeKat = $kategori->kode_kategori;
-        $kategori->delete();
+
+        try {
+            $kategori->delete();
+        } catch (QueryException $e) {
+            $pesan = 'Kategori tidak dapat dihapus karena masih digunakan oleh data lain.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $pesan], 422);
+            }
+            return redirect()->back()->withErrors([$pesan]);
+        }
 
         $this->catatRiwayat(
             'Menghapus kategori aset: ' . $namaKat . ' (' . $kodeKat . ')',

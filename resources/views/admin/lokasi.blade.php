@@ -214,66 +214,138 @@
             btnUpdate.innerHTML = '<span class="spinner-sm"></span>...';
         }
 
+        function resetBtnLokasi(btn, html) {
+            if (btn) {
+                btn.classList.remove('btn-loading');
+                btn.disabled = false;
+                btn.innerHTML = html;
+            }
+        }
+
+        function extractLokasiError(body, fallback) {
+            if (body && body.errors) {
+                const keys = Object.keys(body.errors);
+                if (keys.length && Array.isArray(body.errors[keys[0]]) && body.errors[keys[0]].length) {
+                    return body.errors[keys[0]][0];
+                }
+            }
+            return (body && body.message) ? body.message : fallback;
+        }
+
+        const lokasiHeaders = {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        };
+
+        async function parseLokasiJson(res) {
+            let data = {};
+            try {
+                data = await res.json();
+            } catch (e) {
+                data = {};
+            }
+            return { status: res.status, body: data };
+        }
+
         document.getElementById('form-lokasi').addEventListener('submit', function(e) {
             e.preventDefault();
             let btnSubmit = document.getElementById('btn-simpan-lokasi');
             btnSubmit.classList.add('btn-loading');
+            btnSubmit.disabled = true;
             btnSubmit.innerHTML = '<span class="spinner-sm"></span> Menyimpan...';
 
             fetch(this.action, {
                 method: 'POST', body: new FormData(this),
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-            }).then(res => res.json().then(data => ({ status: res.status, body: data })))
+                headers: lokasiHeaders
+            }).then(parseLokasiJson)
             .then(res => {
                 if (res.status === 200 && res.body.success) {
                     showCustomToast(res.body.message, 'success');
                     setTimeout(() => location.reload(), 800);
                 } else {
-                    showCustomToast('Gagal menyimpan lokasi.', 'error');
-                    btnSubmit.classList.remove('btn-loading'); btnSubmit.innerHTML = 'Simpan Lokasi';
+                    showCustomToast(extractLokasiError(res.body, 'Gagal menyimpan lokasi.'), 'error');
+                    resetBtnLokasi(btnSubmit, '<span id="text-simpan-lokasi">Simpan Lokasi</span>');
                 }
-            }).catch(err => { showCustomToast('Terjadi kesalahan.', 'error'); });
+            }).catch(err => {
+                showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                resetBtnLokasi(btnSubmit, '<span id="text-simpan-lokasi">Simpan Lokasi</span>');
+            });
         });
 
-        document.querySelectorAll('.chip-edit-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
+        document.addEventListener('submit', function(e) {
+            const editForm = e.target.closest('.chip-edit-form');
+            if (editForm) {
                 e.preventDefault();
-                let fullId = this.id.replace('form-edit-', '');
-                fetch(this.action, {
-                    method: 'POST', body: new FormData(this),
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-                }).then(res => res.json().then(data => ({ status: res.status, body: data })))
+                let fullId = editForm.id.replace('form-edit-', '');
+                let btnUpdate = document.getElementById('btn-update-' + fullId);
+                fetch(editForm.action, {
+                    method: 'POST', body: new FormData(editForm),
+                    headers: lokasiHeaders
+                }).then(parseLokasiJson)
                 .then(res => {
                     document.body.classList.remove('is-updating-global');
                     if (res.status === 200 && res.body.success) {
                         showCustomToast(res.body.message, 'success');
                         setTimeout(() => location.reload(), 500);
-                    } else { showCustomToast('Gagal update.', 'error'); }
-                }).catch(err => { document.body.classList.remove('is-updating-global'); });
-            });
-        });
+                    } else {
+                        showCustomToast(extractLokasiError(res.body, 'Gagal update.'), 'error');
+                        resetBtnLokasi(btnUpdate, 'Update');
+                    }
+                }).catch(err => {
+                    document.body.classList.remove('is-updating-global');
+                    showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                    resetBtnLokasi(btnUpdate, 'Update');
+                });
+                return;
+            }
 
-        document.querySelectorAll('.form-delete-lokasi').forEach(form => {
-            form.addEventListener('submit', function(e) {
+            const delForm = e.target.closest('.form-delete-lokasi');
+            if (delForm) {
                 e.preventDefault();
                 if (!confirm('Yakin ingin menghapus lokasi ini?')) return;
-                let chipWrapper = this.closest('.chip-wrapper');
+                let btnDelete = delForm.querySelector('.btn-delete-sm');
+                let chipWrapper = delForm.closest('.chip-wrapper');
                 document.body.classList.add('is-updating-global');
+                if (btnDelete) {
+                    btnDelete.disabled = true;
+                    btnDelete.innerHTML = '<span class="spinner-sm"></span>';
+                }
 
-                fetch(this.action, {
-                    method: 'POST', body: new FormData(this),
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
-                }).then(res => res.json().then(data => ({ status: res.status, body: data })))
+                fetch(delForm.action, {
+                    method: 'POST', body: new FormData(delForm),
+                    headers: lokasiHeaders
+                }).then(parseLokasiJson)
                 .then(res => {
                     document.body.classList.remove('is-updating-global');
                     if (res.status === 200 && res.body.success) {
                         showCustomToast(res.body.message, 'success');
-                        chipWrapper.style.transform = 'scale(0.8)'; chipWrapper.style.opacity = '0';
-                        setTimeout(() => chipWrapper.remove(), 300);
-                    } else { showCustomToast('Gagal menghapus.', 'error'); }
-                }).catch(err => { document.body.classList.remove('is-updating-global'); });
-            });
+                        if (chipWrapper) {
+                            chipWrapper.style.transform = 'scale(0.8)'; chipWrapper.style.opacity = '0';
+                            setTimeout(() => chipWrapper.remove(), 300);
+                        }
+                    } else {
+                        showCustomToast(extractLokasiError(res.body, 'Gagal menghapus.'), 'error');
+                        resetBtnLokasi(btnDelete, 'Hapus');
+                    }
+                }).catch(err => {
+                    document.body.classList.remove('is-updating-global');
+                    showCustomToast('Terjadi kesalahan koneksi.', 'error');
+                    resetBtnLokasi(btnDelete, 'Hapus');
+                });
+            }
         });
+
+        window.__refreshLokasiLive = function(freshDoc) {
+            if (!freshDoc) return false;
+            if (document.querySelector('.chip-wrapper.is-editing, .chip-wrapper.active')) return false;
+            const curChips = document.querySelector('main .category-chips');
+            const newChips = freshDoc.querySelector('main .category-chips');
+            if (curChips && newChips) {
+                curChips.innerHTML = newChips.innerHTML;
+            }
+            return true;
+        };
     </script>
 </body>
 </html>

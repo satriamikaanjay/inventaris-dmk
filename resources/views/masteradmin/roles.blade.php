@@ -108,6 +108,13 @@
             'caps'      => ['view', 'create', 'edit'],
             'labels'    => ['view' => 'Lihat & Download', 'create' => 'Buat / Generate QR', 'edit' => 'Update QR'],
         ],
+        'tracking_pengadaan' => [
+            'nama'      => 'Tracking Pengadaan',
+            'grup'      => 'MANAJEMEN ASET',
+            'deskripsi' => 'Pantau jumlah & rincian pengadaan aset berdasarkan tanggal pada kode aset',
+            'caps'      => ['view'],
+            'labels'    => ['view' => 'Buka Menu'],
+        ],
         'kategori_aset' => [
             'nama'      => 'Kategori Aset',
             'grup'      => 'MASTER DATA',
@@ -1639,10 +1646,11 @@
                     change_summary: ringkasan
                 });
 
-                const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                const res = await fetch(`${window.location.pathname}?${params.toString()}`, {
                     method: 'GET',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
                         'Cache-Control': 'no-cache'
                     }
                 });
@@ -1660,9 +1668,9 @@
 
         async function bukaBlokirLoginAdmin() {
             try {
-                const res = await fetch(`{{ url()->current() }}?_roles_action=unlock_admin_login&_t=${Date.now()}`, {
+                const res = await fetch(`${window.location.pathname}?_roles_action=unlock_admin_login&_t=${Date.now()}`, {
                     method: 'GET',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
                 });
                 const data = await res.json();
                 if (data && data.success) {

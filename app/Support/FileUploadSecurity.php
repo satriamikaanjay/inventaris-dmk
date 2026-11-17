@@ -24,6 +24,15 @@ class FileUploadSecurity
         'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'],
         'xls'  => ['application/vnd.ms-excel', 'application/cdfv2', 'application/octet-stream'],
         'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip', 'application/octet-stream'],
+        'csv'  => [
+            'text/csv',
+            'text/plain',
+            'application/csv',
+            'text/x-csv',
+            'application/x-csv',
+            'application/vnd.ms-excel',
+            'application/octet-stream',
+        ],
     ];
 
     public static function validateUploadedFile(

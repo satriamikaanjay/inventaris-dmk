@@ -1714,9 +1714,9 @@
                     catatan: (resetCatatan.value || '').trim()
                 });
 
-                const res = await fetch(`{{ url()->current() }}?${params.toString()}`, {
+                const res = await fetch(`${window.location.pathname}?${params.toString()}`, {
                     method: 'GET',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache' }
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'Cache-Control': 'no-cache' }
                 });
 
                 const data = await res.json();

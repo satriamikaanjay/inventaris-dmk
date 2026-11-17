@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Middleware\SecurityShieldMiddleware;
 use App\Models\RiwayatAktivitas;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -226,6 +227,9 @@ class DeveloperController extends Controller
     public function index(Request $request)
     {
         if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax() || $request->has('_poll_dev_rt')) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            }
             return redirect()->route('developer.login')->withErrors([
                 'access_key' => 'Sesi Developer Console belum terverifikasi. Silakan login melalui portal Developer.',
             ]);
@@ -246,6 +250,9 @@ class DeveloperController extends Controller
     public function aktivitasAkun(Request $request)
     {
         if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax() || $request->has('_poll_dev_act')) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            }
             return redirect()->route('developer.login')->withErrors([
                 'access_key' => 'Sesi Developer Console belum terverifikasi. Silakan login melalui portal Developer.',
             ]);
@@ -263,14 +270,8 @@ class DeveloperController extends Controller
         return view('developer.aktivitas', $data);
     }
 
-    public function strukturFolder(Request $request)
+    private function collectStrukturSnapshot(): array
     {
-        if (!$this->hasValidDeveloperSession($request)) {
-            return redirect()->route('developer.login')->withErrors([
-                'access_key' => 'Sesi Developer Console belum terverifikasi. Silakan login melalui portal Developer.',
-            ]);
-        }
-
         $integrity = $this->computeIntegrityState();
         $rootAbs = realpath(base_path());
         $rootListing = $rootAbs
@@ -286,7 +287,7 @@ class DeveloperController extends Controller
             }
         }
 
-        return view('developer.struktur', [
+        return [
             'rootDirs'        => $rootListing['dirs'],
             'rootFiles'       => $rootListing['files'],
             'anomalies'       => $integrity['anomalies'],
@@ -294,7 +295,30 @@ class DeveloperController extends Controller
             'baselineTotal'   => $integrity['baselineTotal'],
             'webLocked'       => !empty($webLockInfo['locked']),
             'webLockInfo'     => $webLockInfo,
-        ]);
+        ];
+    }
+
+    public function strukturFolder(Request $request)
+    {
+        if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax() || $request->has('_poll_dev_struktur')) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+            }
+            return redirect()->route('developer.login')->withErrors([
+                'access_key' => 'Sesi Developer Console belum terverifikasi. Silakan login melalui portal Developer.',
+            ]);
+        }
+
+        $snapshot = $this->collectStrukturSnapshot();
+
+        if ($request->has('_poll_dev_struktur')) {
+            return response()->json([
+                'success' => true,
+                'data'    => $snapshot,
+            ]);
+        }
+
+        return view('developer.struktur', $snapshot);
     }
 
     public function strukturTree(Request $request)
@@ -539,6 +563,9 @@ class DeveloperController extends Controller
     public function simpanBaselineFolder(Request $request)
     {
         if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Sesi Developer tidak valid.'], 401);
+            }
             return redirect()->route('developer.login')->withErrors([
                 'access_key' => 'Sesi Developer Console belum terverifikasi.',
             ]);
@@ -546,13 +573,25 @@ class DeveloperController extends Controller
 
         $baselineData = $this->buildBaselineSnapshot();
         @file_put_contents(storage_path('app/dev_file_baseline.json'), json_encode($baselineData, JSON_UNESCAPED_SLASHES), LOCK_EX);
+        $msg = 'Baseline struktur file berhasil diperbarui (' . $baselineData['total_files'] . ' file tercatat).';
 
-        return redirect()->route('developer.struktur')->with('success', 'Baseline struktur file berhasil diperbarui (' . $baselineData['total_files'] . ' file tercatat).');
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'data'    => $this->collectStrukturSnapshot(),
+            ]);
+        }
+
+        return redirect()->route('developer.struktur')->with('success', $msg);
     }
 
     public function toggleKunciWeb(Request $request)
     {
         if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Sesi Developer tidak valid.'], 401);
+            }
             return redirect()->route('developer.login')->withErrors([
                 'access_key' => 'Sesi Developer Console belum terverifikasi.',
             ]);
@@ -578,6 +617,15 @@ class DeveloperController extends Controller
         $msg = $newLocked
             ? 'Web berhasil DIKUNCI (Mode Maintenance Darurat aktif). Semua pengguna melihat halaman Maintenance.'
             : 'Kunci Web berhasil DIBUKA. Seluruh akses web kembali normal.';
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success'     => true,
+                'message'     => $msg,
+                'webLocked'   => $newLocked,
+                'webLockInfo' => $payload,
+            ]);
+        }
 
         return redirect()->route('developer.struktur')->with('success', $msg);
     }
@@ -635,6 +683,7 @@ class DeveloperController extends Controller
             'storage/app/master_login_locks.json',
             'storage/app/master_reset_requests.json',
             'storage/app/web_emergency_lock.json',
+            'storage/app/sec_blocked_ips.json',
         ];
 
         $files = [];
@@ -952,20 +1001,93 @@ class DeveloperController extends Controller
         } catch (\Throwable $e) {
         }
 
+        $presence = $this->collectRolesPresenceSnapshot();
+
         return [
-            'masterLogs' => array_slice($masterLogs, 0, 60),
-            'adminLogs'  => array_slice($adminLogs, 0, 60),
-            'userLogs'   => array_slice($userLogs, 0, 60),
+            'masterLogs'    => array_slice($masterLogs, 0, 60),
+            'adminLogs'     => array_slice($adminLogs, 0, 60),
+            'userLogs'      => array_slice($userLogs, 0, 60),
+            'allRolesUsers' => $presence['allRolesUsers'],
+        ];
+    }
+
+    /**
+     * Ambil daftar seluruh akun beserta status online/offline live dan ringkasan Master Admin.
+     *
+     * @return array{allRolesUsers: array<int, array<string, mixed>>, masterAdmins: array<int, array<string, mixed>>, mobileOnlineCount: int}
+     */
+    private function collectRolesPresenceSnapshot(): array
+    {
+        $presenceMap = [];
+        $presenceFile = storage_path('app/online_presence.json');
+        if (is_file($presenceFile)) {
+            $decP = json_decode((string) @file_get_contents($presenceFile), true);
+            if (is_array($decP)) {
+                $presenceMap = $decP;
+            }
+        }
+        $nowTs = time();
+
+        $allRolesUsers = [];
+        $masterAdmins = [];
+        $mobileOnlineCount = 0;
+
+        try {
+            if (Schema::hasTable('users')) {
+                $users = DB::table('users')
+                    ->select(['users_id', 'nama_lengkap', 'role', 'created_at'])
+                    ->orderBy('role')
+                    ->orderBy('nama_lengkap')
+                    ->get();
+                foreach ($users as $u) {
+                    $normRole = strtolower(str_replace([' ', '-'], '_', trim((string) ($u->role ?? 'user'))));
+                    if ($normRole === 'masteradmin') {
+                        $normRole = 'master_admin';
+                    }
+                    $uidStr = (string) $u->users_id;
+                    $pInfo = $presenceMap[$uidStr] ?? null;
+                    $lastSeen = is_array($pInfo) ? (int) ($pInfo['last_seen'] ?? 0) : 0;
+                    $isOnline = ($lastSeen > 0 && ($nowTs - $lastSeen) <= 45);
+                    $onlineChannel = $isOnline ? (string) ($pInfo['channel'] ?? 'web') : null;
+                    if ($isOnline && $onlineChannel === 'mobile') {
+                        $mobileOnlineCount++;
+                    }
+
+                    $row = [
+                        'id'             => (int) $u->users_id,
+                        'username'       => (string) ($u->nama_lengkap ?: '-'),
+                        'role'           => $normRole,
+                        'is_online'      => $isOnline,
+                        'online_channel' => $onlineChannel,
+                        'last_seen_at'   => $lastSeen > 0 ? date('d/m/Y H:i:s', $lastSeen) : '-',
+                        'created_at'     => $u->created_at ? substr((string) $u->created_at, 0, 10) : '-',
+                    ];
+                    $allRolesUsers[] = $row;
+                    if ($normRole === 'master_admin') {
+                        $masterAdmins[] = $row;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return [
+            'allRolesUsers'     => $allRolesUsers,
+            'masterAdmins'      => $masterAdmins,
+            'mobileOnlineCount' => $mobileOnlineCount,
         ];
     }
 
     public function resetMasterPassword(Request $request)
     {
         if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Sesi Developer tidak valid.'], 401);
+            }
             return redirect()->route('developer.login');
         }
 
-        $request->validate([
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'master_user_id' => ['required', 'integer'],
             'new_password'   => ['required', 'string', 'min:6', 'max:100', 'confirmed'],
         ], [
@@ -975,13 +1097,26 @@ class DeveloperController extends Controller
             'new_password.confirmed'  => 'Konfirmasi kata sandi tidak cocok.',
         ]);
 
+        if ($validator->fails()) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
+            }
+            return back()->withErrors($validator)->withInput();
+        }
+
         $targetUser = User::where('users_id', (int) $request->input('master_user_id'))->first();
         if (!$targetUser) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Akun Master Admin tidak ditemukan.'], 404);
+            }
             return back()->withErrors(['master_user_id' => 'Akun Master Admin tidak ditemukan.']);
         }
 
         $targetRole = strtolower(str_replace([' ', '-'], '_', trim((string) ($targetUser->role ?? ''))));
         if ($targetRole !== 'master_admin' && $targetRole !== 'masteradmin') {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Akun yang dipilih bukan Master Admin.'], 422);
+            }
             return back()->withErrors(['master_user_id' => 'Akun yang dipilih bukan Master Admin.']);
         }
 
@@ -1024,7 +1159,99 @@ class DeveloperController extends Controller
         } catch (\Throwable $e) {
         }
 
-        return back()->with('success', 'Kata sandi Master Admin (' . ($targetUser->nama_lengkap ?: 'Master Admin') . ') berhasil direset dan blokir login 3x gagal telah dibuka.');
+        $msg = 'Kata sandi Master Admin (' . ($targetUser->nama_lengkap ?: 'Master Admin') . ') berhasil direset dan blokir login 3x gagal telah dibuka.';
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'data'    => $this->collectSystemSnapshot(),
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    public function unblockIp(Request $request)
+    {
+        if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Sesi Developer tidak valid.'], 401);
+            }
+            return redirect()->route('developer.login');
+        }
+
+        $validated = $request->validate([
+            'ip' => ['required', 'ip'],
+        ], [
+            'ip.required' => 'Alamat IP wajib diisi.',
+            'ip.ip'       => 'Format alamat IP tidak valid.',
+        ]);
+
+        $ip = (string) $validated['ip'];
+        $actor = (string) (Auth::user()->nama_lengkap ?? 'Developer');
+        SecurityShieldMiddleware::unblockIp($ip, $actor);
+
+        try {
+            if (class_exists(RiwayatAktivitas::class)) {
+                RiwayatAktivitas::create([
+                    'user_id'   => Auth::id(),
+                    'aktivitas' => 'Developer membuka blokir WAF untuk IP ' . $ip . '.',
+                    'modul'     => 'Developer Console',
+                    'status'    => 'Berhasil',
+                ]);
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $msg = 'Blokir IP ' . $ip . ' berhasil dibuka.';
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success'    => true,
+                'message'    => $msg,
+                'blockedIps' => SecurityShieldMiddleware::getBlockedRegistry(),
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    public function unblockAllIps(Request $request)
+    {
+        if (!$this->hasValidDeveloperSession($request)) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Sesi Developer tidak valid.'], 401);
+            }
+            return redirect()->route('developer.login');
+        }
+
+        $actor = (string) (Auth::user()->nama_lengkap ?? 'Developer');
+        $count = SecurityShieldMiddleware::unblockAll($actor);
+
+        try {
+            if ($count > 0 && class_exists(RiwayatAktivitas::class)) {
+                RiwayatAktivitas::create([
+                    'user_id'   => Auth::id(),
+                    'aktivitas' => 'Developer membuka seluruh blokir WAF (' . $count . ' IP).',
+                    'modul'     => 'Developer Console',
+                    'status'    => 'Berhasil',
+                ]);
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $msg = $count > 0
+            ? "Berhasil membuka {$count} blokir/peringatan IP."
+            : 'Tidak ada IP yang sedang terblokir saat ini.';
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success'    => true,
+                'message'    => $msg,
+                'blockedIps' => SecurityShieldMiddleware::getBlockedRegistry(),
+            ]);
+        }
+
+        return back()->with('success', $msg);
     }
 
     private function collectSystemSnapshot(): array
@@ -1091,57 +1318,11 @@ class DeveloperController extends Controller
         ];
 
         $logErrors = $this->readRecentLaravelErrors(20);
-
-        $presenceMap = [];
-        $presenceFile = storage_path('app/online_presence.json');
-        if (is_file($presenceFile)) {
-            $decP = json_decode((string) @file_get_contents($presenceFile), true);
-            if (is_array($decP)) {
-                $presenceMap = $decP;
-            }
-        }
         $nowTs = time();
 
-        $allRolesUsers = [];
-        $masterAdmins = [];
-        $mobileOnlineCount = 0;
-        try {
-            if (Schema::hasTable('users')) {
-                $users = DB::table('users')
-                    ->select(['users_id', 'nama_lengkap', 'role', 'created_at'])
-                    ->orderBy('role')
-                    ->orderBy('nama_lengkap')
-                    ->get();
-                foreach ($users as $u) {
-                    $normRole = strtolower(str_replace([' ', '-'], '_', trim((string) ($u->role ?? 'user'))));
-                    if ($normRole === 'masteradmin') {
-                        $normRole = 'master_admin';
-                    }
-                    $uidStr = (string) $u->users_id;
-                    $pInfo = $presenceMap[$uidStr] ?? null;
-                    $lastSeen = is_array($pInfo) ? (int) ($pInfo['last_seen'] ?? 0) : 0;
-                    $isOnline = ($lastSeen > 0 && ($nowTs - $lastSeen) <= 45);
-                    $onlineChannel = $isOnline ? (string) ($pInfo['channel'] ?? 'web') : null;
-                    if ($isOnline && $onlineChannel === 'mobile') {
-                        $mobileOnlineCount++;
-                    }
-
-                    $row = [
-                        'id'             => (int) $u->users_id,
-                        'username'       => (string) ($u->nama_lengkap ?: '-'),
-                        'role'           => $normRole,
-                        'is_online'      => $isOnline,
-                        'online_channel' => $onlineChannel,
-                        'created_at'     => $u->created_at ? substr((string) $u->created_at, 0, 10) : '-',
-                    ];
-                    $allRolesUsers[] = $row;
-                    if ($normRole === 'master_admin') {
-                        $masterAdmins[] = $row;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-        }
+        $presenceSnapshot = $this->collectRolesPresenceSnapshot();
+        $masterAdmins = $presenceSnapshot['masterAdmins'];
+        $mobileOnlineCount = $presenceSnapshot['mobileOnlineCount'];
 
         $latestMobile = $mobileEntries[0] ?? null;
         $lastMobileTs = (!empty($latestMobile['timestamp'])) ? (int) strtotime((string) $latestMobile['timestamp']) : 0;
@@ -1206,10 +1387,10 @@ class DeveloperController extends Controller
             'recentTelemetry'     => array_slice($rawTelemetry, 0, 40),
             'recentErrorReqs'     => array_slice($errorEntries, 0, 25),
             'logErrors'           => $logErrors,
-            'allRolesUsers'       => $allRolesUsers,
             'masterAdmins'        => $masterAdmins,
             'masterLockState'     => $masterLockState,
             'masterResetRequests' => $masterResetRequests,
+            'blockedIps'          => SecurityShieldMiddleware::getBlockedRegistry(),
         ];
     }
 

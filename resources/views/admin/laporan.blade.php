@@ -1073,6 +1073,29 @@
             margin-top: 2px;
         }
 
+        .official-paper.excel-table-only {
+            min-height: auto;
+            padding: 20px 24px;
+        }
+
+        .official-paper.excel-table-only .kop-surat-header,
+        .official-paper.excel-table-only .doc-title-block,
+        .official-paper.excel-table-only .doc-meta-grid,
+        .official-paper.excel-table-only .doc-summary-strip,
+        .official-paper.excel-table-only .doc-signature-section {
+            display: none !important;
+        }
+
+        .official-paper.excel-table-only .official-table {
+            margin-bottom: 0;
+        }
+
+        #modalPreviewLaporan.mode-excel #btn-modal-cetak-pdf,
+        #modalPreviewLaporan.mode-excel #btn-toggle-kop-laporan,
+        #modalPreviewLaporan.mode-pdf #btn-modal-unduh-excel {
+            display: none !important;
+        }
+
         @media print {
             @page {
                 size: A4 portrait;
@@ -1423,14 +1446,14 @@
                     <span id="modal-preview-header-text">Preview Dokumen Laporan Resmi (Ukuran A4)</span>
                 </div>
                 <div class="preview-modal-actions">
-                    <button type="button" class="btn" style="background: #1e293b; color: #fff; border: 1px solid #475569; padding: 8px 14px; font-size: 12px;" onclick="toggleEditorKopSurat()">
+                    <button type="button" id="btn-toggle-kop-laporan" class="btn" style="background: #1e293b; color: #fff; border: 1px solid #475569; padding: 8px 14px; font-size: 12px;" onclick="toggleEditorKopSurat()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="3"></circle>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                         </svg>
                         <span>Sesuaikan Kop Surat & Logo</span>
                     </button>
-                    <button type="button" class="btn btn-pdf" style="padding: 8px 16px; font-size: 12.5px;" onclick="eksekusiCetakPdfResmi()">
+                    <button type="button" id="btn-modal-cetak-pdf" class="btn btn-pdf" style="padding: 8px 16px; font-size: 12.5px;" onclick="eksekusiCetakPdfResmi()">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 6 2 18 2 18 9"></polyline>
                             <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -1438,7 +1461,7 @@
                         </svg>
                         <span>Cetak / Simpan PDF</span>
                     </button>
-                    <button type="button" class="btn btn-excel" style="padding: 8px 16px; font-size: 12.5px;" onclick="eksekusiUnduhExcelResmi()">
+                    <button type="button" id="btn-modal-unduh-excel" class="btn btn-excel" style="padding: 8px 16px; font-size: 12.5px;" onclick="eksekusiUnduhExcelResmi()">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
@@ -1459,7 +1482,7 @@
             <div class="kop-editor-drawer" id="drawerEditorKop">
                 <div style="font-size: 12.5px; font-weight: 800; color: var(--primary-color); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    <span>Pengaturan Kop Surat Resmi (Otomatis Tersimpan & Tampil di PDF maupun Excel)</span>
+                    <span>Pengaturan Kop Surat Resmi (Otomatis Tersimpan & Tampil di Dokumen PDF)</span>
                 </div>
                 <div class="kop-editor-grid">
                     <div class="form-group">
@@ -2096,18 +2119,32 @@
             renderDokumenPreviewResmi();
             const modal = document.getElementById('modalPreviewLaporan');
             const headerTxt = document.getElementById('modal-preview-header-text');
+            const paperEl = document.getElementById('kertas-laporan-resmi');
+            const drawerKop = document.getElementById('drawerEditorKop');
+            const isExcelMode = modeFokus === 'excel';
+
+            if (paperEl) {
+                paperEl.classList.toggle('excel-table-only', isExcelMode);
+            }
+            if (isExcelMode && drawerKop) {
+                drawerKop.classList.remove('open');
+            }
             if (headerTxt) {
                 const infoNihil = rows.length === 0 ? ' (Laporan Nihil / 0 Data)' : '';
-                headerTxt.textContent = modeFokus === 'excel'
-                    ? `Preview Dokumen Laporan Resmi${infoNihil} — Siap Diunduh ke Excel (.xls) atau Dicetak ke PDF`
+                headerTxt.textContent = isExcelMode
+                    ? `Preview Tabel Excel${infoNihil} — Hanya Tabel Tanpa Header / Kop Surat`
                     : `Preview Dokumen Laporan Resmi (Ukuran A4)${infoNihil} — Siap Dicetak ke PDF`;
             }
-            if (modal) modal.classList.add('show');
+            if (modal) {
+                modal.classList.toggle('mode-excel', isExcelMode);
+                modal.classList.toggle('mode-pdf', !isExcelMode);
+                modal.classList.add('show');
+            }
         }
 
         function tutupModalPreviewLaporan() {
             const modal = document.getElementById('modalPreviewLaporan');
-            if (modal) modal.classList.remove('show');
+            if (modal) modal.classList.remove('show', 'mode-excel', 'mode-pdf');
         }
 
         function toggleEditorKopSurat() {
@@ -2188,6 +2225,8 @@
         }
 
         function eksekusiCetakPdfResmi() {
+            const paperEl = document.getElementById('kertas-laporan-resmi');
+            if (paperEl) paperEl.classList.remove('excel-table-only');
             catatLogCetakKeServer('PDF');
             window.print();
         }
@@ -2197,16 +2236,7 @@
             catatLogCetakKeServer('EXCEL');
             const jenis = stateLaporan.jenis;
             const konfig = KONFIG_JENIS_LAPORAN[jenis] || KONFIG_JENIS_LAPORAN.peminjaman;
-
-            const pt = document.getElementById('teks-kop-pt')?.textContent || 'PT MITRA ASET NUSANTARA';
-            const unit = document.getElementById('teks-kop-unit')?.textContent || '';
-            const alamat = document.getElementById('teks-kop-alamat')?.textContent || '';
-            const kontak = document.getElementById('teks-kop-kontak')?.textContent || '';
-            const nomorDok = document.getElementById('pdf-nomor-dokumen')?.textContent || '';
             const periode = document.getElementById('pdf-meta-periode')?.textContent || '';
-            const cabang = document.getElementById('pdf-meta-cabang')?.textContent || 'Semua Cabang';
-            const tglCetak = document.getElementById('pdf-meta-tglcetak')?.textContent || '';
-            const pimpinan = document.getElementById('teks-sig-pimpinan')?.textContent || '';
 
             const totalUnit = rows.reduce((s, r) => s + (Number(r.unit) || 1), 0);
             let totalNilai = 0;
@@ -2243,26 +2273,9 @@
                 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
                 <head>
                     <meta charset="utf-8">
-                </head>
+                <\/head>
                 <body style="font-family: Arial, sans-serif; font-size: 11pt;">
-                    <table border="0" cellpadding="4" cellspacing="0" style="width:100%; border-collapse:collapse;">
-                        <tr><td colspan="10" style="text-align:center; font-size:16pt; font-weight:bold;">${escapeHtml(pt)}</td></tr>
-                        <tr><td colspan="10" style="text-align:center; font-size:11pt; font-weight:bold;">${escapeHtml(unit)}</td></tr>
-                        <tr><td colspan="10" style="text-align:center; font-size:10pt;">${escapeHtml(alamat)}</td></tr>
-                        <tr><td colspan="10" style="text-align:center; font-size:10pt; border-bottom:3px double #000;">${escapeHtml(kontak)}</td></tr>
-                        <tr><td colspan="10"></td></tr>
-                        <tr><td colspan="10" style="text-align:center; font-size:13pt; font-weight:bold; text-decoration:underline;">${escapeHtml(konfig.judulPdf)}</td></tr>
-                        <tr><td colspan="10" style="text-align:center; font-size:10pt; font-weight:bold;">${escapeHtml(nomorDok)}</td></tr>
-                        <tr><td colspan="10"></td></tr>
-                        <tr>
-                            <td colspan="5"><strong>Periode Laporan:</strong> ${escapeHtml(periode)}</td>
-                            <td colspan="5"><strong>Tanggal Cetak:</strong> ${escapeHtml(tglCetak)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5"><strong>Cakupan Cabang:</strong> ${escapeHtml(cabang)}</td>
-                            <td colspan="5"><strong>Total Aset Tercatat:</strong> ${rows.length} Aset (${totalUnit} Unit)</td>
-                        </tr>
-                        <tr><td colspan="10"></td></tr>
+                    <table border="1" cellpadding="4" cellspacing="0" style="width:100%; border-collapse:collapse;">
                         <thead>
                             <tr style="background-color:#1a4f91; color:#ffffff; font-weight:bold;">
                                 <th style="border:1px solid #000; background:#1a4f91; color:#fff;">NO</th>
@@ -2288,21 +2301,6 @@
                                 <td style="border:1px solid #000; text-align:right; font-weight:bold;">${formatRupiah(totalNilai)}</td>
                             </tr>
                         </tfoot>
-                        <tr><td colspan="10"></td></tr>
-                        <tr><td colspan="10"></td></tr>
-                        <tr>
-                            <td colspan="5" style="text-align:center;">Mengetahui & Menyetujui,<br><strong>Pimpinan Operasional / Mitra</strong></td>
-                            <td colspan="5" style="text-align:center;">Sidoarjo, ${escapeHtml(tglCetak)}<br><strong>Disusun & Disahkan Oleh,</strong></td>
-                        </tr>
-                        <tr><td colspan="10" style="height:45px;"></td></tr>
-                        <tr>
-                            <td colspan="5" style="text-align:center; font-weight:bold; text-decoration:underline;">${escapeHtml(pimpinan)}</td>
-                            <td colspan="5" style="text-align:center; font-weight:bold; text-decoration:underline;">${escapeHtml(NAMA_USER_CETAK)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5" style="text-align:center; font-size:9pt;">Perwakilan Resmi ${escapeHtml(pt)}</td>
-                            <td colspan="5" style="text-align:center; font-size:9pt;">${escapeHtml(JABATAN_USER_CETAK)}</td>
-                        </tr>
                     </table>
                 <\/body>
                 <\/html>
@@ -2310,12 +2308,14 @@
 
             const blob = new Blob(['\ufeff', excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
             const link = document.createElement('a');
+            const objectUrl = URL.createObjectURL(blob);
             const namaFile = `${konfig.nama.replace(/\s+/g, '_')}_${stateLaporan.template}.xls`;
-            link.href = URL.createObjectURL(blob);
+            link.href = objectUrl;
             link.download = namaFile;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
         }
 
         window.addEventListener('click', function (e) {
@@ -2324,6 +2324,40 @@
                 tutupModalPreviewLaporan();
             }
         });
+
+        window.__refreshLaporanLive = function (freshDoc) {
+            if (!freshDoc) return false;
+            const freshJsonEl = freshDoc.getElementById('json-data-laporan-db');
+            if (!freshJsonEl) return false;
+            try {
+                const freshData = JSON.parse(freshJsonEl.value || '{}');
+                Object.keys(DATA_LAPORAN_DB).forEach(k => delete DATA_LAPORAN_DB[k]);
+                Object.assign(DATA_LAPORAN_DB, freshData);
+                const curJsonEl = document.getElementById('json-data-laporan-db');
+                if (curJsonEl) curJsonEl.value = freshJsonEl.value;
+
+                ['filter-cabang-laporan', 'filter-kategori-laporan'].forEach(selId => {
+                    const curSel = document.getElementById(selId);
+                    const newSel = freshDoc.getElementById(selId);
+                    if (curSel && newSel && document.activeElement !== curSel) {
+                        const prevVal = curSel.value;
+                        curSel.innerHTML = newSel.innerHTML;
+                        if (Array.from(curSel.options).some(o => o.value === prevVal)) {
+                            curSel.value = prevVal;
+                        }
+                    }
+                });
+
+                renderLaporanUtama();
+                const previewModal = document.getElementById('modalPreviewLaporan');
+                if (previewModal && previewModal.classList.contains('show') && typeof renderDokumenPreviewResmi === 'function') {
+                    renderDokumenPreviewResmi();
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        };
 
         document.addEventListener('DOMContentLoaded', function () {
             muatPengaturanKopTersimpan();

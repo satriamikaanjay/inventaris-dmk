@@ -554,6 +554,11 @@
 
             let img = new Image();
             img.crossOrigin = "Anonymous";
+            img.onerror = function() {
+                btn.innerText = originalText;
+                btn.disabled = false;
+                alert("Gagal memuat gambar QR Code untuk diunduh.");
+            };
             img.onload = function() {
                 let canvas = document.createElement("canvas");
                 let pad = 30;
@@ -622,7 +627,24 @@
             ctx.textAlign = "center";
             ctx.fillText("DAFTAR BARCODE ASET INVENTARIS", canvas.width / 2, 70);
 
+            let processedCount = 0;
             let loadedCount = 0;
+
+            function finalizeBulkDownload() {
+                if (processedCount !== visibleQrs.length) return;
+
+                if (loadedCount === 0) {
+                    alert("Gagal memuat gambar QR Code untuk diunduh.");
+                } else {
+                    let link = document.createElement("a");
+                    link.download = "Semua_Katalog_QR_Aset.jpg";
+                    link.href = canvas.toDataURL("image/jpeg", 1.0);
+                    link.click();
+                }
+
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
 
             visibleQrs.forEach((el, index) => {
                 let img = new Image();
@@ -653,16 +675,31 @@
                     ctx.fillText(el.getAttribute('data-seri'), x + (itemWidth / 2), y + 300);
 
                     loadedCount++;
+                    processedCount++;
+                    finalizeBulkDownload();
+                };
 
-                    if (loadedCount === visibleQrs.length) {
-                        let link = document.createElement("a");
-                        link.download = "Semua_Katalog_QR_Aset.jpg";
-                        link.href = canvas.toDataURL("image/jpeg", 1.0);
-                        link.click();
+                img.onerror = function() {
+                    let col = index % cols;
+                    let row = Math.floor(index / cols);
+                    let x = padding + (col * (itemWidth + padding));
+                    let y = 100 + padding + (row * (itemHeight + padding));
 
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
+                    ctx.strokeStyle = "#fca5a5";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x, y, itemWidth, itemHeight);
+
+                    ctx.fillStyle = "#dc2626";
+                    ctx.textAlign = "center";
+                    ctx.font = "bold 14px Arial";
+                    ctx.fillText("QR Gagal Dimuat", x + (itemWidth / 2), y + 125);
+
+                    ctx.fillStyle = "#1a4f91";
+                    ctx.font = "bold 16px Arial";
+                    ctx.fillText(el.getAttribute('data-kode'), x + (itemWidth / 2), y + 255);
+
+                    processedCount++;
+                    finalizeBulkDownload();
                 };
 
                 img.src = el.getAttribute('data-url');
@@ -761,7 +798,7 @@
                 const formEl = document.getElementById('form-filter-barcode');
                 const cardBoxEl = document.querySelector('.card-box');
                 const gridEl = cardBoxEl ? cardBoxEl.querySelector('.asset-grid') : null;
-                const pagEl = cardBoxEl ? cardBoxEl.querySelector('.custom-pagination-wrap') : null;
+                let pagEl = cardBoxEl ? cardBoxEl.querySelector('.custom-pagination-wrap') : null;
                 const infoGlobalEl = document.getElementById('info-hasil-search-global');
                 const rawJsonEl = document.getElementById('json-katalog-semua-qr');
                 if (!inputSearch || !cardBoxEl || !gridEl) return;
@@ -775,8 +812,8 @@
                     }
                 }
 
-                const htmlGridAwal = gridEl.innerHTML;
-                const displayPagAwal = pagEl ? pagEl.style.display : '';
+                let htmlGridAwal = gridEl.innerHTML;
+                let displayPagAwal = pagEl ? pagEl.style.display : '';
 
                 function escHtml(str) {
                     return String(str === null || str === undefined ? '' : str)
@@ -870,8 +907,53 @@
                             '\x3c/div\x3e';
                     } else {
                         gridEl.innerHTML = hasilCocok.map(buatHtmlKartuQr).join('');
+                        terapkanGayaKartuDinamis(gridEl);
                     }
                 }
+
+                window.__refreshBarcodeLive = function (freshDoc) {
+                    if (!freshDoc) return false;
+                    const modalQr = document.getElementById('modalQR');
+                    const modalLoad = document.getElementById('modalLoadingGenerate');
+                    if ((modalQr && modalQr.classList.contains('show')) || (modalLoad && modalLoad.classList.contains('show'))) {
+                        return false;
+                    }
+
+                    const newRawJson = freshDoc.getElementById('json-katalog-semua-qr');
+                    if (newRawJson) {
+                        if (rawJsonEl) rawJsonEl.value = newRawJson.value;
+                        try {
+                            katalogGlobal = JSON.parse(newRawJson.value || '[]') || [];
+                        } catch (e) {}
+                    }
+
+                    const newGrid = freshDoc.querySelector('.card-box .asset-grid');
+                    if (newGrid) {
+                        htmlGridAwal = newGrid.innerHTML;
+                    }
+
+                    const newPag = freshDoc.querySelector('.card-box .custom-pagination-wrap');
+                    if (pagEl && newPag) {
+                        pagEl.innerHTML = newPag.innerHTML;
+                    } else if (pagEl && !newPag) {
+                        pagEl.remove();
+                        pagEl = null;
+                    } else if (!pagEl && newPag) {
+                        pagEl = newPag.cloneNode(true);
+                        cardBoxEl.appendChild(pagEl);
+                    }
+                    displayPagAwal = pagEl ? pagEl.style.display : '';
+
+                    if ((inputSearch.value || '').trim() !== '') {
+                        jalankanPencarianSemuaHalaman();
+                    } else {
+                        gridEl.innerHTML = htmlGridAwal;
+                        terapkanGayaKartuDinamis(gridEl);
+                        if (pagEl) pagEl.style.display = displayPagAwal;
+                        if (infoGlobalEl) infoGlobalEl.style.display = 'none';
+                    }
+                    return true;
+                };
 
                 inputSearch.addEventListener('input', jalankanPencarianSemuaHalaman);
                 if (formEl) {
