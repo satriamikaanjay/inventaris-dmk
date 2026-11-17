@@ -25,6 +25,7 @@ import com.example.aplikasi_inventaris_dmk.network.ApiClient
 import com.example.aplikasi_inventaris_dmk.network.PengajuanItem
 import com.example.aplikasi_inventaris_dmk.network.PengajuanLocalStore
 import com.example.aplikasi_inventaris_dmk.network.PengajuanUserResponse
+import com.example.aplikasi_inventaris_dmk.network.ServerAutoDiscovery
 import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
 import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
 import com.example.aplikasi_inventaris_dmk.notification.NotificationHelper
@@ -124,11 +125,11 @@ class HomeActivity : AppCompatActivity() {
         }
 
         findViewById<CardView>(R.id.cardHomeServerStatus)?.setOnClickListener {
-            syncWithWebServer()
+            syncWithWebServer(allowAutoDiscover = true)
         }
         findViewById<TextView>(R.id.btnHomeConfigServer)?.setOnClickListener {
             ServerConfigDialog.show(this) {
-                syncWithWebServer()
+                syncWithWebServer(allowAutoDiscover = false)
             }
         }
 
@@ -169,10 +170,10 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        syncWithWebServer()
+        syncWithWebServer(allowAutoDiscover = true)
     }
 
-    private fun syncWithWebServer() {
+    private fun syncWithWebServer(allowAutoDiscover: Boolean = true) {
         val host = ApiClient.getDisplayHost(ApiClient.getBaseUrl(this))
         updateHomeServerStatus(
             connected = null,
@@ -180,7 +181,7 @@ class HomeActivity : AppCompatActivity() {
             subtitle = "Memeriksa koneksi web ($host)"
         )
         verifyUserAccessStillAllowed()
-        fetchUserPengajuanStats(userId, userName)
+        fetchUserPengajuanStats(userId, userName, allowAutoDiscover)
     }
 
     private fun updateHomeServerStatus(connected: Boolean?, title: String, subtitle: String) {
@@ -304,7 +305,7 @@ class HomeActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvAvatar)?.text = getInitials(userName)
     }
 
-    private fun fetchUserPengajuanStats(userId: Int, userName: String) {
+    private fun fetchUserPengajuanStats(userId: Int, userName: String, allowAutoDiscover: Boolean = true) {
         val uid = if (userId > 0) userId else null
         val localItems = PengajuanLocalStore.getSubmissionsForUser(this, uid, userName)
 
@@ -371,14 +372,45 @@ class HomeActivity : AppCompatActivity() {
                 }
 
                 override fun onFailure(call: Call<PengajuanUserResponse>, t: Throwable) {
-                    val host = ApiClient.getDisplayHost()
-                    updateHomeServerStatus(
-                        connected = false,
-                        title = "Tidak terhubung dengan server",
-                        subtitle = "Mode offline • Pastikan Wi-Fi sama dengan laptop ($host)"
-                    )
                     latestPengajuanList = localItems
                     updateStatsUi(localItems)
+
+                    if (allowAutoDiscover && !isFinishing && !isDestroyed) {
+                        ServerAutoDiscovery.discoverAsync(
+                            context = this@HomeActivity,
+                            onStatus = { statusText ->
+                                if (!isFinishing && !isDestroyed) {
+                                    updateHomeServerStatus(
+                                        connected = null,
+                                        title = "Mencari server di Wi-Fi...",
+                                        subtitle = statusText
+                                    )
+                                }
+                            },
+                            onFinished = { result ->
+                                if (isFinishing || isDestroyed) return@discoverAsync
+                                val foundUrl = result.foundUrl
+                                if (foundUrl != null) {
+                                    ApiClient.setBaseUrl(this@HomeActivity, foundUrl, markAsCustom = false)
+                                    syncWithWebServer(allowAutoDiscover = false)
+                                } else {
+                                    val host = ApiClient.getDisplayHost()
+                                    updateHomeServerStatus(
+                                        connected = false,
+                                        title = "Tidak terhubung dengan server",
+                                        subtitle = "Mode offline • Server belum ditemukan di ${result.scannedLabel} ($host)"
+                                    )
+                                }
+                            }
+                        )
+                    } else {
+                        val host = ApiClient.getDisplayHost()
+                        updateHomeServerStatus(
+                            connected = false,
+                            title = "Tidak terhubung dengan server",
+                            subtitle = "Mode offline • Pastikan Wi-Fi sama dengan laptop ($host)"
+                        )
+                    }
                 }
             })
     }

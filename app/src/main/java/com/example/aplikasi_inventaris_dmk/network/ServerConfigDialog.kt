@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.text.InputType
 import android.util.TypedValue
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -33,17 +34,24 @@ object ServerConfigDialog {
         }
 
         val tvHintInfo = TextView(context).apply {
-            text = "Pastikan HP dan Laptop terhubung ke Wi-Fi / jaringan yang sama. Masukkan IP Laptop (cek lewat cmd: ipconfig) atau URL server:"
+            text = "Aplikasi otomatis mencari server saat pindah Wi-Fi. Anda juga dapat memindai manual atau memasukkan IP Laptop (cek lewat cmd: ipconfig):"
             textSize = 12f
             setTextColor(Color.parseColor("#475569"))
         }
         container.addView(tvHintInfo)
 
+        val tvCurrent = TextView(context).apply {
+            text = "URL aktif saat ini:\n$currentUrl"
+            textSize = 11f
+            setTextColor(Color.parseColor("#64748B"))
+            setPadding(0, dp(8), 0, dp(6))
+        }
+
         val tvLabelIp = TextView(context).apply {
             text = "IP Laptop atau URL Lengkap"
             textSize = 12f
             setTextColor(Color.parseColor("#0F172A"))
-            setPadding(0, dp(12), 0, dp(4))
+            setPadding(0, dp(10), 0, dp(4))
         }
         container.addView(tvLabelIp)
 
@@ -62,7 +70,7 @@ object ServerConfigDialog {
             text = "Mode Server di Laptop"
             textSize = 12f
             setTextColor(Color.parseColor("#0F172A"))
-            setPadding(0, dp(12), 0, dp(4))
+            setPadding(0, dp(10), 0, dp(4))
         }
         container.addView(tvLabelMode)
 
@@ -96,13 +104,50 @@ object ServerConfigDialog {
 
         container.addView(rgMode)
 
-        val tvCurrent = TextView(context).apply {
-            text = "URL aktif saat ini:\n$currentUrl"
-            textSize = 11f
-            setTextColor(Color.parseColor("#64748B"))
-            setPadding(0, dp(10), 0, 0)
+        val btnAutoScan = Button(context).apply {
+            text = "Cari Server Otomatis di Wi-Fi (${ServerAutoDiscovery.getActiveWifiSubnetLabel(context)})"
+            textSize = 12f
+            isAllCaps = false
         }
+        val btnParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin = dp(10)
+        }
+        container.addView(btnAutoScan, btnParams)
         container.addView(tvCurrent)
+
+        btnAutoScan.setOnClickListener {
+            btnAutoScan.isEnabled = false
+            btnAutoScan.text = "Memindai Wi-Fi..."
+            ServerAutoDiscovery.discoverAsync(
+                context = context,
+                onStatus = { status ->
+                    tvCurrent.text = status
+                },
+                onFinished = { result ->
+                    btnAutoScan.isEnabled = true
+                    btnAutoScan.text = "Cari Server Otomatis di Wi-Fi (${result.scannedLabel})"
+                    val found = result.foundUrl
+                    if (found != null) {
+                        val detectedHost = ApiClient.extractHostIp(found)
+                        etInput.setText(detectedHost)
+                        when {
+                            found.contains("127.0.0.1") || found.contains("localhost") -> rbUsb.isChecked = true
+                            found.contains(":8000") -> rbArtisan.isChecked = true
+                            else -> rbApache.isChecked = true
+                        }
+                        tvCurrent.text = "Ditemukan server aktif:\n$found"
+                        tvCurrent.setTextColor(Color.parseColor("#1B5E20"))
+                        Toast.makeText(context, "Server ditemukan: $detectedHost", Toast.LENGTH_SHORT).show()
+                    } else {
+                        tvCurrent.text = "Server belum ditemukan di ${result.scannedLabel}.\nPastikan server web di laptop aktif & satu Wi-Fi."
+                        tvCurrent.setTextColor(Color.parseColor("#C62828"))
+                    }
+                }
+            )
+        }
 
         AlertDialog.Builder(context)
             .setTitle("Pengaturan Server Wi-Fi")

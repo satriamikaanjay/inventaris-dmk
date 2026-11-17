@@ -18,6 +18,7 @@ import androidx.cardview.widget.CardView
 import com.example.aplikasi_inventaris_dmk.network.ApiClient
 import com.example.aplikasi_inventaris_dmk.network.CategoryListResponse
 import com.example.aplikasi_inventaris_dmk.network.LoginResponse
+import com.example.aplikasi_inventaris_dmk.network.ServerAutoDiscovery
 import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
 import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
 import retrofit2.Call
@@ -260,7 +261,7 @@ class LoginActivity : AppCompatActivity() {
                     verifyDatabaseSync(service, displayHost)
                 } else if (response.code() == 503) {
                     renderServerOffline("Server maintenance (HTTP 503) di $displayHost")
-                } else if (allowAutoProbe && !ApiClient.isCustomUrlLocked(this@LoginActivity)) {
+                } else if (allowAutoProbe) {
                     tryAlternateServerEndpoint(currentUrl, "Server $displayHost merespons HTTP ${response.code()}")
                 } else {
                     renderServerOffline("Server merespons HTTP ${response.code()} di $displayHost")
@@ -281,7 +282,7 @@ class LoginActivity : AppCompatActivity() {
     private fun tryAlternateServerEndpoint(failedUrl: String, fallbackError: String) {
         val altUrl = ApiClient.getAlternateDefaultUrl(failedUrl)
         if (altUrl == null) {
-            renderServerOffline(fallbackError)
+            runAutoWifiDiscovery(fallbackError)
             return
         }
         val altHost = ApiClient.getDisplayHost(altUrl)
@@ -297,15 +298,43 @@ class LoginActivity : AppCompatActivity() {
                     ApiClient.setBaseUrl(this@LoginActivity, altUrl, markAsCustom = false)
                     verifyDatabaseSync(altService, altHost)
                 } else {
-                    renderServerOffline(fallbackError)
+                    runAutoWifiDiscovery(fallbackError)
                 }
             }
 
             override fun onFailure(call: Call<UserAccessStatusResponse>, t: Throwable) {
                 if (isFinishing || isDestroyed) return
-                renderServerOffline(fallbackError)
+                runAutoWifiDiscovery(fallbackError)
             }
         })
+    }
+
+    private fun runAutoWifiDiscovery(fallbackError: String) {
+        ServerAutoDiscovery.discoverAsync(
+            context = this,
+            onStatus = { statusText ->
+                if (!isFinishing && !isDestroyed) {
+                    renderServerChecking(statusText)
+                }
+            },
+            onFinished = { result ->
+                if (isFinishing || isDestroyed) return@discoverAsync
+                val foundUrl = result.foundUrl
+                if (foundUrl != null) {
+                    ApiClient.setBaseUrl(this@LoginActivity, foundUrl, markAsCustom = false)
+                    val host = ApiClient.getDisplayHost(foundUrl)
+                    if (result.isBlockedByAdmin) {
+                        renderServerBlocked("Terhubung ($host) • Akses user diblokir Master Admin")
+                    } else {
+                        verifyDatabaseSync(ApiClient.buildServiceForUrl(foundUrl), host)
+                    }
+                } else if (result.scannedLabel == "jaringan lokal") {
+                    renderServerOffline(fallbackError)
+                } else {
+                    renderServerOffline("Server tidak ditemukan di ${result.scannedLabel} ($fallbackError)")
+                }
+            }
+        )
     }
 
     private fun verifyDatabaseSync(service: com.example.aplikasi_inventaris_dmk.network.ApiService, displayHost: String) {
