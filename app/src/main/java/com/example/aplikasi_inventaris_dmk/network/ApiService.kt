@@ -32,11 +32,6 @@ interface ApiService {
     @GET("inventory/branches")
     fun getBranches(): Call<BranchListResponse>
 
-    @GET("inventory/find")
-    fun findAssetByCode(
-        @Query("code") code: String
-    ): Call<InventorySingleResponse>
-
     @POST("pengajuan")
     fun submitPengajuan(@Body body: PengajuanRequest): Call<PengajuanSubmitResponse>
 

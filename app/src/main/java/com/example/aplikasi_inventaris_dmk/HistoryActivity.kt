@@ -184,10 +184,17 @@ class HistoryActivity : AppCompatActivity() {
                             } else {
                                 synced.forEach { item -> addRiwayatCard(item) }
                             }
-                        } else if (localItems.isNotEmpty()) {
-                            localItems.forEach { item -> addRiwayatCard(item) }
                         } else {
-                            showEmptyState("Gagal memuat riwayat pengajuan (HTTP ${response.code()}).")
+                            val errMsg = ApiClient.extractErrorMessage(
+                                response,
+                                "Gagal memuat riwayat pengajuan (HTTP ${response.code()})."
+                            )
+                            if (localItems.isNotEmpty()) {
+                                Toast.makeText(this@HistoryActivity, errMsg, Toast.LENGTH_SHORT).show()
+                                localItems.forEach { item -> addRiwayatCard(item) }
+                            } else {
+                                showEmptyState(errMsg)
+                            }
                         }
                     }
                 }

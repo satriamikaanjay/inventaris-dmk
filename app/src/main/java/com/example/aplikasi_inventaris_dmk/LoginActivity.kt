@@ -1,10 +1,12 @@
 package com.example.aplikasi_inventaris_dmk
 
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
@@ -12,9 +14,12 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import com.example.aplikasi_inventaris_dmk.network.ApiClient
+import com.example.aplikasi_inventaris_dmk.network.CategoryListResponse
 import com.example.aplikasi_inventaris_dmk.network.LoginResponse
-import org.json.JSONObject
+import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
+import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -23,8 +28,14 @@ class LoginActivity : AppCompatActivity() {
 
     private var isPasswordVisible = false
 
+    private lateinit var cardServerStatus: CardView
+    private lateinit var viewServerDot: View
+    private lateinit var tvServerStatusTitle: TextView
+    private lateinit var tvServerStatusSubtitle: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ApiClient.init(applicationContext)
         setContentView(R.layout.activity_login)
 
         // Jika diarahkan keluar karena akses user diblokir oleh Master Admin saat sedang aktif
@@ -39,6 +50,23 @@ class LoginActivity : AppCompatActivity() {
         val tvForgotPassword = findViewById<TextView>(R.id.tvForgotPassword)
         val btnLogin = findViewById<Button>(R.id.btnLogin)
         val btnCallCenter = findViewById<Button>(R.id.btnCallCenter)
+
+        cardServerStatus = findViewById(R.id.cardServerStatus)
+        viewServerDot = findViewById(R.id.viewServerDot)
+        tvServerStatusTitle = findViewById(R.id.tvServerStatusTitle)
+        tvServerStatusSubtitle = findViewById(R.id.tvServerStatusSubtitle)
+
+        findViewById<TextView>(R.id.btnCheckServer).setOnClickListener {
+            checkServerConnectionAndSync(allowAutoProbe = true)
+        }
+        findViewById<TextView>(R.id.btnConfigServer).setOnClickListener {
+            ServerConfigDialog.show(this) {
+                checkServerConnectionAndSync(allowAutoProbe = false)
+            }
+        }
+
+        // Cek koneksi & sinkronisasi dengan web begitu APK dibuka
+        checkServerConnectionAndSync(allowAutoProbe = true)
 
         // Fitur Show / Hide Password
         ivTogglePassword.setOnClickListener {
@@ -99,8 +127,11 @@ class LoginActivity : AppCompatActivity() {
 
                     val loginResponse = response.body()
 
-                    // Cek jika status diblokir meskipun HTTP 200
-                    if (loginResponse != null && (loginResponse.status.equals("blocked", ignoreCase = true) || loginResponse.blocked == true)) {
+                    // Cek jika status diblokir oleh Master Admin meskipun HTTP 200
+                    if (loginResponse != null &&
+                        (loginResponse.status.equals("blocked", ignoreCase = true) ||
+                                (loginResponse.message ?: "").contains("master admin", ignoreCase = true))
+                    ) {
                         showBlockedByMasterAdminDialog()
                         return
                     }
@@ -137,7 +168,7 @@ class LoginActivity : AppCompatActivity() {
                             finish()
                         } else {
                             val msg = loginResponse?.message ?: "Login gagal. Silakan coba lagi."
-                            if (msg.contains("blokir", ignoreCase = true)) {
+                            if (msg.contains("master admin", ignoreCase = true)) {
                                 showBlockedByMasterAdminDialog()
                             } else {
                                 Toast.makeText(this@LoginActivity, msg, Toast.LENGTH_LONG).show()
@@ -150,39 +181,189 @@ class LoginActivity : AppCompatActivity() {
                             ""
                         }
 
-                        val isBlockedError = response.code() == 403 ||
-                                rawErrorBody.contains("blokir", ignoreCase = true) ||
-                                rawErrorBody.contains("blocked", ignoreCase = true)
+                        val errJson = ApiClient.parseErrorJson(rawErrorBody)
+                        val errStatus = errJson?.optString("status", "") ?: ""
+                        val errorMsg = errJson?.optString("message", "")?.takeIf { it.isNotBlank() }
+                            ?: "Email atau kata sandi salah (HTTP ${response.code()})."
 
-                        if (isBlockedError) {
+                        val isMasterAdminBlocked = errStatus.equals("blocked", ignoreCase = true) ||
+                                errorMsg.contains("master admin", ignoreCase = true)
+
+                        if (isMasterAdminBlocked) {
                             showBlockedByMasterAdminDialog()
                             return
                         }
 
-                        val errorMsg = try {
-                            if (rawErrorBody.isNotEmpty()) {
-                                JSONObject(rawErrorBody).optString("message", "Email atau kata sandi salah.")
-                            } else {
-                                "Email atau kata sandi salah."
-                            }
-                        } catch (_: Exception) {
-                            "Email atau kata sandi salah."
+                        if (response.code() in listOf(403, 429, 503) && !isFinishing && !isDestroyed) {
+                            AlertDialog.Builder(this@LoginActivity)
+                                .setTitle(if (response.code() == 503) "Sistem Maintenance" else "Login Ditolak")
+                                .setMessage(errorMsg)
+                                .setPositiveButton("Mengerti", null)
+                                .show()
+                        } else {
+                            Toast.makeText(this@LoginActivity, errorMsg, Toast.LENGTH_LONG).show()
                         }
-                        Toast.makeText(this@LoginActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
                 }
 
                 override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
                     btnLogin.isEnabled = true
                     btnLogin.text = "Masuk Sekarang"
+                    renderServerOffline("Gagal menghubungi ${ApiClient.getDisplayHost()}: ${t.localizedMessage ?: "Timeout"}")
                     Toast.makeText(
                         this@LoginActivity,
-                        "Koneksi Gagal: Periksa jaringan Anda dan pastikan server aktif (${t.localizedMessage})",
+                        "Koneksi Gagal: Pastikan HP & laptop di Wi-Fi yang sama dan cek Atur IP (${ApiClient.getDisplayHost()})",
                         Toast.LENGTH_LONG
                     ).show()
                 }
             })
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkServerConnectionAndSync(allowAutoProbe = true)
+    }
+
+    private fun checkServerConnectionAndSync(allowAutoProbe: Boolean) {
+        val currentUrl = ApiClient.getBaseUrl(this)
+        val displayHost = ApiClient.getDisplayHost(currentUrl)
+        renderServerChecking("Memeriksa $displayHost...")
+
+        val service = ApiClient.buildServiceForUrl(currentUrl)
+        service.getUserAccessStatus().enqueue(object : Callback<UserAccessStatusResponse> {
+            override fun onResponse(
+                call: Call<UserAccessStatusResponse>,
+                response: Response<UserAccessStatusResponse>
+            ) {
+                if (isFinishing || isDestroyed) return
+                val body = response.body()
+                val rawErr = if (!response.isSuccessful) {
+                    try { response.errorBody()?.string() ?: "" } catch (_: Exception) { "" }
+                } else ""
+                val errJson = ApiClient.parseErrorJson(rawErr)
+
+                val isBlocked = body?.blocked == true ||
+                        body?.allowed == false ||
+                        body?.status.equals("blocked", ignoreCase = true) ||
+                        (errJson != null && (
+                            errJson.optBoolean("blocked", false) ||
+                            errJson.optString("status", "").equals("blocked", ignoreCase = true)
+                        ))
+
+                if (isBlocked) {
+                    renderServerBlocked("Terhubung ($displayHost) • Akses user diblokir Master Admin")
+                    return
+                }
+
+                if (response.isSuccessful && (body?.allowed == true || body?.status.equals("allowed", ignoreCase = true))) {
+                    verifyDatabaseSync(service, displayHost)
+                } else if (response.code() == 503) {
+                    renderServerOffline("Server maintenance (HTTP 503) di $displayHost")
+                } else if (allowAutoProbe && !ApiClient.isCustomUrlLocked(this@LoginActivity)) {
+                    tryAlternateServerEndpoint(currentUrl, "Server $displayHost merespons HTTP ${response.code()}")
+                } else {
+                    renderServerOffline("Server merespons HTTP ${response.code()} di $displayHost")
+                }
+            }
+
+            override fun onFailure(call: Call<UserAccessStatusResponse>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
+                if (allowAutoProbe) {
+                    tryAlternateServerEndpoint(currentUrl, "Pastikan HP & laptop di Wi-Fi yang sama ($displayHost)")
+                } else {
+                    renderServerOffline("Pastikan HP & laptop di Wi-Fi yang sama ($displayHost)")
+                }
+            }
+        })
+    }
+
+    private fun tryAlternateServerEndpoint(failedUrl: String, fallbackError: String) {
+        val altUrl = ApiClient.getAlternateDefaultUrl(failedUrl)
+        if (altUrl == null) {
+            renderServerOffline(fallbackError)
+            return
+        }
+        val altHost = ApiClient.getDisplayHost(altUrl)
+        val altService = ApiClient.buildServiceForUrl(altUrl)
+        altService.getUserAccessStatus().enqueue(object : Callback<UserAccessStatusResponse> {
+            override fun onResponse(
+                call: Call<UserAccessStatusResponse>,
+                response: Response<UserAccessStatusResponse>
+            ) {
+                if (isFinishing || isDestroyed) return
+                val body = response.body()
+                if (response.isSuccessful && (body?.allowed == true || body?.status.equals("allowed", ignoreCase = true))) {
+                    ApiClient.setBaseUrl(this@LoginActivity, altUrl, markAsCustom = false)
+                    verifyDatabaseSync(altService, altHost)
+                } else {
+                    renderServerOffline(fallbackError)
+                }
+            }
+
+            override fun onFailure(call: Call<UserAccessStatusResponse>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
+                renderServerOffline(fallbackError)
+            }
+        })
+    }
+
+    private fun verifyDatabaseSync(service: com.example.aplikasi_inventaris_dmk.network.ApiService, displayHost: String) {
+        service.getCategories().enqueue(object : Callback<CategoryListResponse> {
+            override fun onResponse(
+                call: Call<CategoryListResponse>,
+                response: Response<CategoryListResponse>
+            ) {
+                if (isFinishing || isDestroyed) return
+                if (response.isSuccessful && response.body()?.status == "success") {
+                    val jumlahKategori = response.body()?.data?.size ?: 0
+                    renderServerConnected("Sinkron dengan web ($displayHost) • $jumlahKategori kategori aktif")
+                } else {
+                    renderServerConnected("Terhubung ke $displayHost (sinkron sebagian)")
+                }
+            }
+
+            override fun onFailure(call: Call<CategoryListResponse>, t: Throwable) {
+                if (isFinishing || isDestroyed) return
+                renderServerOffline("Server terdeteksi namun gagal sinkron data web ($displayHost)")
+            }
+        })
+    }
+
+    private fun renderServerChecking(subtitle: String) {
+        cardServerStatus.setCardBackgroundColor(Color.parseColor("#F1F5F9"))
+        viewServerDot.setBackgroundResource(R.drawable.bg_circle_orange)
+        tvServerStatusTitle.text = "Menghubungkan ke server..."
+        tvServerStatusTitle.setTextColor(Color.parseColor("#1E293B"))
+        tvServerStatusSubtitle.text = subtitle
+        tvServerStatusSubtitle.setTextColor(Color.parseColor("#64748B"))
+    }
+
+    private fun renderServerConnected(subtitle: String) {
+        cardServerStatus.setCardBackgroundColor(Color.parseColor("#E8F5E9"))
+        viewServerDot.setBackgroundResource(R.drawable.bg_circle_blue)
+        tvServerStatusTitle.text = "Terhubung dengan server"
+        tvServerStatusTitle.setTextColor(Color.parseColor("#2E7D32"))
+        tvServerStatusSubtitle.text = subtitle
+        tvServerStatusSubtitle.setTextColor(Color.parseColor("#1B5E20"))
+    }
+
+    private fun renderServerBlocked(subtitle: String) {
+        cardServerStatus.setCardBackgroundColor(Color.parseColor("#FFF3E0"))
+        viewServerDot.setBackgroundResource(R.drawable.bg_circle_red)
+        tvServerStatusTitle.text = "Terhubung dengan server (Diblokir)"
+        tvServerStatusTitle.setTextColor(Color.parseColor("#E65100"))
+        tvServerStatusSubtitle.text = subtitle
+        tvServerStatusSubtitle.setTextColor(Color.parseColor("#BF360C"))
+    }
+
+    private fun renderServerOffline(subtitle: String) {
+        cardServerStatus.setCardBackgroundColor(Color.parseColor("#FFEBEE"))
+        viewServerDot.setBackgroundResource(R.drawable.bg_circle_red)
+        tvServerStatusTitle.text = "Tidak terhubung dengan server"
+        tvServerStatusTitle.setTextColor(Color.parseColor("#C62828"))
+        tvServerStatusSubtitle.text = subtitle
+        tvServerStatusSubtitle.setTextColor(Color.parseColor("#7F1D1D"))
     }
 
     private fun showBlockedByMasterAdminDialog() {

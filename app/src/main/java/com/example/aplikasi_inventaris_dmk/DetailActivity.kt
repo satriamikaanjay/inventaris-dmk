@@ -210,6 +210,24 @@ class DetailActivity : AppCompatActivity() {
             }
         }
 
+        // Warna Badge Tipe Aset (Selaras aturan web: Aset Berjalan vs Aset Tidak Berjalan / Aset Tidak Dipakai)
+        val tvTipe = findViewById<TextView>(R.id.tvTipeAsetBadge)
+        val tipeUpper = statusBerjalan.uppercase()
+        when {
+            tipeUpper.contains("TIDAK BERJALAN") || tipeUpper.contains("TIDAK DIPAKAI") -> {
+                tvTipe?.setBackgroundResource(R.drawable.bg_badge_orange)
+                tvTipe?.setTextColor(Color.parseColor("#E65100"))
+            }
+            tipeUpper.contains("ASET BERJALAN") -> {
+                tvTipe?.setBackgroundResource(R.drawable.bg_nik_badge)
+                tvTipe?.setTextColor(Color.parseColor("#1C4E8F"))
+            }
+            else -> {
+                tvTipe?.setBackgroundResource(R.drawable.bg_nik_badge)
+                tvTipe?.setTextColor(Color.parseColor("#475569"))
+            }
+        }
+
         // Ikon Barang
         val ivIcon = findViewById<ImageView>(R.id.ivItemDetailIcon)
         val checkStr = "$namaAset $kategori".lowercase()
@@ -243,7 +261,7 @@ class DetailActivity : AppCompatActivity() {
             title = "Data Pengadaan & Spesifikasi",
             rows = listOf(
                 "Merk / Brand" to merk,
-                "Unit / Jumlah" to unitStr,
+                "Total Unit (Cabang)" to unitStr,
                 "Tanggal Pengadaan" to tanggalPengadaan,
                 "Harga Beli" to hargaBeli,
                 "Vendor Pengadaan" to vendorPengadaan,

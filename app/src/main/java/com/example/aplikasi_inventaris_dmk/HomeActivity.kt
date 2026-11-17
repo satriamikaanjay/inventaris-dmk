@@ -6,8 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -23,6 +25,7 @@ import com.example.aplikasi_inventaris_dmk.network.ApiClient
 import com.example.aplikasi_inventaris_dmk.network.PengajuanItem
 import com.example.aplikasi_inventaris_dmk.network.PengajuanLocalStore
 import com.example.aplikasi_inventaris_dmk.network.PengajuanUserResponse
+import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
 import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
 import com.example.aplikasi_inventaris_dmk.notification.NotificationHelper
 import com.example.aplikasi_inventaris_dmk.notification.PengajuanNotificationService
@@ -120,6 +123,15 @@ class HomeActivity : AppCompatActivity() {
             showLogoutDialog()
         }
 
+        findViewById<CardView>(R.id.cardHomeServerStatus)?.setOnClickListener {
+            syncWithWebServer()
+        }
+        findViewById<TextView>(R.id.btnHomeConfigServer)?.setOnClickListener {
+            ServerConfigDialog.show(this) {
+                syncWithWebServer()
+            }
+        }
+
         // Ketika user menekan tombol Back di HP pada halaman Home -> muncul peringatan keluar & logout
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -157,8 +169,50 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        syncWithWebServer()
+    }
+
+    private fun syncWithWebServer() {
+        val host = ApiClient.getDisplayHost(ApiClient.getBaseUrl(this))
+        updateHomeServerStatus(
+            connected = null,
+            title = "Menyinkronkan dengan server...",
+            subtitle = "Memeriksa koneksi web ($host)"
+        )
         verifyUserAccessStillAllowed()
         fetchUserPengajuanStats(userId, userName)
+    }
+
+    private fun updateHomeServerStatus(connected: Boolean?, title: String, subtitle: String) {
+        runOnUiThread {
+            val card = findViewById<CardView>(R.id.cardHomeServerStatus) ?: return@runOnUiThread
+            val dot = findViewById<View>(R.id.viewHomeServerDot) ?: return@runOnUiThread
+            val tvTitle = findViewById<TextView>(R.id.tvHomeServerTitle) ?: return@runOnUiThread
+            val tvSub = findViewById<TextView>(R.id.tvHomeServerSubtitle) ?: return@runOnUiThread
+
+            tvTitle.text = title
+            tvSub.text = subtitle
+            when (connected) {
+                true -> {
+                    card.setCardBackgroundColor(Color.parseColor("#E8F5E9"))
+                    dot.setBackgroundResource(R.drawable.bg_circle_blue)
+                    tvTitle.setTextColor(Color.parseColor("#2E7D32"))
+                    tvSub.setTextColor(Color.parseColor("#1B5E20"))
+                }
+                false -> {
+                    card.setCardBackgroundColor(Color.parseColor("#FFEBEE"))
+                    dot.setBackgroundResource(R.drawable.bg_circle_red)
+                    tvTitle.setTextColor(Color.parseColor("#C62828"))
+                    tvSub.setTextColor(Color.parseColor("#7F1D1D"))
+                }
+                null -> {
+                    card.setCardBackgroundColor(Color.parseColor("#F1F5F9"))
+                    dot.setBackgroundResource(R.drawable.bg_circle_orange)
+                    tvTitle.setTextColor(Color.parseColor("#1E293B"))
+                    tvSub.setTextColor(Color.parseColor("#64748B"))
+                }
+            }
+        }
     }
 
     private fun verifyUserAccessStillAllowed() {
@@ -168,11 +222,23 @@ class HomeActivity : AppCompatActivity() {
                 response: Response<UserAccessStatusResponse>
             ) {
                 val body = response.body()
-                val isBlocked = response.code() == 403 ||
-                        body?.blocked == true ||
-                        body?.allowed == false ||
-                        body?.status.equals("blocked", ignoreCase = true)
-                if (isBlocked && !isFinishing && !isDestroyed) {
+                val rawErr = if (!response.isSuccessful) {
+                    try { response.errorBody()?.string() ?: "" } catch (_: Exception) { "" }
+                } else ""
+                val errJson = ApiClient.parseErrorJson(rawErr)
+
+                val isMasterAdminBlocked =
+                    body?.blocked == true ||
+                    body?.allowed == false ||
+                    body?.status.equals("blocked", ignoreCase = true) ||
+                    (errJson != null && (
+                        errJson.optBoolean("blocked", false) ||
+                        (errJson.has("allowed") && !errJson.optBoolean("allowed", true)) ||
+                        errJson.optString("status", "").equals("blocked", ignoreCase = true) ||
+                        errJson.optString("message", "").contains("master admin", ignoreCase = true)
+                    ))
+
+                if (isMasterAdminBlocked && !isFinishing && !isDestroyed) {
                     PengajuanNotificationService.stopMonitoring(this@HomeActivity)
                     PengajuanLocalStore.clearActiveSession(this@HomeActivity)
                     Toast.makeText(
@@ -260,6 +326,13 @@ class HomeActivity : AppCompatActivity() {
                         latestPengajuanList = synced
                         updateStatsUi(synced)
 
+                        val host = ApiClient.getDisplayHost()
+                        updateHomeServerStatus(
+                            connected = true,
+                            title = "Terhubung dengan server",
+                            subtitle = "Sinkron dengan web ($host) • ${synced.size} riwayat pengajuan"
+                        )
+
                         // Deteksi perubahan status dari Admin -> tampilkan di Panel Notifikasi HP & Pop-up
                         val changed = NotificationHelper.checkAndNotifyStatusChanges(this@HomeActivity, synced)
                         if (changed.isNotEmpty() && !isFinishing && !isDestroyed) {
@@ -286,12 +359,24 @@ class HomeActivity : AppCompatActivity() {
                             .show()
                         }
                     } else {
+                        val host = ApiClient.getDisplayHost()
+                        updateHomeServerStatus(
+                            connected = false,
+                            title = "Sinkronisasi server gagal (HTTP ${response.code()})",
+                            subtitle = "Ketuk untuk cek ulang atau atur IP ($host)"
+                        )
                         latestPengajuanList = localItems
                         updateStatsUi(localItems)
                     }
                 }
 
                 override fun onFailure(call: Call<PengajuanUserResponse>, t: Throwable) {
+                    val host = ApiClient.getDisplayHost()
+                    updateHomeServerStatus(
+                        connected = false,
+                        title = "Tidak terhubung dengan server",
+                        subtitle = "Mode offline • Pastikan Wi-Fi sama dengan laptop ($host)"
+                    )
                     latestPengajuanList = localItems
                     updateStatsUi(localItems)
                 }

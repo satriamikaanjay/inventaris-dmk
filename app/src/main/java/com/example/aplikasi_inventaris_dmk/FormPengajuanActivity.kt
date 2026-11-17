@@ -5,8 +5,12 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Base64
 import android.view.View
+import android.webkit.MimeTypeMap
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -43,13 +47,17 @@ class FormPengajuanActivity : AppCompatActivity() {
     private var isSubmitting = false
     private var currentSubmitCall: Call<PengajuanSubmitResponse>? = null
     private var overlayLockRuanganBaru: View? = null
+    private var overlayLockRuanganManual: View? = null
     private var tvInfoRuanganCabang: TextView? = null
     private var spinnerRuanganBaruRef: Spinner? = null
+    private var etRuanganBaruManualRef: EditText? = null
     private var etDeskripsiRef: EditText? = null
     private var btnSubmitRef: Button? = null
     private var defaultSubmitBtnText: String = "Ajukan"
+    private var isDropdownRoomSelected = false
 
-    // File picker yang mengizinkan SEMUA jenis file ("*/*")
+    private val allowedExtensions = setOf("jpg", "jpeg", "png", "pdf", "doc", "docx", "xls", "xlsx")
+
     private val pickAnyFileLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -61,17 +69,69 @@ class FormPengajuanActivity : AppCompatActivity() {
                 )
             } catch (_: Exception) {}
 
-            selectedFileUri = uri
-            selectedFileMime = contentResolver.getType(uri) ?: "*/*"
-            val (name, sizeStr) = resolveFileMeta(uri)
-            selectedFileName = name
-            selectedFileBase64 = readFileAsBase64(uri)
+            val mime = contentResolver.getType(uri) ?: "*/*"
+            val (rawName, sizeStr) = resolveFileMeta(uri)
+            val resolvedName = ensureExtension(rawName, mime)
+            val ext = resolvedName.substringAfterLast('.', "").lowercase(Locale.ROOT)
 
-            tvSelectedFileName.text = name
+            if (ext !in allowedExtensions) {
+                resetSelectedFile()
+                AlertDialog.Builder(this)
+                    .setTitle("Format File Tidak Didukung")
+                    .setMessage(
+                        "File \"$resolvedName\" tidak dapat dilampirkan.\n\n" +
+                        "Format yang diizinkan server: JPG, JPEG, PNG, PDF, DOC, DOCX, XLS, XLSX."
+                    )
+                    .setPositiveButton("Mengerti", null)
+                    .show()
+                return@registerForActivityResult
+            }
+
+            val base64Data = readFileAsBase64(uri)
+            if (base64Data == null) {
+                resetSelectedFile()
+                return@registerForActivityResult
+            }
+
+            selectedFileUri = uri
+            selectedFileMime = mime
+            selectedFileName = resolvedName
+            selectedFileBase64 = base64Data
+
+            tvSelectedFileName.text = resolvedName
             tvSelectedFileInfo.text = "Ukuran file: $sizeStr • Siap dilampirkan"
             btnPilihFile.text = "Ganti File"
             btnLihatFile.visibility = View.VISIBLE
         }
+    }
+
+    private fun resetSelectedFile() {
+        selectedFileUri = null
+        selectedFileName = null
+        selectedFileBase64 = null
+        selectedFileMime = null
+        tvSelectedFileName.text = "Belum ada file dipilih"
+        tvSelectedFileInfo.text = "Format: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (Maks 8 MB)"
+        btnPilihFile.text = "Pilih File"
+        btnLihatFile.visibility = View.GONE
+    }
+
+    private fun ensureExtension(name: String, mime: String): String {
+        val currentExt = name.substringAfterLast('.', "")
+        if (name.contains('.') && currentExt.isNotBlank() && currentExt.length <= 5) {
+            return name
+        }
+        val inferred = when (mime.lowercase(Locale.ROOT)) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "application/pdf" -> "pdf"
+            "application/msword" -> "doc"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+            "application/vnd.ms-excel" -> "xls"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
+            else -> MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)?.lowercase(Locale.ROOT)
+        }
+        return if (!inferred.isNullOrBlank()) "$name.$inferred" else name
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,8 +169,11 @@ class FormPengajuanActivity : AppCompatActivity() {
         val tvCabangPerpindahan = findViewById<TextView>(R.id.tvCabangPerpindahan)
         val etRuanganLama = findViewById<EditText>(R.id.etRuanganLama)
         val spinnerRuanganBaru = findViewById<Spinner>(R.id.spinnerRuanganBaru)
+        val etRuanganBaruManual = findViewById<EditText>(R.id.etRuanganBaruManual)
         spinnerRuanganBaruRef = spinnerRuanganBaru
+        etRuanganBaruManualRef = etRuanganBaruManual
         overlayLockRuanganBaru = findViewById(R.id.overlayLockRuanganBaru)
+        overlayLockRuanganManual = findViewById(R.id.overlayLockRuanganManual)
         tvInfoRuanganCabang = findViewById(R.id.tvInfoRuanganCabang)
 
         overlayLockRuanganBaru?.setOnClickListener {
@@ -119,6 +182,15 @@ class FormPengajuanActivity : AppCompatActivity() {
                 "Tidak dapat mengubah saat mengirim",
                 Toast.LENGTH_SHORT
             ).show()
+        }
+
+        overlayLockRuanganManual?.setOnClickListener {
+            val msg = if (isSubmitting) {
+                "Tidak dapat mengubah saat mengirim"
+            } else {
+                "Sudah memilih ruangan dari dropdown. Kembalikan dropdown ke '-- Pilih Ruangan Tujuan Baru --' untuk mengetik manual."
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
         val candidateNewRooms = mutableListOf<String>()
@@ -132,25 +204,14 @@ class FormPengajuanActivity : AppCompatActivity() {
                 .filter { it.isNotEmpty() && it != "-" }
                 .distinct()
 
-            if (allRooms.isEmpty()) {
-                AlertDialog.Builder(this)
-                    .setTitle("Tidak Dapat Melakukan Perpindahan")
-                    .setMessage("Cabang \"$itemCabang\" tidak memiliki daftar ruangan sehingga perpindahan tidak dapat dilakukan.")
-                    .setCancelable(false)
-                    .setPositiveButton("Kembali") { _, _ -> finish() }
-                    .show()
-                return
-            }
-
-            // Prioritaskan ruangan yang berbeda dari ruangan lama
+            // Tampilkan ruangan di cabang yang berbeda dari ruangan lama (jika ada)
             val diffRooms = allRooms.filter { !it.equals(itemRuangan, ignoreCase = true) }
-            if (diffRooms.isNotEmpty()) {
-                candidateNewRooms.addAll(diffRooms)
-            } else {
-                candidateNewRooms.addAll(allRooms)
-            }
+            candidateNewRooms.addAll(diffRooms)
 
-            val spinnerItems = mutableListOf("-- Pilih Ruangan Tujuan Baru --")
+            val spinnerItems = mutableListOf(
+                if (candidateNewRooms.isNotEmpty()) "-- Pilih Ruangan Tujuan Baru --"
+                else "-- Tidak ada ruangan lain (Ketik Manual) --"
+            )
             spinnerItems.addAll(candidateNewRooms)
 
             val adapter = ArrayAdapter(
@@ -161,6 +222,38 @@ class FormPengajuanActivity : AppCompatActivity() {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             spinnerRuanganBaru?.adapter = adapter
+
+            spinnerRuanganBaru?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    isDropdownRoomSelected = position > 0
+                    updateRoomInputLockState()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {
+                    isDropdownRoomSelected = false
+                    updateRoomInputLockState()
+                }
+            }
+
+            etRuanganBaruManual?.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    if (!isSubmitting && !isDropdownRoomSelected) {
+                        val txt = s?.toString()?.trim() ?: ""
+                        if (txt.isNotEmpty()) {
+                            etRuanganBaruManual.error = null
+                            tvInfoRuanganCabang?.text = "✓ Menggunakan ruangan baru (input manual): \"$txt\""
+                            tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#2E7D32"))
+                        } else {
+                            tvInfoRuanganCabang?.text = "*Pilih ruangan dari dropdown atau ketik manual nama ruangan baru jika belum tersedia"
+                            tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#1C4E8F"))
+                        }
+                    }
+                }
+                override fun afterTextChanged(s: Editable?) {}
+            })
+
+            updateRoomInputLockState()
         } else {
             layoutPerpindahan?.visibility = View.GONE
         }
@@ -209,16 +302,24 @@ class FormPengajuanActivity : AppCompatActivity() {
             var ruanganTujuanSelected: String? = null
             if (isPerpindahan) {
                 val pos = spinnerRuanganBaru?.selectedItemPosition ?: 0
-                if (pos <= 0) {
+                val manualInput = etRuanganBaruManual?.text?.toString()?.trim() ?: ""
+
+                if (pos > 0) {
+                    ruanganTujuanSelected = spinnerRuanganBaru?.selectedItem?.toString()?.trim()
+                } else if (manualInput.isNotEmpty()) {
+                    ruanganTujuanSelected = manualInput
+                } else {
+                    etRuanganBaruManual?.error = "Ketik nama ruangan baru atau pilih dari dropdown"
+                    etRuanganBaruManual?.requestFocus()
                     Toast.makeText(
                         this,
-                        "Silakan pilih Ruangan Baru (tujuan perpindahan) terlebih dahulu!",
+                        "Silakan pilih Ruangan Baru dari dropdown atau ketik manual nama ruangan baru!",
                         Toast.LENGTH_LONG
                     ).show()
                     return@setOnClickListener
                 }
-                ruanganTujuanSelected = spinnerRuanganBaru?.selectedItem?.toString()?.trim()
-                if (ruanganTujuanSelected.equals(itemRuangan, ignoreCase = true) && candidateNewRooms.size > 1) {
+
+                if (itemRuangan != "-" && ruanganTujuanSelected.equals(itemRuangan, ignoreCase = true)) {
                     Toast.makeText(
                         this,
                         "Ruangan baru tidak boleh sama dengan ruangan lama ($itemRuangan)!",
@@ -406,7 +507,9 @@ class FormPengajuanActivity : AppCompatActivity() {
                     setResult(RESULT_OK)
                     finish()
                 } else {
-                    val errMsg = body?.message ?: "Gagal mengirim pengajuan (HTTP ${response.code()})."
+                    val fallback = "Gagal mengirim pengajuan (HTTP ${response.code()})."
+                    val errMsg = body?.message?.takeIf { it.isNotBlank() }
+                        ?: ApiClient.extractErrorMessage(response, fallback)
                     Toast.makeText(this@FormPengajuanActivity, "❌ $errMsg", Toast.LENGTH_LONG).show()
                 }
             }
@@ -423,6 +526,51 @@ class FormPengajuanActivity : AppCompatActivity() {
         })
     }
 
+    private fun updateRoomInputLockState() {
+        val etManual = etRuanganBaruManualRef ?: return
+        if (isSubmitting) {
+            etManual.isEnabled = false
+            etManual.isFocusable = false
+            etManual.isFocusableInTouchMode = false
+            etManual.alpha = 0.55f
+            overlayLockRuanganManual?.visibility = View.VISIBLE
+            return
+        }
+
+        if (isDropdownRoomSelected) {
+            // Sudah memilih dari dropdown -> kosongkan & kunci textbox manual agar tidak bisa mengetik manual
+            if (!etManual.text.isNullOrEmpty()) {
+                etManual.setText("")
+            }
+            etManual.error = null
+            etManual.isEnabled = false
+            etManual.isFocusable = false
+            etManual.isFocusableInTouchMode = false
+            etManual.alpha = 0.55f
+            etManual.hint = "Dikunci (sudah memilih dari dropdown)"
+            overlayLockRuanganManual?.visibility = View.VISIBLE
+            val selected = spinnerRuanganBaruRef?.selectedItem?.toString()?.trim() ?: ""
+            tvInfoRuanganCabang?.text = "✓ Ruangan dipilih dari daftar: \"$selected\" (Input manual dikunci)"
+            tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#1C4E8F"))
+        } else {
+            // Belum memilih dari dropdown -> textbox manual aktif & bisa diketik
+            etManual.isEnabled = true
+            etManual.isFocusable = true
+            etManual.isFocusableInTouchMode = true
+            etManual.alpha = 1.0f
+            etManual.hint = "Ketik ruangan baru jika belum ada di daftar"
+            overlayLockRuanganManual?.visibility = View.GONE
+            val manualTxt = etManual.text?.toString()?.trim() ?: ""
+            if (manualTxt.isNotEmpty()) {
+                tvInfoRuanganCabang?.text = "✓ Menggunakan ruangan baru (input manual): \"$manualTxt\""
+                tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#2E7D32"))
+            } else {
+                tvInfoRuanganCabang?.text = "*Pilih ruangan dari dropdown atau ketik manual nama ruangan baru jika belum tersedia"
+                tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#1C4E8F"))
+            }
+        }
+    }
+
     private fun setSubmittingState(submitting: Boolean) {
         isSubmitting = submitting
         btnSubmitRef?.isEnabled = !submitting
@@ -435,10 +583,8 @@ class FormPengajuanActivity : AppCompatActivity() {
         if (submitting) {
             tvInfoRuanganCabang?.text = "⚠ Tidak dapat mengubah saat mengirim"
             tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#C62828"))
-        } else {
-            tvInfoRuanganCabang?.text = "*Pilihan ruangan menyesuaikan daftar ruangan pada cabang aset ini"
-            tvInfoRuanganCabang?.setTextColor(android.graphics.Color.parseColor("#1C4E8F"))
         }
+        updateRoomInputLockState()
     }
 
     private fun handleAttemptBack() {

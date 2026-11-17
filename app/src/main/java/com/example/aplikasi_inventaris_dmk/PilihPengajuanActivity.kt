@@ -74,70 +74,36 @@ class PilihPengajuanActivity : AppCompatActivity() {
 
         // Fungsi untuk menampilkan popup konfirmasi sebelum masuk ke halaman Form Pengajuan
         val confirmAndOpenForm: (String) -> Unit = { namaPengajuan ->
-            if (namaPengajuan.contains("Perpindahan", ignoreCase = true)) {
-                // Cek apakah cabang dari aset yang di-scan/dipilih memiliki daftar ruangan
-                if (availableRoomsInCabang.isEmpty()) {
-                    val namaCabDisplay = if (itemCabang != "-") itemCabang else "aset ini"
-                    AlertDialog.Builder(this)
-                        .setTitle("Tidak Dapat Melakukan Perpindahan")
-                        .setMessage(
-                            "Aset \"$itemName\" berada di cabang \"$namaCabDisplay\" yang tidak memiliki ruangan.\n\n" +
-                            "Pengajuan perpindahan ruangan hanya dapat dilakukan pada cabang yang memiliki ruangan."
-                        )
-                        .setPositiveButton("Mengerti", null)
-                        .show()
-                } else {
-                    AlertDialog.Builder(this)
-                        .setTitle("Konfirmasi Pilihan Pengajuan")
-                        .setMessage("Apakah Anda yakin ingin memilih $namaPengajuan untuk aset \"$itemName\" (Cabang: $itemCabang)?")
-                        .setPositiveButton("Iya") { _, _ ->
-                            val formIntent = Intent(this, FormPengajuanActivity::class.java).apply {
-                                putExtra("JENIS_PENGAJUAN", namaPengajuan)
-                                putExtra("ITEM_NAME", itemName)
-                                putExtra("ITEM_CODE", itemCode)
-                                putExtra("ITEM_STATUS", itemStatus)
-                                putExtra("ITEM_LOCATION", itemLocation)
-                                putExtra("ITEM_CATEGORY", itemCategory)
-                                putExtra("ITEM_CABANG", itemCabang)
-                                putExtra("ITEM_RUANGAN", itemRuangan)
-                                putStringArrayListExtra("ITEM_RUANGAN_CABANG", availableRoomsInCabang)
-                                putExtra("ITEM_ASET_ID", asetId)
-                                putExtra("USER_ID", userId)
-                                putExtra("USER_NAME", userName)
-                                putExtra("USER_EMAIL", userEmail)
-                                putExtra("USER_ROLE", userRole)
-                            }
-                            formLauncher.launch(formIntent)
-                        }
-                        .setNegativeButton("Tidak", null)
-                        .show()
-                }
+            val confirmMessage = if (namaPengajuan.contains("Perpindahan", ignoreCase = true) && itemCabang != "-") {
+                "Apakah Anda yakin ingin memilih $namaPengajuan untuk aset \"$itemName\" (Cabang: $itemCabang)?"
             } else {
-                AlertDialog.Builder(this)
-                    .setTitle("Konfirmasi Pilihan Pengajuan")
-                    .setMessage("Apakah Anda yakin ingin memilih $namaPengajuan untuk aset \"$itemName\"?")
-                    .setPositiveButton("Iya") { _, _ ->
-                        val formIntent = Intent(this, FormPengajuanActivity::class.java).apply {
-                            putExtra("JENIS_PENGAJUAN", namaPengajuan)
-                            putExtra("ITEM_NAME", itemName)
-                            putExtra("ITEM_CODE", itemCode)
-                            putExtra("ITEM_STATUS", itemStatus)
-                            putExtra("ITEM_LOCATION", itemLocation)
-                            putExtra("ITEM_CATEGORY", itemCategory)
-                            putExtra("ITEM_CABANG", itemCabang)
-                            putExtra("ITEM_RUANGAN", itemRuangan)
-                            putStringArrayListExtra("ITEM_RUANGAN_CABANG", availableRoomsInCabang)
-                            putExtra("ITEM_ASET_ID", asetId)
-                            putExtra("USER_ID", userId)
-                            putExtra("USER_NAME", userName)
-                            putExtra("USER_EMAIL", userEmail)
-                            putExtra("USER_ROLE", userRole)
-                        }
-                        formLauncher.launch(formIntent)
-                    }
-                    .setNegativeButton("Tidak", null)
-                    .show()
+                "Apakah Anda yakin ingin memilih $namaPengajuan untuk aset \"$itemName\"?"
             }
+
+            AlertDialog.Builder(this)
+                .setTitle("Konfirmasi Pilihan Pengajuan")
+                .setMessage(confirmMessage)
+                .setPositiveButton("Iya") { _, _ ->
+                    val formIntent = Intent(this, FormPengajuanActivity::class.java).apply {
+                        putExtra("JENIS_PENGAJUAN", namaPengajuan)
+                        putExtra("ITEM_NAME", itemName)
+                        putExtra("ITEM_CODE", itemCode)
+                        putExtra("ITEM_STATUS", itemStatus)
+                        putExtra("ITEM_LOCATION", itemLocation)
+                        putExtra("ITEM_CATEGORY", itemCategory)
+                        putExtra("ITEM_CABANG", itemCabang)
+                        putExtra("ITEM_RUANGAN", itemRuangan)
+                        putStringArrayListExtra("ITEM_RUANGAN_CABANG", availableRoomsInCabang)
+                        putExtra("ITEM_ASET_ID", asetId)
+                        putExtra("USER_ID", userId)
+                        putExtra("USER_NAME", userName)
+                        putExtra("USER_EMAIL", userEmail)
+                        putExtra("USER_ROLE", userRole)
+                    }
+                    formLauncher.launch(formIntent)
+                }
+                .setNegativeButton("Tidak", null)
+                .show()
         }
 
         // 5 Opsi Pengajuan: Peminjaman, Permintaan, Peleburan, Perpindahan, Servis

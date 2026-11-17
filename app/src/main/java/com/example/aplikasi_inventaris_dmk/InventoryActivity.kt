@@ -59,12 +59,11 @@ class InventoryActivity : AppCompatActivity() {
         CategoryItem(0, "Alat Kantor", "H"),
         CategoryItem(0, "Alat Logistik", "F"),
         CategoryItem(0, "Alat Rumah Tangga", "E"),
-        CategoryItem(0, "Aset & Properti", "A"),
         CategoryItem(0, "Dekorasi", "G"),
         CategoryItem(0, "Elektronik", "C"),
         CategoryItem(0, "Furniture", "B"),
         CategoryItem(0, "Kendaraan Operasional", "D"),
-        CategoryItem(0, "Tanah dan Bangunan", "T")
+        CategoryItem(0, "Tanah dan Bangunan", "A")
     )
 
     private val defaultCabangs = listOf(
@@ -83,6 +82,8 @@ class InventoryActivity : AppCompatActivity() {
     // Data untuk dialog
     private var kategoris: List<CategoryItem> = defaultKategoris
     private var cabangs: List<BranchItem> = defaultCabangs
+    private var hasApiCategories = false
+    private var hasApiBranches = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -182,7 +183,9 @@ class InventoryActivity : AppCompatActivity() {
                     syncCategoriesAndBranchesFromItems()
                     applyFilterAndSearch()
                 } else {
-                    showEmpty("Gagal memuat data (HTTP ${response.code()}).")
+                    val errMsg = body?.message?.takeIf { it.isNotBlank() }
+                        ?: ApiClient.extractErrorMessage(response, "Gagal memuat data (HTTP ${response.code()}).")
+                    showEmpty(errMsg)
                 }
             }
             override fun onFailure(call: Call<InventoryListResponse>, t: Throwable) {
@@ -211,7 +214,8 @@ class InventoryActivity : AppCompatActivity() {
                 .distinctBy { it.namaKategori?.trim()?.lowercase() }
 
             if (extractedCats.isNotEmpty()) {
-                kategoris = (kategoris + extractedCats)
+                val baseCats = if (hasApiCategories) kategoris else emptyList()
+                kategoris = (baseCats + extractedCats)
                     .map { CategoryItem(it.id, getCleanCategoryName(it.namaKategori), it.kodeKategori) }
                     .filter { !it.namaKategori.isNullOrBlank() && it.namaKategori != "-" }
                     .distinctBy { it.namaKategori?.trim()?.lowercase() }
@@ -224,7 +228,8 @@ class InventoryActivity : AppCompatActivity() {
                 .distinctBy { it.namaCabang?.trim()?.lowercase() }
 
             if (extractedBranches.isNotEmpty()) {
-                cabangs = (cabangs + extractedBranches)
+                val baseBranches = if (hasApiBranches) cabangs else emptyList()
+                cabangs = (baseBranches + extractedBranches)
                     .filter { !it.namaCabang.isNullOrBlank() && it.namaCabang != "-" }
                     .distinctBy { it.namaCabang?.trim()?.lowercase() }
                     .sortedBy { it.namaCabang }
@@ -236,8 +241,9 @@ class InventoryActivity : AppCompatActivity() {
         ApiClient.instance.getCategories().enqueue(object : Callback<CategoryListResponse> {
             override fun onResponse(call: Call<CategoryListResponse>, response: Response<CategoryListResponse>) {
                 val data = response.body()?.data
-                if (!data.isNullOrEmpty()) {
-                    kategoris = (kategoris + data)
+                if (response.isSuccessful && data != null) {
+                    hasApiCategories = true
+                    kategoris = data
                         .map { CategoryItem(it.id, getCleanCategoryName(it.namaKategori), it.kodeKategori) }
                         .filter { !it.namaKategori.isNullOrBlank() && it.namaKategori != "-" }
                         .distinctBy { it.namaKategori?.trim()?.lowercase() }
@@ -252,8 +258,9 @@ class InventoryActivity : AppCompatActivity() {
         ApiClient.instance.getBranches().enqueue(object : Callback<BranchListResponse> {
             override fun onResponse(call: Call<BranchListResponse>, response: Response<BranchListResponse>) {
                 val data = response.body()?.data
-                if (!data.isNullOrEmpty()) {
-                    cabangs = (cabangs + data)
+                if (response.isSuccessful && data != null) {
+                    hasApiBranches = true
+                    cabangs = data
                         .filter { !it.namaCabang.isNullOrBlank() && it.namaCabang != "-" }
                         .distinctBy { it.namaCabang?.trim()?.lowercase() }
                         .sortedBy { it.namaCabang }

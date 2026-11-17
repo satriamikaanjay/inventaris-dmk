@@ -230,9 +230,10 @@ class ScanActivity : AppCompatActivity() {
                     runOnUiThread {
                         isProcessingScan = false
                         tvGuideText.text = "Arahkan kamera ke QR Code / Barcode aset"
+                        val errMsg = ApiClient.extractErrorMessage(response, "Gagal memuat data aset dari server.")
                         Toast.makeText(
                             this@ScanActivity,
-                            "Gagal memuat data aset dari server.",
+                            errMsg,
                             Toast.LENGTH_SHORT
                         ).show()
                     }

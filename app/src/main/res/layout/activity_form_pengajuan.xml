@@ -247,11 +247,48 @@
                         </FrameLayout>
 
                         <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="Atau Ketik Nama Ruangan Baru (Manual)"
+                            android:textColor="#1E293B"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="50dp"
+                            android:layout_marginTop="8dp">
+
+                            <EditText
+                                android:id="@+id/etRuanganBaruManual"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:background="@drawable/bg_input_field"
+                                android:hint="Ketik ruangan baru jika belum ada di daftar"
+                                android:inputType="textCapWords"
+                                android:maxLines="1"
+                                android:paddingStart="14dp"
+                                android:paddingEnd="14dp"
+                                android:textColor="#0F172A"
+                                android:textColorHint="#94A3B8"
+                                android:textSize="13.5sp" />
+
+                            <View
+                                android:id="@+id/overlayLockRuanganManual"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:visibility="gone" />
+                        </FrameLayout>
+
+                        <TextView
                             android:id="@+id/tvInfoRuanganCabang"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="*Pilihan ruangan menyesuaikan daftar ruangan pada cabang aset ini"
+                            android:layout_marginTop="6dp"
+                            android:text="*Pilih ruangan dari dropdown atau ketik manual nama ruangan baru jika belum tersedia"
                             android:textColor="#1C4E8F"
                             android:textSize="11sp" />
                     </LinearLayout>
