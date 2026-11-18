@@ -1,15 +1,20 @@
 package com.example.aplikasi_inventaris_dmk
 
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Base64
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.MimeTypeMap
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -20,6 +25,7 @@ import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
@@ -55,6 +61,43 @@ class DataStokActivity : AppCompatActivity() {
         val baseSatuan: String
     ) {
         override fun toString(): String = displayLabel
+    }
+
+    data class SelectedAttachment(
+        val uri: Uri,
+        val fileName: String,
+        val fileSizeStr: String,
+        val mimeType: String,
+        val base64Data: String
+    )
+
+    private var onFilePickedForDialog: ((SelectedAttachment) -> Unit)? = null
+
+    private val pickAnyFileLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+
+            val mime = contentResolver.getType(uri) ?: "*/*"
+            val (rawName, sizeStr) = resolveFileMeta(uri)
+            val resolvedName = ensureExtension(rawName, mime)
+            val base64Data = readFileAsBase64(uri) ?: return@registerForActivityResult
+
+            val attachment = SelectedAttachment(
+                uri = uri,
+                fileName = resolvedName,
+                fileSizeStr = sizeStr,
+                mimeType = mime,
+                base64Data = base64Data
+            )
+            onFilePickedForDialog?.invoke(attachment)
+        }
     }
 
     private lateinit var rvDataStok: RecyclerView
@@ -705,9 +748,53 @@ class DataStokActivity : AppCompatActivity() {
         val btnPlus = view.findViewById<Button>(R.id.btnPlusJumlahStok)
         val boxValidasi = view.findViewById<LinearLayout>(R.id.boxValidasiStok)
         val tvValidasiInfo = view.findViewById<TextView>(R.id.tvValidasiStokInfo)
+        val layoutUploadFile = view.findViewById<LinearLayout>(R.id.layoutUploadFileStok)
+        val tvSelectedFileName = view.findViewById<TextView>(R.id.tvSelectedFileNameStok)
+        val tvSelectedFileInfo = view.findViewById<TextView>(R.id.tvSelectedFileInfoStok)
+        val btnPilihFile = view.findViewById<Button>(R.id.btnPilihFileStok)
+        val layoutFileActions = view.findViewById<LinearLayout>(R.id.layoutFileActionsStok)
+        val btnLihatFile = view.findViewById<Button>(R.id.btnLihatFileStok)
+        val btnHapusFile = view.findViewById<Button>(R.id.btnHapusFileStok)
         val etDeskripsi = view.findViewById<EditText>(R.id.etDeskripsiStok)
         val btnBatal = view.findViewById<Button>(R.id.btnBatalFormStok)
         val btnSubmit = view.findViewById<Button>(R.id.btnSubmitFormStok)
+
+        var selectedAttachment: SelectedAttachment? = null
+        var isSubmitting = false
+
+        val applySelectedFileUi: (SelectedAttachment?) -> Unit = { att ->
+            selectedAttachment = att
+            if (att != null) {
+                tvSelectedFileName.text = att.fileName
+                tvSelectedFileInfo.text = "Ukuran: ${att.fileSizeStr} • Siap dilampirkan"
+                tvSelectedFileInfo.setTextColor(Color.parseColor("#2E7D32"))
+                btnPilihFile.text = "Ganti File"
+                layoutFileActions.visibility = View.VISIBLE
+            } else {
+                tvSelectedFileName.text = "Belum ada file dipilih (Opsional)"
+                tvSelectedFileInfo.text = "Mendukung semua jenis file (Foto, PDF, Dokumen, Excel, dll)"
+                tvSelectedFileInfo.setTextColor(Color.parseColor("#64748B"))
+                btnPilihFile.text = "Pilih File"
+                layoutFileActions.visibility = View.GONE
+            }
+        }
+
+        val triggerPickFile = {
+            if (!isSubmitting) {
+                onFilePickedForDialog = { att ->
+                    applySelectedFileUi(att)
+                }
+                pickAnyFileLauncher.launch(arrayOf("*/*"))
+            }
+        }
+        btnPilihFile.setOnClickListener { triggerPickFile() }
+        layoutUploadFile.setOnClickListener { triggerPickFile() }
+        btnLihatFile.setOnClickListener { openSelectedFilePreview(selectedAttachment) }
+        btnHapusFile.setOnClickListener {
+            if (!isSubmitting) {
+                applySelectedFileUi(null)
+            }
+        }
 
         tvBadgeJenis.text = "PENGAJUAN PERMINTAAN (DATA STOK)"
         tvTitleForm.text = "Form Pengajuan Permintaan"
@@ -746,8 +833,6 @@ class DataStokActivity : AppCompatActivity() {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         spinnerSatuan.adapter = spinnerAdapter
-
-        var isSubmitting = false
 
         val validateAndRefreshPreview = {
             val selectedOpt = (spinnerSatuan.selectedItem as? SatuanConversionOption)
@@ -899,6 +984,8 @@ class DataStokActivity : AppCompatActivity() {
             btnBatal.isEnabled = false
             spinnerSatuan.isEnabled = false
             etJumlah.isEnabled = false
+            btnPilihFile.isEnabled = false
+            btnHapusFile.isEnabled = false
             etDeskripsi.isEnabled = false
 
             val requestBody = PengajuanRequest(
@@ -921,7 +1008,9 @@ class DataStokActivity : AppCompatActivity() {
                 ruanganTujuan = "Gudang Stok",
                 jenis = jenisApi,
                 jenisPengajuan = jenisApi,
-                keterangan = keteranganFinal
+                keterangan = keteranganFinal,
+                fileName = selectedAttachment?.fileName,
+                fileBase64 = selectedAttachment?.base64Data
             )
 
             ApiClient.instance.submitPengajuan(requestBody).enqueue(object : Callback<PengajuanSubmitResponse> {
@@ -953,8 +1042,8 @@ class DataStokActivity : AppCompatActivity() {
                             ruanganTujuan = "Gudang Stok",
                             jenisPengajuan = jenisApi,
                             keterangan = keteranganFinal,
-                            fileName = null,
-                            localFileUri = null
+                            fileName = selectedAttachment?.fileName,
+                            localFileUri = selectedAttachment?.uri?.toString()
                         )
 
                         dialog.dismiss()
@@ -974,6 +1063,7 @@ class DataStokActivity : AppCompatActivity() {
                                 "Pemohon: $currentUserName\n" +
                                 "Barang: ${item.namaBarang ?: "-"} ($kodeStok)\n" +
                                 "Jumlah: $infoSatuanPinjam\n" +
+                                "Lampiran File: ${selectedAttachment?.fileName ?: "Tidak ada (Opsional)"}\n" +
                                 "Keterangan: ${rawDeskripsi.ifEmpty { "-" }}\n\n" +
                                 "Pengajuan ini telah masuk ke halaman Pengajuan Admin di Web dan menunggu persetujuan (ACC)."
                             )
@@ -993,6 +1083,8 @@ class DataStokActivity : AppCompatActivity() {
                         btnBatal.isEnabled = true
                         spinnerSatuan.isEnabled = true
                         etJumlah.isEnabled = true
+                        btnPilihFile.isEnabled = true
+                        btnHapusFile.isEnabled = true
                         etDeskripsi.isEnabled = true
 
                         val fallback = "Gagal mengirim pengajuan stok (HTTP ${response.code()})."
@@ -1009,6 +1101,8 @@ class DataStokActivity : AppCompatActivity() {
                     btnBatal.isEnabled = true
                     spinnerSatuan.isEnabled = true
                     etJumlah.isEnabled = true
+                    btnPilihFile.isEnabled = true
+                    btnHapusFile.isEnabled = true
                     etDeskripsi.isEnabled = true
 
                     Toast.makeText(
@@ -1054,9 +1148,53 @@ class DataStokActivity : AppCompatActivity() {
         val spinnerSatuan = view.findViewById<Spinner>(R.id.spinnerLainnyaSatuan)
         val etHarga = view.findViewById<EditText>(R.id.etLainnyaHarga)
         val tvFormatHarga = view.findViewById<TextView>(R.id.tvLainnyaFormatHarga)
+        val layoutUploadFile = view.findViewById<LinearLayout>(R.id.layoutUploadFileLainnya)
+        val tvSelectedFileName = view.findViewById<TextView>(R.id.tvSelectedFileNameLainnya)
+        val tvSelectedFileInfo = view.findViewById<TextView>(R.id.tvSelectedFileInfoLainnya)
+        val btnPilihFile = view.findViewById<Button>(R.id.btnPilihFileLainnya)
+        val layoutFileActions = view.findViewById<LinearLayout>(R.id.layoutFileActionsLainnya)
+        val btnLihatFile = view.findViewById<Button>(R.id.btnLihatFileLainnya)
+        val btnHapusFile = view.findViewById<Button>(R.id.btnHapusFileLainnya)
         val etDeskripsi = view.findViewById<EditText>(R.id.etLainnyaDeskripsi)
         val btnBatal = view.findViewById<Button>(R.id.btnBatalLainnyaStok)
         val btnSubmit = view.findViewById<Button>(R.id.btnSubmitLainnyaStok)
+
+        var selectedAttachment: SelectedAttachment? = null
+        var isSubmitting = false
+
+        val applySelectedFileUi: (SelectedAttachment?) -> Unit = { att ->
+            selectedAttachment = att
+            if (att != null) {
+                tvSelectedFileName.text = att.fileName
+                tvSelectedFileInfo.text = "Ukuran: ${att.fileSizeStr} • Siap dilampirkan"
+                tvSelectedFileInfo.setTextColor(Color.parseColor("#047857"))
+                btnPilihFile.text = "Ganti File"
+                layoutFileActions.visibility = View.VISIBLE
+            } else {
+                tvSelectedFileName.text = "Belum ada file dipilih (Opsional)"
+                tvSelectedFileInfo.text = "Mendukung semua jenis file (Foto, PDF, Dokumen, Excel, dll)"
+                tvSelectedFileInfo.setTextColor(Color.parseColor("#64748B"))
+                btnPilihFile.text = "Pilih File"
+                layoutFileActions.visibility = View.GONE
+            }
+        }
+
+        val triggerPickFile = {
+            if (!isSubmitting) {
+                onFilePickedForDialog = { att ->
+                    applySelectedFileUi(att)
+                }
+                pickAnyFileLauncher.launch(arrayOf("*/*"))
+            }
+        }
+        btnPilihFile.setOnClickListener { triggerPickFile() }
+        layoutUploadFile.setOnClickListener { triggerPickFile() }
+        btnLihatFile.setOnClickListener { openSelectedFilePreview(selectedAttachment) }
+        btnHapusFile.setOnClickListener {
+            if (!isSubmitting) {
+                applySelectedFileUi(null)
+            }
+        }
 
         // 1. Nama otomatis terisi dari akun yang login
         etNamaPemohon.setText(currentUserName)
@@ -1087,8 +1225,6 @@ class DataStokActivity : AppCompatActivity() {
             it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
         spinnerSatuan.adapter = satuanAdapter
-
-        var isSubmitting = false
 
         val updatePreviewHarga = {
             val rawHarga = etHarga.text?.toString()?.replace("[^0-9]".toRegex(), "") ?: ""
@@ -1202,6 +1338,8 @@ class DataStokActivity : AppCompatActivity() {
             etJumlah.isEnabled = false
             spinnerSatuan.isEnabled = false
             etHarga.isEnabled = false
+            btnPilihFile.isEnabled = false
+            btnHapusFile.isEnabled = false
             etDeskripsi.isEnabled = false
 
             val requestBody = PengajuanRequest(
@@ -1224,7 +1362,9 @@ class DataStokActivity : AppCompatActivity() {
                 ruanganTujuan = "Gudang Stok",
                 jenis = jenisApi,
                 jenisPengajuan = jenisApi,
-                keterangan = keteranganFinal
+                keterangan = keteranganFinal,
+                fileName = selectedAttachment?.fileName,
+                fileBase64 = selectedAttachment?.base64Data
             )
 
             ApiClient.instance.submitPengajuan(requestBody).enqueue(object : Callback<PengajuanSubmitResponse> {
@@ -1256,8 +1396,8 @@ class DataStokActivity : AppCompatActivity() {
                             ruanganTujuan = "Gudang Stok",
                             jenisPengajuan = jenisApi,
                             keterangan = keteranganFinal,
-                            fileName = null,
-                            localFileUri = null
+                            fileName = selectedAttachment?.fileName,
+                            localFileUri = selectedAttachment?.uri?.toString()
                         )
 
                         dialog.dismiss()
@@ -1272,6 +1412,7 @@ class DataStokActivity : AppCompatActivity() {
                                 "Nama Barang: $inputNamaBarang\n" +
                                 "Jumlah: ${numberFormat.format(inputQty)} $selectedSatuan\n" +
                                 "Harga: $hargaFormatted\n" +
+                                "Lampiran File: ${selectedAttachment?.fileName ?: "Tidak ada (Opsional)"}\n" +
                                 "Keterangan: ${rawDeskripsi.ifEmpty { "-" }}\n\n" +
                                 "Pengajuan ini telah masuk ke halaman Pengajuan Admin di Web (tab Pengajuan Lainnya Data Stok)."
                             )
@@ -1293,6 +1434,8 @@ class DataStokActivity : AppCompatActivity() {
                         etJumlah.isEnabled = true
                         spinnerSatuan.isEnabled = true
                         etHarga.isEnabled = true
+                        btnPilihFile.isEnabled = true
+                        btnHapusFile.isEnabled = true
                         etDeskripsi.isEnabled = true
 
                         val fallback = "Gagal mengirim pengajuan lainnya (HTTP ${response.code()})."
@@ -1311,6 +1454,8 @@ class DataStokActivity : AppCompatActivity() {
                     etJumlah.isEnabled = true
                     spinnerSatuan.isEnabled = true
                     etHarga.isEnabled = true
+                    btnPilihFile.isEnabled = true
+                    btnHapusFile.isEnabled = true
                     etDeskripsi.isEnabled = true
 
                     Toast.makeText(
@@ -1328,5 +1473,123 @@ class DataStokActivity : AppCompatActivity() {
             (resources.displayMetrics.widthPixels * 0.94).toInt(),
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
+    }
+
+    private fun openSelectedFilePreview(attachment: SelectedAttachment?) {
+        if (attachment == null) {
+            Toast.makeText(this, "Belum ada file yang dipilih", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val uri = attachment.uri
+        val mime = attachment.mimeType.ifBlank { contentResolver.getType(uri) ?: "*/*" }
+
+        if (mime.startsWith("image/")) {
+            try {
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    val bitmap = BitmapFactory.decodeStream(stream)
+                    if (bitmap != null) {
+                        val iv = ImageView(this).apply {
+                            setImageBitmap(bitmap)
+                            adjustViewBounds = true
+                            setPadding(24, 24, 24, 8)
+                        }
+                        AlertDialog.Builder(this)
+                            .setTitle(attachment.fileName)
+                            .setView(iv)
+                            .setPositiveButton("Tutup", null)
+                            .setNeutralButton("Buka di Aplikasi Lain") { _, _ ->
+                                launchExternalViewer(uri, mime, attachment.fileName)
+                            }
+                            .show()
+                        return
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        launchExternalViewer(uri, mime, attachment.fileName)
+    }
+
+    private fun launchExternalViewer(uri: Uri, mime: String, fileName: String) {
+        try {
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(viewIntent, "Lihat File: $fileName"))
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "File \"$fileName\" siap dilampirkan (Tidak ada aplikasi pembuka format ini di perangkat).",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun ensureExtension(name: String, mime: String): String {
+        val currentExt = name.substringAfterLast('.', "")
+        if (name.contains('.') && currentExt.isNotBlank() && currentExt.length <= 6) {
+            return name
+        }
+        val inferred = when (mime.lowercase(Locale.ROOT)) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "application/pdf" -> "pdf"
+            "application/msword" -> "doc"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+            "application/vnd.ms-excel" -> "xls"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
+            else -> MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)?.lowercase(Locale.ROOT)
+        }
+        return if (!inferred.isNullOrBlank()) "$name.$inferred" else name
+    }
+
+    private fun readFileAsBase64(uri: Uri): String? {
+        return try {
+            contentResolver.openInputStream(uri)?.use { input ->
+                val bytes = input.readBytes()
+                if (bytes.size > 10 * 1024 * 1024) {
+                    Toast.makeText(this, "Ukuran file terlalu besar (Maks 10 MB)", Toast.LENGTH_SHORT).show()
+                    null
+                } else {
+                    Base64.encodeToString(bytes, Base64.NO_WRAP)
+                }
+            }
+        } catch (_: Exception) {
+            Toast.makeText(this, "Gagal membaca file yang dipilih", Toast.LENGTH_SHORT).show()
+            null
+        }
+    }
+
+    private fun resolveFileMeta(uri: Uri): Pair<String, String> {
+        var displayName = "file_lampiran"
+        var sizeBytes: Long = -1L
+
+        try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0) {
+                        val name = cursor.getString(nameIndex)
+                        if (!name.isNullOrBlank()) displayName = name
+                    }
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                        sizeBytes = cursor.getLong(sizeIndex)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            uri.lastPathSegment?.let { displayName = it }
+        }
+
+        val sizeFormatted = when {
+            sizeBytes < 0 -> "Ukuran tidak diketahui"
+            sizeBytes < 1024 -> "$sizeBytes B"
+            sizeBytes < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", sizeBytes / 1024.0)
+            else -> String.format(Locale.US, "%.2f MB", sizeBytes / (1024.0 * 1024.0))
+        }
+        return Pair(displayName, sizeFormatted)
     }
 }

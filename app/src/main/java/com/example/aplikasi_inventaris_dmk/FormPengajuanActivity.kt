@@ -72,20 +72,6 @@ class FormPengajuanActivity : AppCompatActivity() {
             val mime = contentResolver.getType(uri) ?: "*/*"
             val (rawName, sizeStr) = resolveFileMeta(uri)
             val resolvedName = ensureExtension(rawName, mime)
-            val ext = resolvedName.substringAfterLast('.', "").lowercase(Locale.ROOT)
-
-            if (ext !in allowedExtensions) {
-                resetSelectedFile()
-                AlertDialog.Builder(this)
-                    .setTitle("Format File Tidak Didukung")
-                    .setMessage(
-                        "File \"$resolvedName\" tidak dapat dilampirkan.\n\n" +
-                        "Format yang diizinkan server: JPG, JPEG, PNG, PDF, DOC, DOCX, XLS, XLSX."
-                    )
-                    .setPositiveButton("Mengerti", null)
-                    .show()
-                return@registerForActivityResult
-            }
 
             val base64Data = readFileAsBase64(uri)
             if (base64Data == null) {
@@ -110,8 +96,8 @@ class FormPengajuanActivity : AppCompatActivity() {
         selectedFileName = null
         selectedFileBase64 = null
         selectedFileMime = null
-        tvSelectedFileName.text = "Belum ada file dipilih"
-        tvSelectedFileInfo.text = "Format: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (Maks 8 MB)"
+        tvSelectedFileName.text = "Belum ada file dipilih (Opsional)"
+        tvSelectedFileInfo.text = "Mendukung semua jenis file (Foto, PDF, Dokumen, Excel, dll)"
         btnPilihFile.text = "Pilih File"
         btnLihatFile.visibility = View.GONE
     }
