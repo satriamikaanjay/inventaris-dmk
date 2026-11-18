@@ -88,10 +88,18 @@ class HomeActivity : AppCompatActivity() {
         findViewById<CardView>(R.id.btnAjukanBaru)?.setOnClickListener { openInventory() }
 
         // Navigasi ke Data Stok Barang (Sinkron Web)
-        findViewById<CardView>(R.id.btnDataStok)?.setOnClickListener {
-            val nextIntent = Intent(this, DataStokActivity::class.java)
+        val openDataStok = {
+            val nextIntent = Intent(this, DataStokActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            }
             startActivity(nextIntent)
         }
+        findViewById<CardView>(R.id.btnDataStok)?.setOnClickListener { openDataStok() }
+        findViewById<LinearLayout>(R.id.btnNavStok)?.setOnClickListener { openDataStok() }
 
         // Navigasi ke Scan QR
         val openScan = {

@@ -1,5 +1,6 @@
 package com.example.aplikasi_inventaris_dmk
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
@@ -163,6 +164,57 @@ class DataStokActivity : AppCompatActivity() {
             currentFilter = FilterStatus.HABIS
             updateFilterTabsUi()
             applyFilters()
+        }
+
+        val userName = intent.getStringExtra("USER_NAME") ?: "Pengguna"
+        val userEmail = intent.getStringExtra("USER_EMAIL") ?: ""
+        val userRole = intent.getStringExtra("USER_ROLE") ?: ""
+        val userId = intent.getIntExtra("USER_ID", 0)
+
+        findViewById<LinearLayout>(R.id.btnNavHome)?.setOnClickListener {
+            startActivity(Intent(this, HomeActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            })
+            finish()
+        }
+
+        findViewById<LinearLayout>(R.id.btnNavInventory)?.setOnClickListener {
+            startActivity(Intent(this, InventoryActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            })
+            finish()
+        }
+
+        findViewById<View>(R.id.btnNavScan)?.setOnClickListener {
+            startActivity(Intent(this, ScanActivity::class.java).apply {
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            })
+        }
+
+        findViewById<LinearLayout>(R.id.btnNavStok)?.setOnClickListener {
+            rvDataStok.smoothScrollToPosition(0)
+        }
+
+        findViewById<LinearLayout>(R.id.btnNavHistory)?.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            })
+            finish()
         }
     }
 

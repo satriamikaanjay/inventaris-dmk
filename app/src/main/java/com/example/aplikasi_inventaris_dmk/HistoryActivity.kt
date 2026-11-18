@@ -91,6 +91,19 @@ class HistoryActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
+        // Navigasi ke Data Stok
+        findViewById<LinearLayout>(R.id.btnNavStok)?.setOnClickListener {
+            val intent = Intent(this, DataStokActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("USER_NAME", userName)
+                putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole)
+                putExtra("USER_ID", userId)
+            }
+            startActivity(intent)
+            finish()
+        }
+
         // Refresh & Logout
         findViewById<ImageView>(R.id.ivNotification)?.setOnClickListener {
             Toast.makeText(this, "Memperbarui status pengajuan...", Toast.LENGTH_SHORT).show()

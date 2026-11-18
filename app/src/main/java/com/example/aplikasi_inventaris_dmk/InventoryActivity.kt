@@ -125,6 +125,15 @@ class InventoryActivity : AppCompatActivity() {
                 putExtra("USER_ROLE", userRole); putExtra("USER_ID", userId)
             })
         }
+        val openDataStok = {
+            startActivity(Intent(this, DataStokActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                putExtra("USER_NAME", userName); putExtra("USER_EMAIL", userEmail)
+                putExtra("USER_ROLE", userRole); putExtra("USER_ID", userId)
+            })
+            finish()
+        }
+        findViewById<LinearLayout>(R.id.btnNavStok)?.setOnClickListener { openDataStok() }
         findViewById<LinearLayout>(R.id.btnNavHistory)?.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
@@ -139,7 +148,7 @@ class InventoryActivity : AppCompatActivity() {
 
         // Shortcut ke Data Stok Barang
         findViewById<LinearLayout>(R.id.btnShortcutDataStok)?.setOnClickListener {
-            startActivity(Intent(this, DataStokActivity::class.java))
+            openDataStok()
         }
 
         // Label filter aktif → klik untuk reset
