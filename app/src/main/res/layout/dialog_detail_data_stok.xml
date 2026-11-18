@@ -203,36 +203,24 @@
                 android:textSize="12.5sp" />
         </LinearLayout>
 
-        <!-- Label Pilihan Pengajuan -->
+        <!-- Label Pengajuan Permintaan -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:layout_marginBottom="8dp"
-            android:text="Pilih Jenis Pengajuan Data Stok:"
+            android:text="Pinjam / Minta Stok Barang Ini:"
             android:textColor="#0F172A"
             android:textSize="12.5sp"
             android:textStyle="bold" />
 
-        <!-- 2 Button Utama: Pengajuan Permintaan & Pengajuan Lainnya -->
+        <!-- Button Pengajuan Permintaan -->
         <Button
             android:id="@+id/btnPengajuanPermintaanStok"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:backgroundTint="#1C4E8F"
             android:text="📥 Pengajuan Permintaan"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="13.5sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btnPengajuanLainnyaStok"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#047857"
-            android:text="📝 Pengajuan Lainnya"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="13.5sp"

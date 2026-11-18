@@ -328,12 +328,19 @@ class HistoryActivity : AppCompatActivity() {
         }
         inner.addView(tvJenis)
 
-        // Jika Pengajuan Stok: tampilkan Jumlah Stok & Satuan
+        // Jika Pengajuan Stok: tampilkan Jumlah Stok & Satuan (+ Harga jika ada)
         if (isStokItem) {
             val qty = item.unitJumlah ?: 1
             val sat = item.satuan?.takeIf { it.isNotBlank() && it != "-" } ?: "Unit"
+            val hargaVal = item.nilaiEstimasi ?: 0.0
+            val hargaSuffix = if (hargaVal > 0) {
+                val nf = java.text.NumberFormat.getNumberInstance(java.util.Locale.Builder().setLanguage("id").setRegion("ID").build())
+                " • Harga: Rp ${nf.format(hargaVal.toLong())}"
+            } else {
+                ""
+            }
             val tvJumlahStok = TextView(ctx).apply {
-                text = "Jumlah Stok: $qty $sat"
+                text = "Jumlah Stok: $qty $sat$hargaSuffix"
                 textSize = 11.5f
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(Color.parseColor("#047857"))

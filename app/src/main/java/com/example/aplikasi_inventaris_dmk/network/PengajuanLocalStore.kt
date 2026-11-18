@@ -76,6 +76,7 @@ object PengajuanLocalStore {
         kategori: String?,
         unitJumlah: Int? = null,
         satuan: String? = null,
+        nilaiEstimasi: Double? = null,
         lokasi: String?,
         cabangAsal: String? = null,
         ruanganAsal: String? = null,
@@ -104,6 +105,7 @@ object PengajuanLocalStore {
         val resolvedQty = unitJumlah ?: serverItem?.unitJumlah ?: 1
         val resolvedSatuan = satuan ?: serverItem?.satuan ?: "-"
         val resolvedStokId = dataStokId ?: serverItem?.dataStokId
+        val resolvedHarga = nilaiEstimasi ?: serverItem?.nilaiEstimasi ?: 0.0
 
         val obj = JSONObject().apply {
             put("id", newId)
@@ -118,6 +120,7 @@ object PengajuanLocalStore {
             put("kategori", kategori ?: "-")
             put("unit_jumlah", resolvedQty)
             put("satuan", resolvedSatuan)
+            put("nilai_estimasi", resolvedHarga)
             put("lokasi", lokasi ?: "-")
             put("cabang_asal", cabangAsal ?: "-")
             put("ruangan_asal", ruanganAsal ?: "-")
@@ -163,6 +166,7 @@ object PengajuanLocalStore {
             kategori = kategori,
             unitJumlah = resolvedQty,
             satuan = resolvedSatuan,
+            nilaiEstimasi = resolvedHarga,
             lokasi = lokasi,
             cabangAsal = cabangAsal,
             ruanganAsal = ruanganAsal,
@@ -216,6 +220,7 @@ object PengajuanLocalStore {
                         kategori = o.optString("kategori", "-"),
                         unitJumlah = o.optInt("unit_jumlah", 1).takeIf { it > 0 } ?: 1,
                         satuan = o.optString("satuan", "-"),
+                        nilaiEstimasi = o.optDouble("nilai_estimasi", 0.0).takeIf { !it.isNaN() && it > 0.0 },
                         lokasi = o.optString("lokasi", "-"),
                         cabangAsal = o.optString("cabang_asal", "-"),
                         ruanganAsal = o.optString("ruangan_asal", "-"),
@@ -267,6 +272,7 @@ object PengajuanLocalStore {
                 put("kategori", item.kategori ?: "-")
                 put("unit_jumlah", item.unitJumlah ?: 1)
                 put("satuan", item.satuan ?: "-")
+                put("nilai_estimasi", item.nilaiEstimasi ?: 0.0)
                 put("lokasi", item.lokasi ?: "-")
                 put("cabang_asal", item.cabangAsal ?: "-")
                 put("ruangan_asal", item.ruanganAsal ?: "-")

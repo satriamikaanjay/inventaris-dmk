@@ -80,6 +80,7 @@ class DataStokActivity : AppCompatActivity() {
     private lateinit var btnFilterSemua: TextView
     private lateinit var btnFilterTersedia: TextView
     private lateinit var btnFilterHabis: TextView
+    private lateinit var btnPengajuanLainnyaLuar: Button
 
     private lateinit var adapter: DataStokAdapter
 
@@ -147,6 +148,7 @@ class DataStokActivity : AppCompatActivity() {
         btnFilterSemua = findViewById(R.id.btnFilterSemua)
         btnFilterTersedia = findViewById(R.id.btnFilterTersedia)
         btnFilterHabis = findViewById(R.id.btnFilterHabis)
+        btnPengajuanLainnyaLuar = findViewById(R.id.btnPengajuanLainnyaLuar)
 
         swipeRefresh.setColorSchemeColors(Color.parseColor("#1C4E8F"), Color.parseColor("#2E7D32"))
     }
@@ -206,6 +208,11 @@ class DataStokActivity : AppCompatActivity() {
             currentFilter = FilterStatus.HABIS
             updateFilterTabsUi()
             applyFilters()
+        }
+
+        // Tombol Pengajuan Lainnya di luar daftar (untuk mengajukan barang yang belum ada di Data Stok)
+        btnPengajuanLainnyaLuar.setOnClickListener {
+            showFormPengajuanLainnyaStokDialog()
         }
 
         findViewById<LinearLayout>(R.id.btnNavHome)?.setOnClickListener {
@@ -578,9 +585,7 @@ class DataStokActivity : AppCompatActivity() {
     }
 
     /**
-     * Menampilkan popup Detail Data Stok beserta 2 tombol:
-     * 1. Pengajuan Permintaan
-     * 2. Pengajuan Lainnya
+     * Menampilkan popup Detail Data Stok beserta tombol Pengajuan Permintaan.
      */
     private fun showStokDetailDialog(item: StokItem) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_detail_data_stok, null)
@@ -608,7 +613,6 @@ class DataStokActivity : AppCompatActivity() {
         val tvInfoKonversi = view.findViewById<TextView>(R.id.tvDetailInfoKonversi)
         val tvKeterangan = view.findViewById<TextView>(R.id.tvDetailKeteranganStok)
         val btnPermintaan = view.findViewById<Button>(R.id.btnPengajuanPermintaanStok)
-        val btnLainnya = view.findViewById<Button>(R.id.btnPengajuanLainnyaStok)
         val btnTutup = view.findViewById<Button>(R.id.btnTutupDetailStok)
 
         tvKode.text = kodeStok
@@ -651,12 +655,7 @@ class DataStokActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             dialog.dismiss()
-            showFormPengajuanStokDialog(item, isPermintaan = true)
-        }
-
-        btnLainnya.setOnClickListener {
-            dialog.dismiss()
-            showFormPengajuanStokDialog(item, isPermintaan = false)
+            showFormPengajuanPermintaanStokDialog(item)
         }
 
         dialog.show()
@@ -667,14 +666,13 @@ class DataStokActivity : AppCompatActivity() {
     }
 
     /**
-     * Menampilkan Form Pengajuan Permintaan / Pengajuan Lainnya untuk item Data Stok:
+     * Menampilkan Form Pengajuan Permintaan untuk item yang sudah ada di Data Stok:
      * - Nama pemohon otomatis terisi dari akun yang login
      * - Pilihan satuan dasar atau satuan konversi lebih besar (Slop / Dus)
      * - Validasi tidak bisa meminjam melebihi stok yang tersedia
      * - Textbox deskripsi / keterangan (opsional)
-     * - Sinkron langsung ke halaman web bagian Pengajuan Admin (Data Stok)
      */
-    private fun showFormPengajuanStokDialog(item: StokItem, isPermintaan: Boolean) {
+    private fun showFormPengajuanPermintaanStokDialog(item: StokItem) {
         resolveActiveUserAccount()
 
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_form_pengajuan_stok, null)
@@ -711,19 +709,11 @@ class DataStokActivity : AppCompatActivity() {
         val btnBatal = view.findViewById<Button>(R.id.btnBatalFormStok)
         val btnSubmit = view.findViewById<Button>(R.id.btnSubmitFormStok)
 
-        if (isPermintaan) {
-            tvBadgeJenis.text = "PENGAJUAN PERMINTAAN (DATA STOK)"
-            tvTitleForm.text = "Form Pengajuan Permintaan"
-            tvLabelJumlah.text = "Jumlah Stok yang Ingin Dipinjam / Diminta"
-            btnSubmit.text = "Ajukan Permintaan"
-            btnSubmit.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1C4E8F"))
-        } else {
-            tvBadgeJenis.text = "PENGAJUAN LAINNYA (DATA STOK)"
-            tvTitleForm.text = "Form Pengajuan Lainnya"
-            tvLabelJumlah.text = "Jumlah Stok Terkait"
-            btnSubmit.text = "Ajukan Lainnya"
-            btnSubmit.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#047857"))
-        }
+        tvBadgeJenis.text = "PENGAJUAN PERMINTAAN (DATA STOK)"
+        tvTitleForm.text = "Form Pengajuan Permintaan"
+        tvLabelJumlah.text = "Jumlah Stok yang Ingin Dipinjam / Diminta"
+        btnSubmit.text = "Ajukan Permintaan"
+        btnSubmit.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1C4E8F"))
 
         tvNamaBarang.text = item.namaBarang ?: "Barang Stok"
         tvKode.text = "Kode Stok: $kodeStok"
@@ -759,7 +749,6 @@ class DataStokActivity : AppCompatActivity() {
 
         var isSubmitting = false
 
-        // Fungsi untuk menghitung konversi & memvalidasi apakah melebihi stok tersedia
         val validateAndRefreshPreview = {
             val selectedOpt = (spinnerSatuan.selectedItem as? SatuanConversionOption)
                 ?: conversionOptions.first()
@@ -791,7 +780,7 @@ class DataStokActivity : AppCompatActivity() {
                 etJumlah.error = "Melebihi stok tersedia (${numberFormat.format(stokTersedia)} ${selectedOpt.baseSatuan})"
                 btnSubmit.isEnabled = false
                 btnSubmit.alpha = 0.5f
-            } else if (isPermintaan && stokTersedia <= 0) {
+            } else if (stokTersedia <= 0) {
                 boxValidasi.setBackgroundResource(R.drawable.bg_badge_red)
                 tvValidasiInfo.setTextColor(Color.parseColor("#C62828"))
                 tvValidasiInfo.text = "❌ Stok barang ini sedang habis (0 ${selectedOpt.baseSatuan})."
@@ -889,8 +878,7 @@ class DataStokActivity : AppCompatActivity() {
 
             val totalBaseQty = totalBaseQtyLong.toInt()
             val rawDeskripsi = etDeskripsi.text?.toString()?.trim() ?: ""
-            val jenisApi = if (isPermintaan) "permintaan" else "lainnya_stok"
-            val jenisLabelSuccess = if (isPermintaan) "Pengajuan Permintaan Stok" else "Pengajuan Lainnya (Data Stok)"
+            val jenisApi = "permintaan"
 
             val keteranganFinal = buildString {
                 if (selectedOpt.multiplier > 1) {
@@ -901,8 +889,7 @@ class DataStokActivity : AppCompatActivity() {
                     append(rawDeskripsi)
                 }
                 if (isEmpty()) {
-                    val prefixText = if (isPermintaan) "Permintaan peminjaman stok" else "Pengajuan stok lainnya"
-                    append("$prefixText sebanyak $totalBaseQty ${selectedOpt.baseSatuan} oleh $currentUserName")
+                    append("Permintaan peminjaman stok sebanyak $totalBaseQty ${selectedOpt.baseSatuan} oleh $currentUserName")
                 }
             }
 
@@ -926,6 +913,7 @@ class DataStokActivity : AppCompatActivity() {
                 kategoriNama = "Data Stok",
                 unitJumlah = totalBaseQty,
                 satuan = selectedOpt.baseSatuan,
+                nilaiEstimasi = null,
                 lokasi = "Gudang Data Stok",
                 cabangAsal = "Pusat",
                 ruanganAsal = "Gudang Stok",
@@ -948,7 +936,7 @@ class DataStokActivity : AppCompatActivity() {
                     if (isOk) {
                         val savedItem = PengajuanLocalStore.saveSubmission(
                             context = this@DataStokActivity,
-                            serverItem = body?.data,
+                            serverItem = body.data,
                             userId = if (currentUserId > 0) currentUserId else null,
                             userName = currentUserName,
                             dataStokId = item.id,
@@ -957,6 +945,7 @@ class DataStokActivity : AppCompatActivity() {
                             kategori = "Data Stok",
                             unitJumlah = totalBaseQty,
                             satuan = selectedOpt.baseSatuan,
+                            nilaiEstimasi = null,
                             lokasi = "Gudang Data Stok",
                             cabangAsal = "Pusat",
                             ruanganAsal = "Gudang Stok",
@@ -978,10 +967,10 @@ class DataStokActivity : AppCompatActivity() {
                         }
 
                         AlertDialog.Builder(this@DataStokActivity)
-                            .setTitle("✅ Pengajuan Berhasil Dikirim")
+                            .setTitle("✅ Pengajuan Permintaan Terkirim")
                             .setMessage(
                                 "Nomor Pengajuan: ${savedItem.nomorPengajuan ?: "-"}\n" +
-                                "Jenis: $jenisLabelSuccess\n" +
+                                "Jenis: Pengajuan Permintaan (Data Stok)\n" +
                                 "Pemohon: $currentUserName\n" +
                                 "Barang: ${item.namaBarang ?: "-"} ($kodeStok)\n" +
                                 "Jumlah: $infoSatuanPinjam\n" +
@@ -1000,7 +989,7 @@ class DataStokActivity : AppCompatActivity() {
                             .show()
                     } else {
                         btnSubmit.isEnabled = true
-                        btnSubmit.text = if (isPermintaan) "Ajukan Permintaan" else "Ajukan Lainnya"
+                        btnSubmit.text = "Ajukan Permintaan"
                         btnBatal.isEnabled = true
                         spinnerSatuan.isEnabled = true
                         etJumlah.isEnabled = true
@@ -1016,7 +1005,7 @@ class DataStokActivity : AppCompatActivity() {
                 override fun onFailure(call: Call<PengajuanSubmitResponse>, t: Throwable) {
                     isSubmitting = false
                     btnSubmit.isEnabled = true
-                    btnSubmit.text = if (isPermintaan) "Ajukan Permintaan" else "Ajukan Lainnya"
+                    btnSubmit.text = "Ajukan Permintaan"
                     btnBatal.isEnabled = true
                     spinnerSatuan.isEnabled = true
                     etJumlah.isEnabled = true
@@ -1032,6 +1021,308 @@ class DataStokActivity : AppCompatActivity() {
         }
 
         validateAndRefreshPreview()
+        dialog.show()
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.94).toInt(),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    /**
+     * Menampilkan Form Pengajuan Lainnya (diletakkan di luar Detail Stok):
+     * Digunakan untuk mengajukan barang baru / barang yang belum ada di Data Stok,
+     * lengkap dengan input Nama Barang, Jumlah, Satuan, Harga (Rp), dan Deskripsi (opsional).
+     */
+    private fun showFormPengajuanLainnyaStokDialog() {
+        resolveActiveUserAccount()
+
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_form_pengajuan_lainnya_stok, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .setCancelable(false)
+            .create()
+
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+
+        val btnClose = view.findViewById<TextView>(R.id.btnCloseFormLainnyaStok)
+        val etNamaPemohon = view.findViewById<EditText>(R.id.etLainnyaNamaPemohon)
+        val etNamaBarang = view.findViewById<EditText>(R.id.etLainnyaNamaBarang)
+        val btnMinus = view.findViewById<Button>(R.id.btnMinusLainnyaJumlah)
+        val etJumlah = view.findViewById<EditText>(R.id.etLainnyaJumlah)
+        val btnPlus = view.findViewById<Button>(R.id.btnPlusLainnyaJumlah)
+        val spinnerSatuan = view.findViewById<Spinner>(R.id.spinnerLainnyaSatuan)
+        val etHarga = view.findViewById<EditText>(R.id.etLainnyaHarga)
+        val tvFormatHarga = view.findViewById<TextView>(R.id.tvLainnyaFormatHarga)
+        val etDeskripsi = view.findViewById<EditText>(R.id.etLainnyaDeskripsi)
+        val btnBatal = view.findViewById<Button>(R.id.btnBatalLainnyaStok)
+        val btnSubmit = view.findViewById<Button>(R.id.btnSubmitLainnyaStok)
+
+        // 1. Nama otomatis terisi dari akun yang login
+        etNamaPemohon.setText(currentUserName)
+
+        // 2. Pilihan satuan barang
+        val daftarSatuan = listOf(
+            "Pcs",
+            "Buah",
+            "Unit",
+            "Roll",
+            "Slop",
+            "Dus",
+            "Rim",
+            "Pack",
+            "Ball",
+            "Botol",
+            "Kg",
+            "Kilo",
+            "Ikat",
+            "Biji",
+            "Set"
+        )
+        val satuanAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            daftarSatuan
+        ).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        spinnerSatuan.adapter = satuanAdapter
+
+        var isSubmitting = false
+
+        val updatePreviewHarga = {
+            val rawHarga = etHarga.text?.toString()?.replace("[^0-9]".toRegex(), "") ?: ""
+            val hargaVal = rawHarga.toLongOrNull() ?: 0L
+            val qtyVal = (etJumlah.text?.toString()?.trim()?.toIntOrNull() ?: 1).coerceAtLeast(1)
+            if (hargaVal > 0L) {
+                tvFormatHarga.text = "Nominal Harga: Rp ${numberFormat.format(hargaVal)} (Untuk $qtyVal ${spinnerSatuan.selectedItem ?: "Unit"})"
+                tvFormatHarga.setTextColor(Color.parseColor("#047857"))
+            } else {
+                tvFormatHarga.text = "Masukkan harga / estimasi harga barang dalam Rupiah"
+                tvFormatHarga.setTextColor(Color.parseColor("#64748B"))
+            }
+        }
+
+        etHarga.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updatePreviewHarga()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        etJumlah.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updatePreviewHarga()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        spinnerSatuan.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, v: View?, position: Int, id: Long) {
+                updatePreviewHarga()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                updatePreviewHarga()
+            }
+        }
+
+        btnMinus.setOnClickListener {
+            if (isSubmitting) return@setOnClickListener
+            val current = etJumlah.text?.toString()?.trim()?.toIntOrNull() ?: 1
+            val next = maxOf(1, current - 1)
+            etJumlah.setText(next.toString())
+            etJumlah.setSelection(etJumlah.text.length)
+        }
+
+        btnPlus.setOnClickListener {
+            if (isSubmitting) return@setOnClickListener
+            val current = etJumlah.text?.toString()?.trim()?.toIntOrNull() ?: 0
+            val next = current + 1
+            etJumlah.setText(next.toString())
+            etJumlah.setSelection(etJumlah.text.length)
+        }
+
+        btnClose.setOnClickListener {
+            if (!isSubmitting) dialog.dismiss()
+        }
+        btnBatal.setOnClickListener {
+            if (!isSubmitting) dialog.dismiss()
+        }
+
+        btnSubmit.setOnClickListener {
+            if (isSubmitting) return@setOnClickListener
+
+            val inputNamaBarang = etNamaBarang.text?.toString()?.trim() ?: ""
+            if (inputNamaBarang.isEmpty()) {
+                etNamaBarang.error = "Nama barang wajib diisi"
+                etNamaBarang.requestFocus()
+                Toast.makeText(this, "Silakan isi nama barang yang ingin diajukan!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val inputQty = etJumlah.text?.toString()?.trim()?.toIntOrNull() ?: 0
+            if (inputQty <= 0) {
+                etJumlah.error = "Minimal 1"
+                etJumlah.requestFocus()
+                Toast.makeText(this, "Jumlah barang minimal 1!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val rawHarga = etHarga.text?.toString()?.replace("[^0-9]".toRegex(), "") ?: ""
+            val inputHargaLong = rawHarga.toLongOrNull() ?: 0L
+            if (inputHargaLong <= 0L) {
+                etHarga.error = "Harga wajib diisi"
+                etHarga.requestFocus()
+                Toast.makeText(this, "Silakan masukkan harga / estimasi harga barang!", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val selectedSatuan = spinnerSatuan.selectedItem?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: "Unit"
+            val rawDeskripsi = etDeskripsi.text?.toString()?.trim() ?: ""
+            val hargaFormatted = "Rp ${numberFormat.format(inputHargaLong)}"
+
+            val keteranganFinal = buildString {
+                append("[Barang Baru di Luar Stok • Harga: $hargaFormatted]")
+                if (rawDeskripsi.isNotEmpty()) {
+                    append(" — ")
+                    append(rawDeskripsi)
+                }
+            }
+
+            val kodeStokBaru = "STK-BARU"
+            val jenisApi = "lainnya_stok"
+
+            isSubmitting = true
+            btnSubmit.isEnabled = false
+            btnSubmit.text = "Mengirim..."
+            btnBatal.isEnabled = false
+            etNamaBarang.isEnabled = false
+            etJumlah.isEnabled = false
+            spinnerSatuan.isEnabled = false
+            etHarga.isEnabled = false
+            etDeskripsi.isEnabled = false
+
+            val requestBody = PengajuanRequest(
+                userId = if (currentUserId > 0) currentUserId else null,
+                namaUser = currentUserName,
+                pemohon = currentUserName,
+                asetId = null,
+                dataStokId = null,
+                kodeAset = kodeStokBaru,
+                namaAset = inputNamaBarang,
+                kategori = "Data Stok (Barang Baru)",
+                kategoriNama = "Data Stok (Barang Baru)",
+                unitJumlah = inputQty,
+                satuan = selectedSatuan,
+                nilaiEstimasi = inputHargaLong.toDouble(),
+                lokasi = "Pengajuan Barang Baru",
+                cabangAsal = "Pusat",
+                ruanganAsal = "Gudang Stok",
+                cabangTujuan = "Pusat",
+                ruanganTujuan = "Gudang Stok",
+                jenis = jenisApi,
+                jenisPengajuan = jenisApi,
+                keterangan = keteranganFinal
+            )
+
+            ApiClient.instance.submitPengajuan(requestBody).enqueue(object : Callback<PengajuanSubmitResponse> {
+                override fun onResponse(
+                    call: Call<PengajuanSubmitResponse>,
+                    response: Response<PengajuanSubmitResponse>
+                ) {
+                    isSubmitting = false
+                    val body = response.body()
+                    val isOk = response.isSuccessful && body != null && (body.status == "success" || body.success == true)
+
+                    if (isOk) {
+                        val savedItem = PengajuanLocalStore.saveSubmission(
+                            context = this@DataStokActivity,
+                            serverItem = body.data,
+                            userId = if (currentUserId > 0) currentUserId else null,
+                            userName = currentUserName,
+                            dataStokId = null,
+                            kodeAset = kodeStokBaru,
+                            namaAset = inputNamaBarang,
+                            kategori = "Data Stok (Barang Baru)",
+                            unitJumlah = inputQty,
+                            satuan = selectedSatuan,
+                            nilaiEstimasi = inputHargaLong.toDouble(),
+                            lokasi = "Pengajuan Barang Baru",
+                            cabangAsal = "Pusat",
+                            ruanganAsal = "Gudang Stok",
+                            cabangTujuan = "Pusat",
+                            ruanganTujuan = "Gudang Stok",
+                            jenisPengajuan = jenisApi,
+                            keterangan = keteranganFinal,
+                            fileName = null,
+                            localFileUri = null
+                        )
+
+                        dialog.dismiss()
+                        loadDataStok(showLoadingIndicator = false)
+
+                        AlertDialog.Builder(this@DataStokActivity)
+                            .setTitle("✅ Pengajuan Lainnya Terkirim")
+                            .setMessage(
+                                "Nomor Pengajuan: ${savedItem.nomorPengajuan ?: "-"}\n" +
+                                "Jenis: Pengajuan Lainnya (Data Stok)\n" +
+                                "Pemohon: $currentUserName\n" +
+                                "Nama Barang: $inputNamaBarang\n" +
+                                "Jumlah: ${numberFormat.format(inputQty)} $selectedSatuan\n" +
+                                "Harga: $hargaFormatted\n" +
+                                "Keterangan: ${rawDeskripsi.ifEmpty { "-" }}\n\n" +
+                                "Pengajuan ini telah masuk ke halaman Pengajuan Admin di Web (tab Pengajuan Lainnya Data Stok)."
+                            )
+                            .setPositiveButton("Lihat Riwayat") { _, _ ->
+                                startActivity(Intent(this@DataStokActivity, HistoryActivity::class.java).apply {
+                                    putExtra("USER_NAME", currentUserName)
+                                    putExtra("USER_EMAIL", currentUserEmail)
+                                    putExtra("USER_ROLE", currentUserRole)
+                                    putExtra("USER_ID", currentUserId)
+                                })
+                            }
+                            .setNegativeButton("Selesai", null)
+                            .show()
+                    } else {
+                        btnSubmit.isEnabled = true
+                        btnSubmit.text = "Ajukan Lainnya"
+                        btnBatal.isEnabled = true
+                        etNamaBarang.isEnabled = true
+                        etJumlah.isEnabled = true
+                        spinnerSatuan.isEnabled = true
+                        etHarga.isEnabled = true
+                        etDeskripsi.isEnabled = true
+
+                        val fallback = "Gagal mengirim pengajuan lainnya (HTTP ${response.code()})."
+                        val errMsg = body?.message?.takeIf { it.isNotBlank() }
+                            ?: ApiClient.extractErrorMessage(response, fallback)
+                        Toast.makeText(this@DataStokActivity, "❌ $errMsg", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                override fun onFailure(call: Call<PengajuanSubmitResponse>, t: Throwable) {
+                    isSubmitting = false
+                    btnSubmit.isEnabled = true
+                    btnSubmit.text = "Ajukan Lainnya"
+                    btnBatal.isEnabled = true
+                    etNamaBarang.isEnabled = true
+                    etJumlah.isEnabled = true
+                    spinnerSatuan.isEnabled = true
+                    etHarga.isEnabled = true
+                    etDeskripsi.isEnabled = true
+
+                    Toast.makeText(
+                        this@DataStokActivity,
+                        "❌ Koneksi ke server gagal: ${t.localizedMessage}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            })
+        }
+
+        updatePreviewHarga()
         dialog.show()
         dialog.window?.setLayout(
             (resources.displayMetrics.widthPixels * 0.94).toInt(),
