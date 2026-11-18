@@ -46,6 +46,11 @@
             android:name=".InventoryActivity"
             android:exported="false" />
 
+        <!-- Data Stok Activity (Sinkron Web) -->
+        <activity
+            android:name=".DataStokActivity"
+            android:exported="true" />
+
         <!-- Scan Activity -->
         <activity
             android:name=".ScanActivity"

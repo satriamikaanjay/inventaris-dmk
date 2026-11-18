@@ -120,6 +120,23 @@ data class PengajuanItem(
     @SerializedName("respon_oleh") val responOleh: String?
 )
 
+data class StokListResponse(
+    @SerializedName("status") val status: String,
+    @SerializedName("total") val total: Int?,
+    @SerializedName("data") val data: List<StokItem>?
+)
+
+data class StokItem(
+    @SerializedName("id") val id: Int,
+    @SerializedName("urutan") val urutan: Int?,
+    @SerializedName("nama_barang") val namaBarang: String?,
+    @SerializedName("jumlah") val jumlah: Int?,
+    @SerializedName("satuan") val satuan: String?,
+    @SerializedName("keterangan") val keterangan: String?,
+    @SerializedName("tersedia") val tersedia: Boolean?
+)
+
+
 data class PengajuanSubmitResponse(
     @SerializedName("status") val status: String?,
     @SerializedName("success") val success: Boolean? = null,

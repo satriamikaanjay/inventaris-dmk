@@ -137,6 +137,11 @@ class InventoryActivity : AppCompatActivity() {
         // Tombol filter icon
         findViewById<LinearLayout>(R.id.btnOpenFilter)?.setOnClickListener { showFilterDialog() }
 
+        // Shortcut ke Data Stok Barang
+        findViewById<LinearLayout>(R.id.btnShortcutDataStok)?.setOnClickListener {
+            startActivity(Intent(this, DataStokActivity::class.java))
+        }
+
         // Label filter aktif → klik untuk reset
         tvActiveFilter.setOnClickListener { resetFilter() }
 

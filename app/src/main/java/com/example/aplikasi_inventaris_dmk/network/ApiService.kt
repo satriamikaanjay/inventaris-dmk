@@ -40,4 +40,7 @@ interface ApiService {
         @Query("user_id") userId: Int?,
         @Query("nama_user") namaUser: String? = null
     ): Call<PengajuanUserResponse>
+
+    @GET("data-stok")
+    fun getDataStok(): Call<StokListResponse>
 }

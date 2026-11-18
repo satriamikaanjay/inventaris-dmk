@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/cardStokRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="14dp"
+    android:layout_marginTop="5dp"
+    android:layout_marginEnd="14dp"
+    android:layout_marginBottom="5dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?android:attr/selectableItemBackground"
+    app:cardBackgroundColor="#FFFFFF"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="1.5dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <!-- Bar Indikator Status Kiri -->
+        <View
+            android:id="@+id/viewIndicatorStok"
+            android:layout_width="5dp"
+            android:layout_height="match_parent"
+            android:background="#2E7D32" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <!-- Nomor Urut Badge Lingkaran/Kotak -->
+            <TextView
+                android:id="@+id/tvUrutanBadge"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_nik_badge"
+                android:gravity="center"
+                android:text="#1"
+                android:textColor="#1C4E8F"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                tools:text="#01" />
+
+            <!-- Informasi Nama Barang & Satuan -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvNamaBarang"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="#0F172A"
+                    android:textSize="14.5sp"
+                    android:textStyle="bold"
+                    tools:text="Lakban Dmk Super Kuat" />
+
+                <TextView
+                    android:id="@+id/tvDetailSatuan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#64748B"
+                    android:textSize="11.5sp"
+                    tools:text="Satuan: Roll • Ket: -" />
+            </LinearLayout>
+
+            <!-- Sisi Kanan: Badge Jumlah & Status Stok -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvJumlahStokBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_btn_blue_square"
+                    android:gravity="center"
+                    android:paddingStart="9dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="9dp"
+                    android:paddingBottom="4dp"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    tools:text="1,968 Roll" />
+
+                <TextView
+                    android:id="@+id/tvStatusTersedia"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Tersedia"
+                    android:textColor="#2E7D32"
+                    android:textSize="10.5sp"
+                    android:textStyle="bold"
+                    tools:text="Tersedia" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

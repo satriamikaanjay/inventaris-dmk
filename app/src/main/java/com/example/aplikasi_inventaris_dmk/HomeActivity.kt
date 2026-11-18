@@ -87,6 +87,12 @@ class HomeActivity : AppCompatActivity() {
         findViewById<LinearLayout>(R.id.btnNavInventory)?.setOnClickListener { openInventory() }
         findViewById<CardView>(R.id.btnAjukanBaru)?.setOnClickListener { openInventory() }
 
+        // Navigasi ke Data Stok Barang (Sinkron Web)
+        findViewById<CardView>(R.id.btnDataStok)?.setOnClickListener {
+            val nextIntent = Intent(this, DataStokActivity::class.java)
+            startActivity(nextIntent)
+        }
+
         // Navigasi ke Scan QR
         val openScan = {
             val nextIntent = Intent(this, ScanActivity::class.java).apply {
