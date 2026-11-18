@@ -9,6 +9,7 @@ Aplikasi Android berbasis Kotlin untuk pengguna cabang pada sistem **Inventaris 
 - **Auto-Discovery Wi-Fi & Status Server Real-Time:** Saat berpindah ke Wi-Fi mana pun (Wi-Fi kampus, rumah, atau hotspot HP), aplikasi otomatis memindai subnet Wi-Fi lokal untuk menemukan server web laptop (`Apache` port `80` maupun `artisan serve` port `8000`) tanpa harus edit kode. Tersedia juga tombol **Atur IP** dan **Cari Server Otomatis di Wi-Fi** untuk pengaturan manual.
 - **Autentikasi & Status Akses Cabang:** Login akun user cabang yang terhubung dengan status akses dari web.
 - **Inventaris & Detail Aset:** Melihat daftar aset per kategori, jumlah unit cabang, detail aset, serta tipe status aset (`Aset Berjalan`, `Aset Tidak Berjalan`, `Aset Tidak Dipakai`).
+- **Data Stok Barang (Sinkron Web):** Melihat seluruh data stok barang dari tabel web (`/api/data-stok`), dilengkapi ringkasan statistik (total jenis barang, stok tersedia, stok habis), pencarian real-time, filter status ketersediaan, pull-to-refresh, dan pop-up detail barang.
 - **Scan QR / Barcode Aset:** Menggunakan CameraX dan Google ML Kit untuk memindai kode aset secara langsung.
 - **Pengajuan Kerusakan, Perbaikan & Perpindahan:**
   - Mendukung lampiran foto/dokumen.
