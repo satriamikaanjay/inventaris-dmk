@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="#FFFFFF"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Baris Atas: Kode Stok + Status Badge + Tombol Close -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvDetailKodeStok"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_nik_badge"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="STK-001"
+                android:textColor="#1C4E8F"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvDetailStatusBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_badge_green"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="TERSEDIA"
+                android:textColor="#2E7D32"
+                android:textSize="10.5sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/btnCloseDetailStok"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_circle_gray"
+                android:gravity="center"
+                android:text="✕"
+                android:textColor="#475569"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Nama Barang Stok -->
+        <TextView
+            android:id="@+id/tvDetailNamaBarang"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="Lakban DMK"
+            android:textColor="#0F172A"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvDetailSubTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Kategori: Data Stok Persediaan • Nomor Urut #1"
+            android:textColor="#64748B"
+            android:textSize="12sp" />
+
+        <!-- Box Informasi Stok Tersedia -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_input_rounded"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="JUMLAH STOK TERSEDIA"
+                        android:textColor="#64748B"
+                        android:textSize="10.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDetailJumlahStok"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="1.968 Roll"
+                        android:textColor="#1C4E8F"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="SATUAN DASAR"
+                        android:textColor="#64748B"
+                        android:textSize="10.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvDetailSatuanDasar"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="Roll"
+                        android:textColor="#0F172A"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Info Konversi Satuan Besar (Tampil bila barang punya konversi Dus/Slop) -->
+            <LinearLayout
+                android:id="@+id/layoutDetailInfoKonversi"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_nik_badge"
+                android:orientation="vertical"
+                android:padding="10dp"
+                android:visibility="visible">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📦 Konversi Satuan Peminjaman / Permintaan:"
+                    android:textColor="#1C4E8F"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvDetailInfoKonversi"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="• 1 Slop = 6 Roll\n• 1 Dus = 9 Roll atau 54 Roll"
+                    android:textColor="#1E293B"
+                    android:textSize="11.5sp" />
+            </LinearLayout>
+
+            <!-- Keterangan / Catatan dari Web -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="10dp"
+                android:background="#E2E8F0" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="KETERANGAN / CATATAN STOK"
+                android:textColor="#64748B"
+                android:textSize="10.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvDetailKeteranganStok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="-"
+                android:textColor="#334155"
+                android:textSize="12.5sp" />
+        </LinearLayout>
+
+        <!-- Label Pilihan Pengajuan -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp"
+            android:text="Pilih Jenis Pengajuan Data Stok:"
+            android:textColor="#0F172A"
+            android:textSize="12.5sp"
+            android:textStyle="bold" />
+
+        <!-- 2 Button Utama: Pengajuan Permintaan & Pengajuan Lainnya -->
+        <Button
+            android:id="@+id/btnPengajuanPermintaanStok"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:backgroundTint="#1C4E8F"
+            android:text="📥 Pengajuan Permintaan"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="13.5sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnPengajuanLainnyaStok"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#047857"
+            android:text="📝 Pengajuan Lainnya"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="13.5sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnTutupDetailStok"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#F1F5F9"
+            android:text="Tutup"
+            android:textAllCaps="false"
+            android:textColor="#475569"
+            android:textSize="12.5sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

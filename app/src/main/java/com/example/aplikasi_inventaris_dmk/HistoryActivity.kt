@@ -284,10 +284,15 @@ class HistoryActivity : AppCompatActivity() {
         rowTop.addView(tvStatus)
         inner.addView(rowTop)
 
-        // Nomor Ajuan & Kode aset
+        // Nomor Ajuan & Kode aset / stok
+        val isStokItem = (item.dataStokId != null && item.dataStokId > 0) ||
+            item.jenisPengajuan.equals("permintaan", ignoreCase = true) ||
+            item.jenisPengajuan.equals("lainnya_stok", ignoreCase = true) ||
+            (item.kodeAset?.startsWith("STK-", ignoreCase = true) == true)
         val noAjuanStr = if (!item.nomorPengajuan.isNullOrBlank()) "${item.nomorPengajuan} • " else ""
+        val kodeLabel = if (isStokItem) "Kode Stok" else "Kode Aset"
         val tvKode = TextView(ctx).apply {
-            text = "${noAjuanStr}Kode Aset: ${item.kodeAset ?: "-"}"
+            text = "${noAjuanStr}$kodeLabel: ${item.kodeAset ?: "-"}"
             textSize = 11f
             setTextColor(Color.parseColor("#64748B"))
             setPadding(0, dpToPx(4), 0, 0)
@@ -305,14 +310,37 @@ class HistoryActivity : AppCompatActivity() {
         inner.addView(divider)
 
         // Jenis pengajuan
-        val jenisLabel = item.jenisPengajuan?.replaceFirstChar { it.uppercase() } ?: "-"
+        val rawJenis = item.jenisPengajuan?.lowercase( java.util.Locale.ROOT ) ?: ""
+        val jenisDisplay = when (rawJenis) {
+            "permintaan" -> "Pengajuan Permintaan (Data Stok)"
+            "lainnya_stok", "stok_lainnya" -> "Pengajuan Lainnya (Data Stok)"
+            "lainnya_aset" -> "Pengajuan Lainnya (Data Aset)"
+            else -> {
+                val cap = item.jenisPengajuan?.replaceFirstChar { it.uppercase() } ?: "-"
+                "Pengajuan $cap"
+            }
+        }
         val tvJenis = TextView(ctx).apply {
-            text = "Jenis Pengajuan: Pengajuan $jenisLabel"
+            text = "Jenis Pengajuan: $jenisDisplay"
             textSize = 12f
             setTypeface(null, Typeface.BOLD)
             setTextColor(Color.parseColor("#1C4E8F"))
         }
         inner.addView(tvJenis)
+
+        // Jika Pengajuan Stok: tampilkan Jumlah Stok & Satuan
+        if (isStokItem) {
+            val qty = item.unitJumlah ?: 1
+            val sat = item.satuan?.takeIf { it.isNotBlank() && it != "-" } ?: "Unit"
+            val tvJumlahStok = TextView(ctx).apply {
+                text = "Jumlah Stok: $qty $sat"
+                textSize = 11.5f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.parseColor("#047857"))
+                setPadding(0, dpToPx(4), 0, 0)
+            }
+            inner.addView(tvJumlahStok)
+        }
 
         // Jika Perpindahan: tampilkan Ruangan Lama & Ruangan Baru
         if (item.jenisPengajuan.equals("perpindahan", ignoreCase = true)) {

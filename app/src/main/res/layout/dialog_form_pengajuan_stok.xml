@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="#FFFFFF"
+    app:cardCornerRadius="20dp"
+    app:cardElevation="8dp">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <!-- Header Dialog Form -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvBadgeJenisFormStok"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_nik_badge"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="3dp"
+                        android:text="PENGAJUAN PERMINTAAN STOK"
+                        android:textColor="#1C4E8F"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvTitleFormStok"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="Form Pengajuan Permintaan"
+                        android:textColor="#0F172A"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btnCloseFormStok"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@drawable/bg_circle_gray"
+                    android:gravity="center"
+                    android:text="✕"
+                    android:textColor="#475569"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Ringkasan Barang Stok yang Dipilih -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/bg_input_rounded"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tvFormStokNamaBarang"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Lakban DMK"
+                            android:textColor="#0F172A"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvFormStokKode"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Kode Stok: STK-001"
+                            android:textColor="#64748B"
+                            android:textSize="11.5sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvFormStokTersediaBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge_green"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="5dp"
+                        android:text="Tersedia: 1.968 Roll"
+                        android:textColor="#2E7D32"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvFormStokKonversiGuide"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="ℹ️ Konversi: 1 Slop = 6 Roll • 1 Dus = 9 Roll atau 54 Roll"
+                    android:textColor="#1C4E8F"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:visibility="visible" />
+            </LinearLayout>
+
+            <!-- 1. Nama Pemohon (Otomatis dari Akun) -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Nama Pemohon (Otomatis dari Akun)"
+                android:textColor="#0F172A"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/etFormStokNamaPemohon"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_rounded"
+                android:enabled="false"
+                android:focusable="false"
+                android:paddingHorizontal="14dp"
+                android:text="Dewi"
+                android:textColor="#1E293B"
+                android:textSize="13.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="✓ Terisi otomatis sesuai akun yang sedang login"
+                android:textColor="#2E7D32"
+                android:textSize="10.5sp" />
+
+            <!-- 2. Pilihan Satuan (Satuan Dasar atau Satuan Konversi Lebih Besar) -->
+            <TextView
+                android:id="@+id/tvLabelPilihSatuanStok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Pilih Satuan Peminjaman / Permintaan"
+                android:textColor="#0F172A"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_rounded"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp">
+
+                <Spinner
+                    android:id="@+id/spinnerSatuanStok"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+            </LinearLayout>
+
+            <!-- 3. Input Jumlah Stok yang Ingin Dipinjam / Diminta -->
+            <TextView
+                android:id="@+id/tvLabelJumlahStok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Jumlah Stok yang Ingin Dipinjam"
+                android:textColor="#0F172A"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnMinusJumlahStok"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:backgroundTint="#E2E8F0"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:padding="0dp"
+                    android:text="−"
+                    android:textColor="#0F172A"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <EditText
+                    android:id="@+id/etJumlahPinjamStok"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input_rounded"
+                    android:gravity="center"
+                    android:hint="Masukkan jumlah"
+                    android:inputType="number"
+                    android:paddingHorizontal="12dp"
+                    android:text="1"
+                    android:textColor="#0F172A"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnPlusJumlahStok"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:backgroundTint="#1C4E8F"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:padding="0dp"
+                    android:text="+"
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Box Preview Konversi & Validasi Stok Real-Time -->
+            <LinearLayout
+                android:id="@+id/boxValidasiStok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_badge_green"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:id="@+id/tvValidasiStokInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:lineSpacingExtra="2dp"
+                    android:text="✓ Total dipinjam: 1 Roll (Sisa stok: 1.967 Roll)"
+                    android:textColor="#2E7D32"
+                    android:textSize="11.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 4. Textbox Deskripsi / Keterangan (Opsional) -->
+            <TextView
+                android:id="@+id/tvLabelDeskripsiStok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Deskripsi / Keterangan (Opsional)"
+                android:textColor="#0F172A"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/etDeskripsiStok"
+                android:layout_width="match_parent"
+                android:layout_height="90dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_rounded"
+                android:gravity="top|start"
+                android:hint="Tuliskan alasan/keperluan meminjam atau meminta stok ini (opsional)..."
+                android:inputType="textMultiLine|textCapSentences"
+                android:padding="12dp"
+                android:textColor="#0F172A"
+                android:textColorHint="#94A3B8"
+                android:textSize="13sp" />
+
+            <!-- Tombol Aksi: Batal & Kirim -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnBatalFormStok"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#F1F5F9"
+                    android:text="Batal"
+                    android:textAllCaps="false"
+                    android:textColor="#475569"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnSubmitFormStok"
+                    android:layout_width="0dp"
+                    android:layout_height="46dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1.5"
+                    android:backgroundTint="#1C4E8F"
+                    android:text="Ajukan Permintaan"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</androidx.cardview.widget.CardView>

@@ -70,9 +70,12 @@ object PengajuanLocalStore {
         serverItem: PengajuanItem? = null,
         userId: Int?,
         userName: String,
+        dataStokId: Int? = null,
         kodeAset: String,
         namaAset: String,
         kategori: String?,
+        unitJumlah: Int? = null,
+        satuan: String? = null,
         lokasi: String?,
         cabangAsal: String? = null,
         ruanganAsal: String? = null,
@@ -98,15 +101,23 @@ object PengajuanLocalStore {
         val statusVal = serverItem?.status ?: "Menunggu"
 
         val cleanKet = keterangan?.trim()?.ifBlank { "-" } ?: "-"
+        val resolvedQty = unitJumlah ?: serverItem?.unitJumlah ?: 1
+        val resolvedSatuan = satuan ?: serverItem?.satuan ?: "-"
+        val resolvedStokId = dataStokId ?: serverItem?.dataStokId
 
         val obj = JSONObject().apply {
             put("id", newId)
             put("nomor_pengajuan", nomorAjuan)
             put("user_id", userId ?: 0)
+            if (resolvedStokId != null && resolvedStokId > 0) {
+                put("data_stok_id", resolvedStokId)
+            }
             put("nama_user", userName)
             put("kode_aset", kodeAset)
             put("nama_aset", namaAset)
             put("kategori", kategori ?: "-")
+            put("unit_jumlah", resolvedQty)
+            put("satuan", resolvedSatuan)
             put("lokasi", lokasi ?: "-")
             put("cabang_asal", cabangAsal ?: "-")
             put("ruangan_asal", ruanganAsal ?: "-")
@@ -145,10 +156,13 @@ object PengajuanLocalStore {
             id = newId,
             nomorPengajuan = nomorAjuan,
             userId = userId,
+            dataStokId = resolvedStokId,
             namaUser = userName,
             kodeAset = kodeAset,
             namaAset = namaAset,
             kategori = kategori,
+            unitJumlah = resolvedQty,
+            satuan = resolvedSatuan,
             lokasi = lokasi,
             cabangAsal = cabangAsal,
             ruanganAsal = ruanganAsal,
@@ -195,10 +209,13 @@ object PengajuanLocalStore {
                         id = o.optInt("id", i + 1),
                         nomorPengajuan = o.optString("nomor_pengajuan", "").takeIf { it.isNotBlank() },
                         userId = itemUserId,
+                        dataStokId = o.optInt("data_stok_id", 0).takeIf { it > 0 },
                         namaUser = itemUserName,
                         kodeAset = o.optString("kode_aset", "-"),
                         namaAset = o.optString("nama_aset", "-"),
                         kategori = o.optString("kategori", "-"),
+                        unitJumlah = o.optInt("unit_jumlah", 1).takeIf { it > 0 } ?: 1,
+                        satuan = o.optString("satuan", "-"),
                         lokasi = o.optString("lokasi", "-"),
                         cabangAsal = o.optString("cabang_asal", "-"),
                         ruanganAsal = o.optString("ruangan_asal", "-"),
@@ -241,10 +258,15 @@ object PengajuanLocalStore {
                 put("id", item.id)
                 put("nomor_pengajuan", item.nomorPengajuan ?: "AJU-${item.id}")
                 put("user_id", item.userId ?: userId ?: 0)
+                if (item.dataStokId != null && item.dataStokId > 0) {
+                    put("data_stok_id", item.dataStokId)
+                }
                 put("nama_user", item.namaUser ?: userName)
                 put("kode_aset", item.kodeAset ?: "-")
                 put("nama_aset", item.namaAset ?: "-")
                 put("kategori", item.kategori ?: "-")
+                put("unit_jumlah", item.unitJumlah ?: 1)
+                put("satuan", item.satuan ?: "-")
                 put("lokasi", item.lokasi ?: "-")
                 put("cabang_asal", item.cabangAsal ?: "-")
                 put("ruangan_asal", item.ruanganAsal ?: "-")
