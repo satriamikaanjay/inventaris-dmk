@@ -92,7 +92,8 @@ object ServerAutoDiscovery {
                 priorityIps.add(net.gateway)
             }
         }
-        // Gateway hotspot Windows & USB adb reverse
+        // Gateway hotspot Windows, Android Emulator host alias, & USB adb reverse
+        priorityIps.add("10.0.2.2")
         priorityIps.add("192.168.137.1")
         priorityIps.add("127.0.0.1")
 
