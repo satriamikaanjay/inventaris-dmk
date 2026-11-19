@@ -33,13 +33,23 @@ object PengajuanLocalStore {
         userRole: String
     ) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
+        val prevUserId = prefs.getInt(KEY_SESSION_USER_ID, -1)
+        val prevUserName = prefs.getString(KEY_SESSION_USER_NAME, "") ?: ""
+        val isDifferentAccount = (prevUserId != -1 && prevUserId != userId) ||
+                (prevUserName.isNotBlank() && !prevUserName.trim().equals(userName.trim(), ignoreCase = true))
+
+        val editor = prefs.edit()
             .putInt(KEY_SESSION_USER_ID, userId)
             .putString(KEY_SESSION_USER_NAME, userName)
             .putString(KEY_SESSION_USER_EMAIL, userEmail)
             .putString(KEY_SESSION_USER_ROLE, userRole)
             .putBoolean(KEY_SESSION_LOGGED_IN, true)
-            .apply()
+
+        if (isDifferentAccount) {
+            editor.remove(KEY_ITEMS)
+            editor.remove(KEY_NOTIFIED_STATUS)
+        }
+        editor.apply()
     }
 
     fun getActiveSession(context: Context): ActiveUserSession? {
@@ -62,6 +72,8 @@ object PengajuanLocalStore {
             .remove(KEY_SESSION_USER_NAME)
             .remove(KEY_SESSION_USER_EMAIL)
             .remove(KEY_SESSION_USER_ROLE)
+            .remove(KEY_ITEMS)
+            .remove(KEY_NOTIFIED_STATUS)
             .apply()
     }
 
@@ -194,18 +206,26 @@ object PengajuanLocalStore {
             return emptyList()
         }
 
+        val cleanTargetName = userName.trim()
         val result = mutableListOf<PengajuanItem>()
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val itemUserId = o.optInt("user_id", 0)
-            val itemUserName = o.optString("nama_user", "")
+            val itemUserName = o.optString("nama_user", "").trim()
 
-            val matchUser = itemUserId == 0 ||
-                    (userId != null && userId > 0 && itemUserId == userId) ||
-                    itemUserName.equals(userName, ignoreCase = true) ||
-                    itemUserName.contains(userName, ignoreCase = true) ||
-                    userName.contains(itemUserName, ignoreCase = true) ||
-                    userName.isBlank()
+            val matchUser = when {
+                userId != null && userId > 0 -> {
+                    if (itemUserId > 0) {
+                        itemUserId == userId
+                    } else {
+                        cleanTargetName.isNotEmpty() && itemUserName.equals(cleanTargetName, ignoreCase = true)
+                    }
+                }
+                cleanTargetName.isNotEmpty() -> {
+                    itemUserName.equals(cleanTargetName, ignoreCase = true)
+                }
+                else -> false
+            }
 
             if (matchUser) {
                 result.add(
