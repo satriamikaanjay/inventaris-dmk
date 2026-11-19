@@ -541,14 +541,26 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun showBackExitLogoutDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Keluar Aplikasi")
-            .setMessage("Jika Anda keluar maka akan ter-logout. Apakah Anda yakin ingin keluar?")
-            .setPositiveButton("Iya") { _, _ ->
-                performLogout()
-            }
-            .setNegativeButton("Tidak", null)
-            .show()
+        val rememberMeActive = PengajuanLocalStore.isRememberMeEnabled(this)
+        if (rememberMeActive) {
+            AlertDialog.Builder(this)
+                .setTitle("Keluar Aplikasi")
+                .setMessage("Apakah Anda yakin ingin keluar dari aplikasi? Sesi login Anda tetap tersimpan karena \"Ingat saya\" aktif, sehingga tidak perlu login ulang kecuali Anda menekan Logout.")
+                .setPositiveButton("Iya") { _, _ ->
+                    finishAffinity()
+                }
+                .setNegativeButton("Tidak", null)
+                .show()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Keluar Aplikasi")
+                .setMessage("Jika Anda keluar maka akan ter-logout. Apakah Anda yakin ingin keluar?")
+                .setPositiveButton("Iya") { _, _ ->
+                    performLogout()
+                }
+                .setNegativeButton("Tidak", null)
+                .show()
+        }
     }
 
     private fun performLogout() {

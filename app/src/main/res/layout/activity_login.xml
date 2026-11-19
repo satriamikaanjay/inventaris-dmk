@@ -261,12 +261,27 @@
                 app:layout_constraintEnd_toEndOf="@id/etPassword"
                 app:layout_constraintTop_toTopOf="@id/etPassword" />
 
+            <!-- Checkbox Ingat Saya di Kiri Bawah Input Password -->
+            <CheckBox
+                android:id="@+id/cbRememberMe"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="8dp"
+                android:buttonTint="#1C4E8F"
+                android:checked="true"
+                android:minHeight="40dp"
+                android:text="Ingat saya"
+                android:textColor="#334155"
+                android:textSize="13sp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/etPassword" />
+
             <!-- Lupa Sandi di Kanan Bawah Input Password -->
             <TextView
                 android:id="@+id/tvForgotPassword"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
                 android:layout_marginEnd="24dp"
                 android:clickable="true"
                 android:focusable="false"
@@ -275,8 +290,9 @@
                 android:textColor="#1C4E8F"
                 android:textSize="13sp"
                 android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="@id/cbRememberMe"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/etPassword" />
+                app:layout_constraintTop_toTopOf="@id/cbRememberMe" />
 
             <!-- Tombol Masuk Sekarang -->
             <Button
@@ -285,7 +301,7 @@
                 android:layout_height="54dp"
                 android:layout_marginStart="24dp"
                 android:layout_marginEnd="24dp"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 android:backgroundTint="#1C4E8F"
                 android:focusable="false"
                 android:text="Masuk Sekarang"
@@ -296,7 +312,7 @@
                 app:cornerRadius="12dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/tvForgotPassword" />
+                app:layout_constraintTop_toBottomOf="@id/cbRememberMe" />
 
             <!-- Tombol Call Center (Secondary Style) -->
             <Button

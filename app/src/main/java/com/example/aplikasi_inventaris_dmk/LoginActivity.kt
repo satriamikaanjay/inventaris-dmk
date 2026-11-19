@@ -8,6 +8,7 @@ import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
@@ -18,9 +19,11 @@ import androidx.cardview.widget.CardView
 import com.example.aplikasi_inventaris_dmk.network.ApiClient
 import com.example.aplikasi_inventaris_dmk.network.CategoryListResponse
 import com.example.aplikasi_inventaris_dmk.network.LoginResponse
+import com.example.aplikasi_inventaris_dmk.network.PengajuanLocalStore
 import com.example.aplikasi_inventaris_dmk.network.ServerAutoDiscovery
 import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
 import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
+import com.example.aplikasi_inventaris_dmk.notification.PengajuanNotificationService
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -37,10 +40,31 @@ class LoginActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ApiClient.init(applicationContext)
+
+        val isBlockedLogout = intent.getBooleanExtra("FORCE_BLOCKED_LOGOUT", false)
+        if (!isBlockedLogout) {
+            val savedSession = PengajuanLocalStore.getActiveSession(this)
+            if (savedSession != null && savedSession.isLoggedIn && savedSession.rememberMe) {
+                val homeIntent = Intent(this, HomeActivity::class.java).apply {
+                    putExtra("USER_ID", savedSession.userId)
+                    putExtra("USER_NAME", savedSession.userName)
+                    putExtra("USER_EMAIL", savedSession.userEmail)
+                    putExtra("USER_ROLE", savedSession.userRole)
+                }
+                startActivity(homeIntent)
+                finish()
+                return
+            } else if (savedSession != null && !savedSession.rememberMe) {
+                // Jika sebelumnya login tanpa "Ingat saya", bersihkan sesi saat kembali membuka halaman login
+                PengajuanNotificationService.stopMonitoring(this)
+                PengajuanLocalStore.clearActiveSession(this)
+            }
+        }
+
         setContentView(R.layout.activity_login)
 
         // Jika diarahkan keluar karena akses user diblokir oleh Master Admin saat sedang aktif
-        if (intent.getBooleanExtra("FORCE_BLOCKED_LOGOUT", false)) {
+        if (isBlockedLogout) {
             showBlockedByMasterAdminDialog()
         }
 
@@ -48,6 +72,7 @@ class LoginActivity : AppCompatActivity() {
         val edtEmail = findViewById<EditText>(R.id.etEmail)
         val edtPassword = findViewById<EditText>(R.id.etPassword)
         val ivTogglePassword = findViewById<ImageView>(R.id.ivTogglePassword)
+        val cbRememberMe = findViewById<CheckBox>(R.id.cbRememberMe)
         val tvForgotPassword = findViewById<TextView>(R.id.tvForgotPassword)
         val btnLogin = findViewById<Button>(R.id.btnLogin)
         val btnCallCenter = findViewById<Button>(R.id.btnCallCenter)
@@ -145,25 +170,30 @@ class LoginActivity : AppCompatActivity() {
                                 Toast.LENGTH_SHORT
                             ).show()
 
+                            val user = loginResponse.data
+                            val resolvedUserId = user?.user_id ?: user?.id ?: 0
+                            val displayName = user?.user_name?.takeIf { it.isNotBlank() }
+                                ?: user?.nama_lengkap?.takeIf { it.isNotBlank() }
+                                ?: email.substringBefore("@")
+                                    .replaceFirstChar { it.uppercase() }
+                            val resolvedEmail = user?.email ?: email
+                            val resolvedRole = user?.role ?: ""
+
+                            // Simpan sesi aktif beserta pilihan "Ingat saya"
+                            PengajuanLocalStore.saveActiveSession(
+                                context = this@LoginActivity,
+                                userId = resolvedUserId,
+                                userName = displayName,
+                                userEmail = resolvedEmail,
+                                userRole = resolvedRole,
+                                rememberMe = cbRememberMe.isChecked
+                            )
+
                             val nextIntent = Intent(this@LoginActivity, HomeActivity::class.java).apply {
-                                loginResponse.data?.let { user ->
-                                    val displayName = when {
-                                        !user.user_name.isNullOrBlank() -> user.user_name
-                                        !user.nama_lengkap.isNullOrBlank() -> user.nama_lengkap
-                                        else -> email.substringBefore("@")
-                                            .replaceFirstChar { it.uppercase() }
-                                    }
-                                    putExtra("USER_ID", user.user_id ?: user.id ?: 0)
-                                    putExtra("USER_NAME", displayName)
-                                    putExtra("USER_EMAIL", user.email ?: email)
-                                    putExtra("USER_ROLE", user.role ?: "")
-                                } ?: run {
-                                    putExtra(
-                                        "USER_NAME",
-                                        email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                                    )
-                                    putExtra("USER_EMAIL", email)
-                                }
+                                putExtra("USER_ID", resolvedUserId)
+                                putExtra("USER_NAME", displayName)
+                                putExtra("USER_EMAIL", resolvedEmail)
+                                putExtra("USER_ROLE", resolvedRole)
                             }
                             startActivity(nextIntent)
                             finish()

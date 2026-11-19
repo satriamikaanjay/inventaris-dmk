@@ -12,7 +12,8 @@ data class ActiveUserSession(
     val userName: String,
     val userEmail: String,
     val userRole: String,
-    val isLoggedIn: Boolean
+    val isLoggedIn: Boolean,
+    val rememberMe: Boolean = false
 )
 
 object PengajuanLocalStore {
@@ -24,13 +25,15 @@ object PengajuanLocalStore {
     private const val KEY_SESSION_USER_EMAIL = "session_user_email"
     private const val KEY_SESSION_USER_ROLE = "session_user_role"
     private const val KEY_SESSION_LOGGED_IN = "session_logged_in"
+    private const val KEY_SESSION_REMEMBER_ME = "session_remember_me"
 
     fun saveActiveSession(
         context: Context,
         userId: Int,
         userName: String,
         userEmail: String,
-        userRole: String
+        userRole: String,
+        rememberMe: Boolean? = null
     ) {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         val prevUserId = prefs.getInt(KEY_SESSION_USER_ID, -1)
@@ -38,18 +41,31 @@ object PengajuanLocalStore {
         val isDifferentAccount = (prevUserId != -1 && prevUserId != userId) ||
                 (prevUserName.isNotBlank() && !prevUserName.trim().equals(userName.trim(), ignoreCase = true))
 
+        val resolvedRememberMe = when {
+            rememberMe != null -> rememberMe
+            isDifferentAccount -> false
+            else -> prefs.getBoolean(KEY_SESSION_REMEMBER_ME, false)
+        }
+
         val editor = prefs.edit()
             .putInt(KEY_SESSION_USER_ID, userId)
             .putString(KEY_SESSION_USER_NAME, userName)
             .putString(KEY_SESSION_USER_EMAIL, userEmail)
             .putString(KEY_SESSION_USER_ROLE, userRole)
             .putBoolean(KEY_SESSION_LOGGED_IN, true)
+            .putBoolean(KEY_SESSION_REMEMBER_ME, resolvedRememberMe)
 
         if (isDifferentAccount) {
             editor.remove(KEY_ITEMS)
             editor.remove(KEY_NOTIFIED_STATUS)
         }
         editor.apply()
+    }
+
+    fun isRememberMeEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_SESSION_LOGGED_IN, false) &&
+                prefs.getBoolean(KEY_SESSION_REMEMBER_ME, false)
     }
 
     fun getActiveSession(context: Context): ActiveUserSession? {
@@ -60,7 +76,8 @@ object PengajuanLocalStore {
             userName = prefs.getString(KEY_SESSION_USER_NAME, "Pengguna") ?: "Pengguna",
             userEmail = prefs.getString(KEY_SESSION_USER_EMAIL, "") ?: "",
             userRole = prefs.getString(KEY_SESSION_USER_ROLE, "") ?: "",
-            isLoggedIn = true
+            isLoggedIn = true,
+            rememberMe = prefs.getBoolean(KEY_SESSION_REMEMBER_ME, false)
         )
     }
 
@@ -68,6 +85,7 @@ object PengajuanLocalStore {
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putBoolean(KEY_SESSION_LOGGED_IN, false)
+            .putBoolean(KEY_SESSION_REMEMBER_ME, false)
             .remove(KEY_SESSION_USER_ID)
             .remove(KEY_SESSION_USER_NAME)
             .remove(KEY_SESSION_USER_EMAIL)
