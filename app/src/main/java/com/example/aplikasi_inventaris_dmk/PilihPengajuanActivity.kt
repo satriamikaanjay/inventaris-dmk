@@ -106,21 +106,19 @@ class PilihPengajuanActivity : AppCompatActivity() {
                 .show()
         }
 
-        // 5 Opsi Pengajuan: Peminjaman, Permintaan, Peleburan, Perpindahan, Servis
-        findViewById<CardView>(R.id.cardOpsiPeminjaman)?.setOnClickListener {
-            confirmAndOpenForm("Pengajuan Peminjaman")
-        }
-        findViewById<CardView>(R.id.cardOpsiPermintaan)?.setOnClickListener {
-            confirmAndOpenForm("Pengajuan Permintaan")
+        // Hanya 4 Opsi Pengajuan khusus Inventory (Data Aset): Perpindahan, Peleburan, Servis, Lainnya (Aset)
+        // Pengajuan Peminjaman / Permintaan hanya tersedia melalui menu Data Stok
+        findViewById<CardView>(R.id.cardOpsiPerpindahan)?.setOnClickListener {
+            confirmAndOpenForm("Pengajuan Perpindahan")
         }
         findViewById<CardView>(R.id.cardOpsiPeleburan)?.setOnClickListener {
             confirmAndOpenForm("Pengajuan Peleburan")
         }
-        findViewById<CardView>(R.id.cardOpsiPerpindahan)?.setOnClickListener {
-            confirmAndOpenForm("Pengajuan Perpindahan")
-        }
         findViewById<CardView>(R.id.cardOpsiServis)?.setOnClickListener {
             confirmAndOpenForm("Pengajuan Servis")
+        }
+        findViewById<CardView>(R.id.cardOpsiLainnyaAset)?.setOnClickListener {
+            confirmAndOpenForm("Pengajuan Lainnya (Aset)")
         }
     }
 

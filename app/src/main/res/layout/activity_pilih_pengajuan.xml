@@ -127,19 +127,19 @@
                 android:layout_marginStart="4dp"
                 android:layout_marginTop="20dp"
                 android:layout_marginBottom="10dp"
-                android:text="Silakan Pilih Opsi Pengajuan"
+                android:text="Pilih Opsi Pengajuan Inventory (Data Aset)"
                 android:textColor="#0F172A"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
-            <!-- Opsi 1: Pengajuan Peminjaman -->
+            <!-- Opsi 1: Pengajuan Perpindahan -->
             <androidx.cardview.widget.CardView
-                android:id="@+id/cardOpsiPeminjaman"
+                android:id="@+id/cardOpsiPerpindahan"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
-                android:focusable="false"
+                android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
                 app:cardBackgroundColor="#FFFFFF"
                 app:cardCornerRadius="14dp"
@@ -155,9 +155,9 @@
                     <TextView
                         android:layout_width="44dp"
                         android:layout_height="44dp"
-                        android:background="@drawable/bg_nik_badge"
+                        android:background="@drawable/bg_badge_green"
                         android:gravity="center"
-                        android:text="📦"
+                        android:text="🔄"
                         android:textSize="20sp" />
 
                     <LinearLayout
@@ -170,7 +170,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Pengajuan Peminjaman"
+                            android:text="Pengajuan Perpindahan"
                             android:textColor="#0F172A"
                             android:textSize="15sp"
                             android:textStyle="bold" />
@@ -179,7 +179,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Ajukan permohonan peminjaman aset inventaris"
+                            android:text="Ajukan mutasi atau perpindahan lokasi/ruangan aset"
                             android:textColor="#64748B"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -194,76 +194,14 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- Opsi 2: Pengajuan Permintaan -->
-            <androidx.cardview.widget.CardView
-                android:id="@+id/cardOpsiPermintaan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:clickable="true"
-                android:focusable="false"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardBackgroundColor="#FFFFFF"
-                app:cardCornerRadius="14dp"
-                app:cardElevation="2dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:background="@drawable/bg_nik_badge"
-                        android:gravity="center"
-                        android:text="📋"
-                        android:textSize="20sp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Pengajuan Permintaan"
-                            android:textColor="#0F172A"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Ajukan permintaan penggunaan atau pengadaan aset"
-                            android:textColor="#64748B"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="›"
-                        android:textColor="#1C4E8F"
-                        android:textSize="24sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- Opsi 3: Pengajuan Peleburan -->
+            <!-- Opsi 2: Pengajuan Peleburan -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cardOpsiPeleburan"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
-                android:focusable="false"
+                android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
                 app:cardBackgroundColor="#FFFFFF"
                 app:cardCornerRadius="14dp"
@@ -318,76 +256,14 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- Opsi 4: Pengajuan Perpindahan -->
-            <androidx.cardview.widget.CardView
-                android:id="@+id/cardOpsiPerpindahan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:clickable="true"
-                android:focusable="false"
-                android:foreground="?attr/selectableItemBackground"
-                app:cardBackgroundColor="#FFFFFF"
-                app:cardCornerRadius="14dp"
-                app:cardElevation="2dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:background="@drawable/bg_badge_green"
-                        android:gravity="center"
-                        android:text="🔄"
-                        android:textSize="20sp" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Pengajuan Perpindahan"
-                            android:textColor="#0F172A"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Ajukan mutasi atau perpindahan lokasi aset"
-                            android:textColor="#64748B"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="›"
-                        android:textColor="#1C4E8F"
-                        android:textSize="24sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- Opsi 5: Pengajuan Servis -->
+            <!-- Opsi 3: Pengajuan Servis -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cardOpsiServis"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="10dp"
                 android:clickable="true"
-                android:focusable="false"
+                android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
                 app:cardBackgroundColor="#FFFFFF"
                 app:cardCornerRadius="14dp"
@@ -428,6 +304,68 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="Ajukan perbaikan atau perawatan berkala untuk aset"
+                            android:textColor="#64748B"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="›"
+                        android:textColor="#1C4E8F"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Opsi 4: Pengajuan Lainnya (Khusus Data Aset) -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardOpsiLainnyaAset"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                app:cardBackgroundColor="#FFFFFF"
+                app:cardCornerRadius="14dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_nik_badge"
+                        android:gravity="center"
+                        android:text="📝"
+                        android:textSize="20sp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Pengajuan Lainnya (Aset)"
+                            android:textColor="#0F172A"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Ajukan keperluan lainnya khusus untuk aset inventaris ini"
                             android:textColor="#64748B"
                             android:textSize="12sp" />
                     </LinearLayout>

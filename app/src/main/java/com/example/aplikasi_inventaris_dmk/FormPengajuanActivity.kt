@@ -124,7 +124,7 @@ class FormPengajuanActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_form_pengajuan)
 
-        val jenisPengajuan = intent.getStringExtra("JENIS_PENGAJUAN") ?: "Pengajuan Peminjaman"
+        val jenisPengajuan = intent.getStringExtra("JENIS_PENGAJUAN") ?: "Pengajuan Lainnya (Aset)"
         val itemName       = intent.getStringExtra("ITEM_NAME")       ?: "Aset Inventaris"
         val itemCode       = intent.getStringExtra("ITEM_CODE")       ?: "Kode: -"
         val itemLocation   = intent.getStringExtra("ITEM_LOCATION")   ?: "-"
@@ -410,12 +410,12 @@ class FormPengajuanActivity : AppCompatActivity() {
         fileName: String?,
         fileBase64: String?
     ) {
+        // FormPengajuanActivity khusus untuk pengajuan Inventory (Data Aset)
         val jenisApi = when {
-            jenisLabel.contains("Permintaan", ignoreCase = true)  -> "permintaan"
             jenisLabel.contains("Peleburan", ignoreCase = true)   -> "peleburan"
             jenisLabel.contains("Perpindahan", ignoreCase = true) -> "perpindahan"
             jenisLabel.contains("Servis", ignoreCase = true)      -> "servis"
-            else                                                  -> "peminjaman"
+            else                                                  -> "lainnya_aset"
         }
 
         val combinedKeterangan = buildString {

@@ -259,13 +259,13 @@
             android:textSize="12.5sp"
             android:textStyle="bold" />
 
-        <!-- Button Pengajuan Permintaan -->
+        <!-- Button Pengajuan Peminjaman / Permintaan -->
         <Button
             android:id="@+id/btnPengajuanPermintaanStok"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:backgroundTint="#1C4E8F"
-            android:text="📥 Pengajuan Permintaan"
+            android:text="📥 Pengajuan Peminjaman / Permintaan"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
             android:textSize="13.5sp"
