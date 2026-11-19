@@ -38,18 +38,60 @@
             android:paddingEnd="12dp"
             android:paddingBottom="12dp">
 
-            <!-- Nomor Urut Badge Lingkaran/Kotak -->
-            <TextView
-                android:id="@+id/tvUrutanBadge"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:background="@drawable/bg_nik_badge"
-                android:gravity="center"
-                android:text="#1"
-                android:textColor="#1C4E8F"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                tools:text="#01" />
+            <!-- Thumbnail Foto Barang (jika ada foto) atau Nomor Urut Badge -->
+            <FrameLayout
+                android:layout_width="46dp"
+                android:layout_height="46dp">
+
+                <TextView
+                    android:id="@+id/tvUrutanBadge"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_nik_badge"
+                    android:gravity="center"
+                    android:text="#1"
+                    android:textColor="#1C4E8F"
+                    android:textSize="11.5sp"
+                    android:textStyle="bold"
+                    tools:text="#01" />
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cardFotoStok"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground"
+                    android:visibility="gone"
+                    app:cardBackgroundColor="#F1F5F9"
+                    app:cardCornerRadius="10dp"
+                    app:cardElevation="0dp">
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <ImageView
+                            android:id="@+id/ivFotoStok"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="Foto Barang Stok"
+                            android:scaleType="centerCrop" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="bottom|end"
+                            android:layout_margin="2dp"
+                            android:background="@drawable/bg_photo_badge_dark"
+                            android:paddingHorizontal="3dp"
+                            android:paddingVertical="1dp"
+                            android:text="🔍"
+                            android:textColor="#FFFFFF"
+                            android:textSize="8sp" />
+                    </FrameLayout>
+                </androidx.cardview.widget.CardView>
+            </FrameLayout>
 
             <!-- Informasi Nama Barang & Satuan -->
             <LinearLayout

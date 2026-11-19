@@ -17,6 +17,9 @@ class InventoryAdapter(
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val cardItemRoot: CardView  = itemView.findViewById(R.id.cardItemRoot)
+        val layoutCardTop: View     = itemView.findViewById(R.id.layoutCardTop)
+        val ivItemPhoto: ImageView  = itemView.findViewById(R.id.ivItemPhoto)
+        val tvZoomFotoHint: TextView= itemView.findViewById(R.id.tvZoomFotoHint)
         val tvCategoryTag: TextView = itemView.findViewById(R.id.tvCategoryTag)
         val tvUnitBadge: TextView   = itemView.findViewById(R.id.tvUnitBadge)
         val ivItemIcon: ImageView   = itemView.findViewById(R.id.ivItemIcon)
@@ -37,6 +40,7 @@ class InventoryAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = items[position]
+        val context = holder.itemView.context
 
         // Nama Aset
         val name = item.namaAset ?: "Aset #${item.kodeAset ?: "-"}"
@@ -107,7 +111,7 @@ class InventoryAdapter(
             }
         }
 
-        // Ikon berdasarkan kategori / nama barang
+        // Ikon fallback berdasarkan kategori / nama barang
         val checkStr = (name + " " + kategori).lowercase()
         when {
             checkStr.contains("kendaraan") || checkStr.contains("mobil") || checkStr.contains("motor") ->
@@ -125,7 +129,52 @@ class InventoryAdapter(
                 holder.ivItemIcon.setImageResource(android.R.drawable.ic_menu_agenda)
         }
 
-        // Aksi klik card item
+        // Reset state foto sebelum memuat (mencegah flicker saat scroll RecyclerView)
+        holder.ivItemPhoto.setImageDrawable(null)
+        holder.ivItemPhoto.visibility = View.GONE
+        holder.tvZoomFotoHint.visibility = View.GONE
+        holder.ivItemIcon.visibility = View.VISIBLE
+        holder.tvCategoryTag.background = null
+        holder.tvCategoryTag.setTextColor(Color.parseColor("#1C4E8F"))
+        holder.layoutCardTop.setOnClickListener { onItemClick(item) }
+
+        if (PhotoLoader.hasPhoto(item.fotoBarang, item.fotoUrl)) {
+            val previewSubtitle = "Kode: $kode • $kategori"
+            val openPreview = View.OnClickListener {
+                PhotoLoader.showImagePreviewPopup(
+                    context = context,
+                    title = name,
+                    subtitle = previewSubtitle,
+                    fotoBarang = item.fotoBarang,
+                    fotoUrl = item.fotoUrl
+                )
+            }
+            PhotoLoader.loadInto(
+                context = context,
+                imageView = holder.ivItemPhoto,
+                fotoBarang = item.fotoBarang,
+                fotoUrl = item.fotoUrl,
+                maxDimPx = 420,
+                onLoaded = {
+                    holder.ivItemPhoto.visibility = View.VISIBLE
+                    holder.tvZoomFotoHint.visibility = View.VISIBLE
+                    holder.ivItemIcon.visibility = View.GONE
+                    holder.tvCategoryTag.setBackgroundResource(R.drawable.bg_photo_badge_dark)
+                    holder.tvCategoryTag.setTextColor(Color.WHITE)
+                    holder.layoutCardTop.setOnClickListener(openPreview)
+                },
+                onFailed = {
+                    holder.ivItemPhoto.visibility = View.GONE
+                    holder.tvZoomFotoHint.visibility = View.GONE
+                    holder.ivItemIcon.visibility = View.VISIBLE
+                    holder.tvCategoryTag.background = null
+                    holder.tvCategoryTag.setTextColor(Color.parseColor("#1C4E8F"))
+                    holder.layoutCardTop.setOnClickListener { onItemClick(item) }
+                }
+            )
+        }
+
+        // Aksi klik card item (area info bawah) -> buka Detail Aset
         holder.cardItemRoot.setOnClickListener { onItemClick(item) }
     }
 

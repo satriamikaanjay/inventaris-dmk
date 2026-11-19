@@ -49,7 +49,9 @@ data class AssetItem(
     @SerializedName("status_peleburan") val statusPeleburan: String?,
     @SerializedName("tanggal_peleburan") val tanggalPeleburan: String?,
     @SerializedName("metode_peleburan") val metodePeleburan: String?,
-    @SerializedName("nilai_jual") val nilaiJual: Double?
+    @SerializedName("nilai_jual") val nilaiJual: Double?,
+    @SerializedName("foto_barang") val fotoBarang: String? = null,
+    @SerializedName("foto_url") val fotoUrl: String? = null
 )
 
 data class CategoryListResponse(
@@ -141,6 +143,8 @@ data class StokItem(
     @SerializedName("jumlah") val jumlah: Int?,
     @SerializedName("satuan") val satuan: String?,
     @SerializedName("keterangan") val keterangan: String?,
+    @SerializedName("foto_barang") val fotoBarang: String? = null,
+    @SerializedName("foto_url") val fotoUrl: String? = null,
     @SerializedName("tersedia") val tersedia: Boolean?
 )
 

@@ -506,6 +506,8 @@ class InventoryActivity : AppCompatActivity() {
             putExtra("ITEM_TGL_PELEBURAN",     item.tanggalPeleburan ?: "-")
             putExtra("ITEM_METODE_PELEBURAN",  item.metodePeleburan ?: "-")
             putExtra("ITEM_NILAI_JUAL",        item.nilaiJual ?: 0.0)
+            putExtra("ITEM_FOTO_BARANG",       item.fotoBarang ?: "")
+            putExtra("ITEM_FOTO_URL",          item.fotoUrl ?: "")
         })
     }
 

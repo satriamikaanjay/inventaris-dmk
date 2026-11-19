@@ -228,17 +228,68 @@ class DetailActivity : AppCompatActivity() {
             }
         }
 
-        // Ikon Barang
+        // Ikon / Foto Barang di Detail Aset
+        val fotoBarang = item?.fotoBarang?.takeIf { it.isNotBlank() && it != "-" }
+            ?: intent.getStringExtra("ITEM_FOTO_BARANG")?.takeIf { it.isNotBlank() && it != "-" }
+        val fotoUrl = item?.fotoUrl?.takeIf { it.isNotBlank() && it != "-" }
+            ?: intent.getStringExtra("ITEM_FOTO_URL")?.takeIf { it.isNotBlank() && it != "-" }
+
         val ivIcon = findViewById<ImageView>(R.id.ivItemDetailIcon)
-        val checkStr = "$namaAset $kategori".lowercase()
-        when {
-            checkStr.contains("kendaraan") || checkStr.contains("mobil") || checkStr.contains("motor") ->
-                ivIcon?.setImageResource(android.R.drawable.ic_menu_directions)
-            checkStr.contains("proyektor") || checkStr.contains("kamera") ->
-                ivIcon?.setImageResource(android.R.drawable.ic_menu_camera)
-            checkStr.contains("laptop") || checkStr.contains("komputer") || checkStr.contains("printer") ->
-                ivIcon?.setImageResource(android.R.drawable.ic_menu_slideshow)
-            else -> ivIcon?.setImageResource(android.R.drawable.ic_menu_agenda)
+        val cardFotoDetail = findViewById<CardView>(R.id.cardFotoAsetDetail)
+        val ivFotoDetail = findViewById<ImageView>(R.id.ivFotoAsetDetail)
+
+        val setFallbackIcon = {
+            ivIcon?.setPadding(dp(14), dp(14), dp(14), dp(14))
+            ivIcon?.scaleType = ImageView.ScaleType.FIT_CENTER
+            ivIcon?.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#1C4E8F"))
+            val checkStr = "$namaAset $kategori".lowercase()
+            when {
+                checkStr.contains("kendaraan") || checkStr.contains("mobil") || checkStr.contains("motor") ->
+                    ivIcon?.setImageResource(android.R.drawable.ic_menu_directions)
+                checkStr.contains("proyektor") || checkStr.contains("kamera") ->
+                    ivIcon?.setImageResource(android.R.drawable.ic_menu_camera)
+                checkStr.contains("laptop") || checkStr.contains("komputer") || checkStr.contains("printer") ->
+                    ivIcon?.setImageResource(android.R.drawable.ic_menu_slideshow)
+                else -> ivIcon?.setImageResource(android.R.drawable.ic_menu_agenda)
+            }
+            ivIcon?.setOnClickListener(null)
+            cardFotoDetail?.visibility = View.GONE
+        }
+
+        setFallbackIcon()
+
+        if (PhotoLoader.hasPhoto(fotoBarang, fotoUrl)) {
+            val openPreview = View.OnClickListener {
+                PhotoLoader.showImagePreviewPopup(
+                    context = this,
+                    title = namaAset,
+                    subtitle = "Kode: $kodeAset • $kategori",
+                    fotoBarang = fotoBarang,
+                    fotoUrl = fotoUrl
+                )
+            }
+            if (ivFotoDetail != null) {
+                PhotoLoader.loadInto(
+                    context = this,
+                    imageView = ivFotoDetail,
+                    fotoBarang = fotoBarang,
+                    fotoUrl = fotoUrl,
+                    maxDimPx = 900,
+                    onLoaded = { bmp ->
+                        cardFotoDetail?.visibility = View.VISIBLE
+                        cardFotoDetail?.setOnClickListener(openPreview)
+                        ivFotoDetail.setOnClickListener(openPreview)
+                        ivIcon?.setPadding(0, 0, 0, 0)
+                        ivIcon?.imageTintList = null
+                        ivIcon?.scaleType = ImageView.ScaleType.CENTER_CROP
+                        ivIcon?.setImageBitmap(bmp)
+                        ivIcon?.setOnClickListener(openPreview)
+                    },
+                    onFailed = {
+                        setFallbackIcon()
+                    }
+                )
+            }
         }
 
         // Bangun semua kartu seksi sesuai halaman Data Aset di Website

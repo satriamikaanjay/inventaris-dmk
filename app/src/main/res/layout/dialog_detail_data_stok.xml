@@ -7,11 +7,16 @@
     app:cardCornerRadius="20dp"
     app:cardElevation="8dp">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
 
         <!-- Baris Atas: Kode Stok + Status Badge + Tombol Close -->
         <LinearLayout
@@ -81,6 +86,46 @@
             android:text="Kategori: Data Stok Persediaan • Nomor Urut #1"
             android:textColor="#64748B"
             android:textSize="12sp" />
+
+        <!-- Preview Foto Barang Stok (Muncul bila ada foto, klik untuk popup preview) -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardDetailFotoStok"
+            android:layout_width="match_parent"
+            android:layout_height="170dp"
+            android:layout_marginTop="14dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground"
+            android:visibility="gone"
+            app:cardBackgroundColor="#F1F5F9"
+            app:cardCornerRadius="14dp"
+            app:cardElevation="0dp">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/ivDetailFotoStok"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="Foto Barang Stok"
+                    android:scaleType="centerCrop" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="10dp"
+                    android:background="@drawable/bg_photo_badge_dark"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="🔍 Ketuk untuk perbesar"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10.5sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+        </androidx.cardview.widget.CardView>
 
         <!-- Box Informasi Stok Tersedia -->
         <LinearLayout
@@ -238,5 +283,6 @@
             android:textSize="12.5sp"
             android:textStyle="bold" />
 
-    </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
 </androidx.cardview.widget.CardView>

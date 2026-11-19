@@ -650,6 +650,8 @@ class DataStokActivity : AppCompatActivity() {
         val btnClose = view.findViewById<TextView>(R.id.btnCloseDetailStok)
         val tvNamaBarang = view.findViewById<TextView>(R.id.tvDetailNamaBarang)
         val tvSubTitle = view.findViewById<TextView>(R.id.tvDetailSubTitle)
+        val cardDetailFoto = view.findViewById<CardView>(R.id.cardDetailFotoStok)
+        val ivDetailFoto = view.findViewById<ImageView>(R.id.ivDetailFotoStok)
         val tvJumlahStok = view.findViewById<TextView>(R.id.tvDetailJumlahStok)
         val tvSatuanDasar = view.findViewById<TextView>(R.id.tvDetailSatuanDasar)
         val layoutInfoKonversi = view.findViewById<LinearLayout>(R.id.layoutDetailInfoKonversi)
@@ -659,11 +661,41 @@ class DataStokActivity : AppCompatActivity() {
         val btnTutup = view.findViewById<Button>(R.id.btnTutupDetailStok)
 
         tvKode.text = kodeStok
-        tvNamaBarang.text = item.namaBarang ?: "Barang Stok"
+        val namaBarangDisplay = item.namaBarang ?: "Barang Stok"
+        tvNamaBarang.text = namaBarangDisplay
         tvSubTitle.text = "Kategori: Data Stok Persediaan • Nomor Urut #$nomorUrut"
         tvJumlahStok.text = "${numberFormat.format(jumlah)} $satuan"
         tvSatuanDasar.text = satuan
         tvKeterangan.text = ket
+
+        // Foto Barang Stok (Klik untuk membuka popup preview ukuran besar)
+        cardDetailFoto.visibility = View.GONE
+        if (PhotoLoader.hasPhoto(item.fotoBarang, item.fotoUrl)) {
+            val openPreview = View.OnClickListener {
+                PhotoLoader.showImagePreviewPopup(
+                    context = this,
+                    title = namaBarangDisplay,
+                    subtitle = "$kodeStok • Stok: ${numberFormat.format(jumlah)} $satuan",
+                    fotoBarang = item.fotoBarang,
+                    fotoUrl = item.fotoUrl
+                )
+            }
+            PhotoLoader.loadInto(
+                context = this,
+                imageView = ivDetailFoto,
+                fotoBarang = item.fotoBarang,
+                fotoUrl = item.fotoUrl,
+                maxDimPx = 800,
+                onLoaded = {
+                    cardDetailFoto.visibility = View.VISIBLE
+                    cardDetailFoto.setOnClickListener(openPreview)
+                    ivDetailFoto.setOnClickListener(openPreview)
+                },
+                onFailed = {
+                    cardDetailFoto.visibility = View.GONE
+                }
+            )
+        }
 
         if (isTersedia && jumlah > 0) {
             tvStatusBadge.text = "TERSEDIA"
