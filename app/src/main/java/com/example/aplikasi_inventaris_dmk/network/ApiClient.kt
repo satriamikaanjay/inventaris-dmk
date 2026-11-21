@@ -15,11 +15,14 @@ object ApiClient {
     const val DEFAULT_APACHE_URL = "http://$DEFAULT_HOST_IP/INVENTARIS-DMK/public/api/"
     const val DEFAULT_ARTISAN_URL = "http://$DEFAULT_HOST_IP:8000/api/"
     const val LOCALHOST_USB_URL = "http://127.0.0.1:8000/api/"
-    const val DEFAULT_BASE_URL = DEFAULT_APACHE_URL
+    const val DEFAULT_TUNNEL_URL = "https://category-namespace-floating-obtaining.trycloudflare.com/INVENTARIS-DMK/public/api/"
+    const val DEFAULT_BASE_URL = DEFAULT_TUNNEL_URL
 
     private const val PREF_NAME = "ApiClientPrefs"
     private const val KEY_BASE_URL = "base_url"
     private const val KEY_CUSTOM_LOCKED = "custom_locked"
+    private const val KEY_DEFAULT_URL_VERSION = "default_url_version"
+    private const val CURRENT_DEFAULT_URL_VERSION = 3
 
     @Volatile
     private var currentBaseUrl: String = DEFAULT_BASE_URL
@@ -47,7 +50,7 @@ object ApiClient {
                 chain.proceed(req)
             }
             .addInterceptor(logging)
-            .connectTimeout(6, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
@@ -55,6 +58,19 @@ object ApiClient {
 
     fun init(context: Context) {
         val prefs = context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val savedVersion = prefs.getInt(KEY_DEFAULT_URL_VERSION, 1)
+        if (savedVersion < CURRENT_DEFAULT_URL_VERSION) {
+            currentBaseUrl = DEFAULT_BASE_URL
+            isCustomSaved = false
+            cachedUrl = null
+            cachedService = null
+            prefs.edit()
+                .putString(KEY_BASE_URL, DEFAULT_BASE_URL)
+                .putBoolean(KEY_CUSTOM_LOCKED, false)
+                .putInt(KEY_DEFAULT_URL_VERSION, CURRENT_DEFAULT_URL_VERSION)
+                .apply()
+            return
+        }
         val saved = prefs.getString(KEY_BASE_URL, null)
         isCustomSaved = prefs.getBoolean(KEY_CUSTOM_LOCKED, false)
         currentBaseUrl = if (!saved.isNullOrBlank()) normalizeBaseUrl(saved) else DEFAULT_BASE_URL
@@ -113,6 +129,7 @@ object ApiClient {
             .edit()
             .putString(KEY_BASE_URL, normalized)
             .putBoolean(KEY_CUSTOM_LOCKED, markAsCustom)
+            .putInt(KEY_DEFAULT_URL_VERSION, CURRENT_DEFAULT_URL_VERSION)
             .apply()
         return normalized
     }
@@ -122,6 +139,9 @@ object ApiClient {
             val parsed = Uri.parse(url)
             val host = parsed.host ?: return null
             val scheme = parsed.scheme ?: "http"
+            if (scheme.equals("https", ignoreCase = true)) {
+                return null
+            }
             if (url.contains("/INVENTARIS-DMK/public", ignoreCase = true)) {
                 "$scheme://$host:8000/api/"
             } else if (parsed.port == 8000 && host != "127.0.0.1" && host != "localhost") {
@@ -138,9 +158,11 @@ object ApiClient {
         return try {
             val parsed = Uri.parse(url)
             val host = parsed.host ?: return url
+            val scheme = parsed.scheme ?: "http"
             val port = parsed.port
             val isApache = url.contains("/INVENTARIS-DMK/public", ignoreCase = true)
             when {
+                scheme.equals("https", ignoreCase = true) -> "$host (HTTPS)"
                 port > 0 && port != 80 && port != 443 -> "$host:$port"
                 isApache -> "$host (Apache)"
                 else -> host

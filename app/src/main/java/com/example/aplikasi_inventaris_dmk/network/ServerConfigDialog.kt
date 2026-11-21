@@ -57,9 +57,13 @@ object ServerConfigDialog {
 
         val etInput = EditText(context).apply {
             setText(
-                if (currentUrl.contains("127.0.0.1")) ApiClient.DEFAULT_HOST_IP else currentHost
+                when {
+                    currentUrl.contains("127.0.0.1") -> ApiClient.DEFAULT_HOST_IP
+                    currentUrl.startsWith("https://", ignoreCase = true) -> "https://$currentHost"
+                    else -> currentHost
+                }
             )
-            hint = "Contoh: ${ApiClient.DEFAULT_HOST_IP} atau 192.168.1.10"
+            hint = "Contoh: ${ApiClient.DEFAULT_HOST_IP} atau https://xxx.trycloudflare.com"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             textSize = 14f
             setSingleLine(true)
@@ -165,8 +169,16 @@ object ServerConfigDialog {
                         }
                     }
                     else -> {
-                        if (raw.contains("/")) {
-                            ApiClient.normalizeBaseUrl(raw, preferArtisanPortIfNoPath = false)
+                        val isHttpsDomain = raw.startsWith("https://", ignoreCase = true) ||
+                            raw.contains(".trycloudflare.com", ignoreCase = true) ||
+                            raw.contains(".lhr.life", ignoreCase = true) ||
+                            raw.contains(".ngrok", ignoreCase = true)
+                        if (raw.contains("/") || isHttpsDomain) {
+                            val withScheme = if (!raw.startsWith("http://", ignoreCase = true) &&
+                                !raw.startsWith("https://", ignoreCase = true) &&
+                                isHttpsDomain
+                            ) "https://$raw" else raw
+                            ApiClient.normalizeBaseUrl(withScheme, preferArtisanPortIfNoPath = false)
                         } else {
                             val hostOnly = raw.removePrefix("http://").removePrefix("https://").substringBefore(":").ifBlank { ApiClient.DEFAULT_HOST_IP }
                             "http://$hostOnly/INVENTARIS-DMK/public/api/"
