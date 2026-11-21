@@ -234,12 +234,12 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- 4. Harga / Estimasi Harga (Rp) -->
+            <!-- 4. Harga / Estimasi Harga (Rp) (Opsional) -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:text="Harga / Estimasi Harga Barang (Rp) *"
+                android:text="Harga / Estimasi Harga Barang (Rp) (Opsional)"
                 android:textColor="#0F172A"
                 android:textSize="12.5sp"
                 android:textStyle="bold" />
@@ -268,7 +268,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:hint="Contoh: 50000"
+                    android:hint="Contoh: 50000 (opsional)"
                     android:inputType="number"
                     android:singleLine="true"
                     android:textColor="#0F172A"
@@ -282,8 +282,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Nominal Harga: Rp 0"
-                android:textColor="#047857"
+                android:text="Opsional • Kosongkan jika harga belum diketahui"
+                android:textColor="#64748B"
                 android:textSize="11sp"
                 android:textStyle="bold" />
 

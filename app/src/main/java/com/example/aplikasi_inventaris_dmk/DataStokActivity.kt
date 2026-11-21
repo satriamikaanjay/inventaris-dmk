@@ -1157,7 +1157,7 @@ class DataStokActivity : AppCompatActivity() {
     /**
      * Menampilkan Form Pengajuan Lainnya (diletakkan di luar Detail Stok):
      * Digunakan untuk mengajukan barang baru / barang yang belum ada di Data Stok,
-     * lengkap dengan input Nama Barang, Jumlah, Satuan, Harga (Rp), dan Deskripsi (opsional).
+     * lengkap dengan input Nama Barang, Jumlah, Satuan, Harga (Rp, opsional), dan Deskripsi (opsional).
      */
     private fun showFormPengajuanLainnyaStokDialog() {
         resolveActiveUserAccount()
@@ -1266,7 +1266,7 @@ class DataStokActivity : AppCompatActivity() {
                 tvFormatHarga.text = "Nominal Harga: Rp ${numberFormat.format(hargaVal)} (Untuk $qtyVal ${spinnerSatuan.selectedItem ?: "Unit"})"
                 tvFormatHarga.setTextColor(Color.parseColor("#047857"))
             } else {
-                tvFormatHarga.text = "Masukkan harga / estimasi harga barang dalam Rupiah"
+                tvFormatHarga.text = "Opsional • Kosongkan jika harga belum diketahui"
                 tvFormatHarga.setTextColor(Color.parseColor("#64748B"))
             }
         }
@@ -1340,19 +1340,18 @@ class DataStokActivity : AppCompatActivity() {
 
             val rawHarga = etHarga.text?.toString()?.replace("[^0-9]".toRegex(), "") ?: ""
             val inputHargaLong = rawHarga.toLongOrNull() ?: 0L
-            if (inputHargaLong <= 0L) {
-                etHarga.error = "Harga wajib diisi"
-                etHarga.requestFocus()
-                Toast.makeText(this, "Silakan masukkan harga / estimasi harga barang!", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            val nilaiEstimasiValue: Double? = if (inputHargaLong > 0L) inputHargaLong.toDouble() else null
 
             val selectedSatuan = spinnerSatuan.selectedItem?.toString()?.trim()?.takeIf { it.isNotEmpty() } ?: "Unit"
             val rawDeskripsi = etDeskripsi.text?.toString()?.trim() ?: ""
-            val hargaFormatted = "Rp ${numberFormat.format(inputHargaLong)}"
+            val hargaFormatted = if (inputHargaLong > 0L) "Rp ${numberFormat.format(inputHargaLong)}" else null
 
             val keteranganFinal = buildString {
-                append("[Barang Baru di Luar Stok • Harga: $hargaFormatted]")
+                if (hargaFormatted != null) {
+                    append("[Barang Baru di Luar Stok • Harga: $hargaFormatted]")
+                } else {
+                    append("[Barang Baru di Luar Stok]")
+                }
                 if (rawDeskripsi.isNotEmpty()) {
                     append(" — ")
                     append(rawDeskripsi)
@@ -1386,7 +1385,7 @@ class DataStokActivity : AppCompatActivity() {
                 kategoriNama = "Data Stok (Barang Baru)",
                 unitJumlah = inputQty,
                 satuan = selectedSatuan,
-                nilaiEstimasi = inputHargaLong.toDouble(),
+                nilaiEstimasi = nilaiEstimasiValue,
                 lokasi = "Pengajuan Barang Baru",
                 cabangAsal = "Pusat",
                 ruanganAsal = "Gudang Stok",
@@ -1420,7 +1419,7 @@ class DataStokActivity : AppCompatActivity() {
                             kategori = "Data Stok (Barang Baru)",
                             unitJumlah = inputQty,
                             satuan = selectedSatuan,
-                            nilaiEstimasi = inputHargaLong.toDouble(),
+                            nilaiEstimasi = nilaiEstimasiValue,
                             lokasi = "Pengajuan Barang Baru",
                             cabangAsal = "Pusat",
                             ruanganAsal = "Gudang Stok",
@@ -1443,7 +1442,7 @@ class DataStokActivity : AppCompatActivity() {
                                 "Pemohon: $currentUserName\n" +
                                 "Nama Barang: $inputNamaBarang\n" +
                                 "Jumlah: ${numberFormat.format(inputQty)} $selectedSatuan\n" +
-                                "Harga: $hargaFormatted\n" +
+                                "Harga: ${hargaFormatted ?: "- (Opsional)"}\n" +
                                 "Lampiran File: ${selectedAttachment?.fileName ?: "Tidak ada (Opsional)"}\n" +
                                 "Keterangan: ${rawDeskripsi.ifEmpty { "-" }}\n\n" +
                                 "Pengajuan ini telah masuk ke halaman Pengajuan Admin di Web (tab Pengajuan Lainnya Data Stok)."
