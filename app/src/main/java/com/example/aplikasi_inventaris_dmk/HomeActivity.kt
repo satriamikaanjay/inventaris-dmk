@@ -192,9 +192,8 @@ class HomeActivity : AppCompatActivity() {
         val currentHost = ApiClient.extractHostIp(currentUrl)
         val host = ApiClient.getDisplayHost(currentUrl)
 
-        // Jika IP lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung pindai server Wi-Fi tanpa tunggu timeout
+        // Jika IP lokal lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung pindai server Wi-Fi tanpa tunggu timeout
         if (allowAutoDiscover &&
-            !ApiClient.isCustomUrlLocked(this) &&
             !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, currentHost)
         ) {
             updateHomeServerStatus(

@@ -158,10 +158,9 @@ class LoginActivity : AppCompatActivity() {
         btnLogin.isEnabled = false
         btnLogin.text = "Memproses..."
 
-        // Jika IP tersimpan berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), cari server Wi-Fi dulu
+        // Jika IP lokal tersimpan berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), cari server Wi-Fi dulu
         val savedHost = ApiClient.extractHostIp(ApiClient.getBaseUrl(this))
         if (allowAutoDiscoverRetry &&
-            !ApiClient.isCustomUrlLocked(this) &&
             !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, savedHost)
         ) {
             btnLogin.text = "Mencari server Wi-Fi..."
@@ -357,9 +356,8 @@ class LoginActivity : AppCompatActivity() {
         val currentHost = ApiClient.extractHostIp(currentUrl)
         val displayHost = ApiClient.getDisplayHost(currentUrl)
 
-        // Jika IP lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung cari server Wi-Fi tanpa menunggu timeout
+        // Jika IP lokal lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung cari server Wi-Fi tanpa menunggu timeout
         if (allowAutoProbe &&
-            !ApiClient.isCustomUrlLocked(this) &&
             !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, currentHost)
         ) {
             runAutoWifiDiscovery("Mencari server baru di Wi-Fi ${WifiAccessGuard.REQUIRED_SSID}")
