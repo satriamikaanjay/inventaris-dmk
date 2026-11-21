@@ -23,6 +23,7 @@ import com.example.aplikasi_inventaris_dmk.network.PengajuanLocalStore
 import com.example.aplikasi_inventaris_dmk.network.ServerAutoDiscovery
 import com.example.aplikasi_inventaris_dmk.network.ServerConfigDialog
 import com.example.aplikasi_inventaris_dmk.network.UserAccessStatusResponse
+import com.example.aplikasi_inventaris_dmk.network.WifiAccessGuard
 import com.example.aplikasi_inventaris_dmk.notification.PengajuanNotificationService
 import retrofit2.Call
 import retrofit2.Callback
@@ -45,15 +46,10 @@ class LoginActivity : AppCompatActivity() {
         if (!isBlockedLogout) {
             val savedSession = PengajuanLocalStore.getActiveSession(this)
             if (savedSession != null && savedSession.isLoggedIn && savedSession.rememberMe) {
-                val homeIntent = Intent(this, HomeActivity::class.java).apply {
-                    putExtra("USER_ID", savedSession.userId)
-                    putExtra("USER_NAME", savedSession.userName)
-                    putExtra("USER_EMAIL", savedSession.userEmail)
-                    putExtra("USER_ROLE", savedSession.userRole)
+                if (WifiAccessGuard.isAllowed(this)) {
+                    navigateToHomeFromSession(savedSession)
+                    return
                 }
-                startActivity(homeIntent)
-                finish()
-                return
             } else if (savedSession != null && !savedSession.rememberMe) {
                 // Jika sebelumnya login tanpa "Ingat saya", bersihkan sesi saat kembali membuka halaman login
                 PengajuanNotificationService.stopMonitoring(this)
@@ -253,7 +249,29 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!WifiAccessGuard.isAllowed(this)) {
+            return
+        }
+        val isBlockedLogout = intent.getBooleanExtra("FORCE_BLOCKED_LOGOUT", false)
+        if (!isBlockedLogout) {
+            val savedSession = PengajuanLocalStore.getActiveSession(this)
+            if (savedSession != null && savedSession.isLoggedIn && savedSession.rememberMe) {
+                navigateToHomeFromSession(savedSession)
+                return
+            }
+        }
         checkServerConnectionAndSync(allowAutoProbe = true)
+    }
+
+    private fun navigateToHomeFromSession(session: com.example.aplikasi_inventaris_dmk.network.ActiveUserSession) {
+        val homeIntent = Intent(this, HomeActivity::class.java).apply {
+            putExtra("USER_ID", session.userId)
+            putExtra("USER_NAME", session.userName)
+            putExtra("USER_EMAIL", session.userEmail)
+            putExtra("USER_ROLE", session.userRole)
+        }
+        startActivity(homeIntent)
+        finish()
     }
 
     private fun checkServerConnectionAndSync(allowAutoProbe: Boolean) {

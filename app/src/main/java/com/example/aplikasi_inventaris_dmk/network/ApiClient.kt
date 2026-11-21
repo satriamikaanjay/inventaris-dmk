@@ -11,7 +11,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    const val DEFAULT_HOST_IP = "192.168.68.117"
+    const val DEFAULT_HOST_IP = "192.168.1.117"
     const val DEFAULT_APACHE_URL = "http://$DEFAULT_HOST_IP/INVENTARIS-DMK/public/api/"
     const val DEFAULT_ARTISAN_URL = "http://$DEFAULT_HOST_IP:8000/api/"
     const val LOCALHOST_USB_URL = "http://127.0.0.1:8000/api/"

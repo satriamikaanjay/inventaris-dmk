@@ -2,9 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Izin Internet, Kamera, & Notifikasi -->
+    <!-- Izin Internet, Wi-Fi, Lokasi (untuk verifikasi SSID Wi-Fi), Kamera, & Notifikasi -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -35,6 +38,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Layar Pembatasan Wi-Fi Tertentu (TP-Link_456A) -->
+        <activity
+            android:name=".WifiBlockedActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
 
         <!-- Home / Dashboard Activity -->
         <activity
