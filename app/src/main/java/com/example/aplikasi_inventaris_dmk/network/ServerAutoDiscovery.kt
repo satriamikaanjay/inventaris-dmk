@@ -44,6 +44,28 @@ object ServerAutoDiscovery {
         return if (parts.size == 4) "${parts[0]}.${parts[1]}.${parts[2]}.x" else first
     }
 
+    /**
+     * Mengecek apakah hostIp berada pada subnet Wi-Fi aktif saat ini.
+     * Berguna untuk langsung melewati IP lama (mis. IP USB Tethering 10.33.x.x)
+     * tanpa harus menunggu timeout 6-12 detik saat kabel data dicabut.
+     */
+    fun isHostOnActiveWifiSubnet(context: Context, hostIp: String?): Boolean {
+        if (hostIp.isNullOrBlank()) return false
+        // Jika memakai domain publik (bukan IPv4 lokal), jangan dianggap beda subnet
+        if (!isValidIpv4(hostIp)) return true
+        val hostParts = hostIp.split(".")
+        if (hostParts.size != 4) return true
+        val nets = collectLocalNetworks(context.applicationContext)
+        if (nets.isEmpty()) return true
+        return nets.any { net ->
+            val netParts = net.ip.split(".")
+            netParts.size == 4 &&
+                netParts[0] == hostParts[0] &&
+                netParts[1] == hostParts[1] &&
+                (netParts[2] == hostParts[2] || (net.prefixLength in 16..23))
+        }
+    }
+
     fun discoverAsync(
         context: Context,
         onStatus: ((String) -> Unit)? = null,
@@ -84,17 +106,21 @@ object ServerAutoDiscovery {
 
         val priorityIps = LinkedHashSet<String>()
         val savedHost = ApiClient.extractHostIp(ApiClient.getBaseUrl(context))
-        if (isValidIpv4(savedHost)) priorityIps.add(savedHost)
+        // Prioritaskan IP default Wi-Fi (192.168.1.117) lebih dulu jika satu subnet dengan Wi-Fi aktif
         if (isValidIpv4(ApiClient.DEFAULT_HOST_IP)) priorityIps.add(ApiClient.DEFAULT_HOST_IP)
+        if (isValidIpv4(savedHost) && isHostOnActiveWifiSubnet(context, savedHost)) {
+            priorityIps.add(savedHost)
+        }
 
         for (net in localNets) {
             if (!net.gateway.isNullOrBlank() && isValidIpv4(net.gateway)) {
                 priorityIps.add(net.gateway)
             }
         }
-        // Gateway hotspot Windows, Android Emulator host alias, & USB adb reverse
-        priorityIps.add("10.0.2.2")
+        // Fallback IP terakhir (bila berbeda subnet) & hotspot Windows
+        if (isValidIpv4(savedHost)) priorityIps.add(savedHost)
         priorityIps.add("192.168.137.1")
+        priorityIps.add("10.0.2.2")
         priorityIps.add("127.0.0.1")
 
         // 1. Cek cepat IP prioritas (IP terakhir, gateway, hotspot Windows, USB localhost)
@@ -297,6 +323,8 @@ object ServerAutoDiscovery {
         }
 
         // Fallback & dukungan Hotspot HP (ap0 / swlan0 / wlan0) via NetworkInterface
+        // Jangan masukkan interface USB tethering (rndis) jika Wi-Fi sudah aktif agar IP server selalu memakai Wi-Fi
+        val hasWifiAlready = result.isNotEmpty()
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces != null && interfaces.hasMoreElements()) {
@@ -307,12 +335,15 @@ object ServerAutoDiscovery {
                 if (name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("pdp") || name.startsWith("tun")) {
                     continue
                 }
+                if (hasWifiAlready && name.startsWith("rndis")) {
+                    continue
+                }
                 val isPreferredLan = name.startsWith("wlan") ||
                     name.startsWith("ap") ||
                     name.startsWith("swlan") ||
                     name.startsWith("wifi") ||
                     name.startsWith("eth") ||
-                    name.startsWith("rndis")
+                    (!hasWifiAlready && name.startsWith("rndis"))
                 if (!isPreferredLan) continue
 
                 for (ifaceAddr in nif.interfaceAddresses) {

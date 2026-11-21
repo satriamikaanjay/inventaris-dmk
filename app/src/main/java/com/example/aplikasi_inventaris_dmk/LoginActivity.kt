@@ -137,114 +137,192 @@ class LoginActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Ubah tombol ke status loading
-            btnLogin.isEnabled = false
-            btnLogin.text = "Memproses..."
+            // Ubah tombol ke status loading dan lakukan login (otomatis cari server Wi-Fi jika IP lama gagal)
+            performLoginRequest(
+                email = email,
+                password = password,
+                rememberMe = cbRememberMe.isChecked,
+                btnLogin = btnLogin,
+                allowAutoDiscoverRetry = true
+            )
+        }
+    }
 
-            // Panggil API Login menggunakan Retrofit
-            ApiClient.instance.loginUser(email, password).enqueue(object : Callback<LoginResponse> {
-                override fun onResponse(call: Call<LoginResponse>, response: Response<LoginResponse>) {
-                    btnLogin.isEnabled = true
-                    btnLogin.text = "Masuk Sekarang"
+    private fun performLoginRequest(
+        email: String,
+        password: String,
+        rememberMe: Boolean,
+        btnLogin: Button,
+        allowAutoDiscoverRetry: Boolean
+    ) {
+        btnLogin.isEnabled = false
+        btnLogin.text = "Memproses..."
 
-                    val loginResponse = response.body()
+        // Jika IP tersimpan berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), cari server Wi-Fi dulu
+        val savedHost = ApiClient.extractHostIp(ApiClient.getBaseUrl(this))
+        if (allowAutoDiscoverRetry &&
+            !ApiClient.isCustomUrlLocked(this) &&
+            !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, savedHost)
+        ) {
+            btnLogin.text = "Mencari server Wi-Fi..."
+            ServerAutoDiscovery.discoverAsync(
+                context = this,
+                onStatus = { statusText ->
+                    if (!isFinishing && !isDestroyed) {
+                        renderServerChecking(statusText)
+                    }
+                },
+                onFinished = { result ->
+                    if (isFinishing || isDestroyed) return@discoverAsync
+                    val foundUrl = result.foundUrl
+                    if (foundUrl != null) {
+                        ApiClient.setBaseUrl(this@LoginActivity, foundUrl, markAsCustom = false)
+                        val host = ApiClient.getDisplayHost(foundUrl)
+                        renderServerConnected("Sinkron dengan web ($host)")
+                        performLoginRequest(email, password, rememberMe, btnLogin, allowAutoDiscoverRetry = false)
+                    } else {
+                        performLoginRequest(email, password, rememberMe, btnLogin, allowAutoDiscoverRetry = false)
+                    }
+                }
+            )
+            return
+        }
 
-                    // Cek jika status diblokir oleh Master Admin meskipun HTTP 200
-                    if (loginResponse != null &&
-                        (loginResponse.status.equals("blocked", ignoreCase = true) ||
-                                (loginResponse.message ?: "").contains("master admin", ignoreCase = true))
-                    ) {
+        // Panggil API Login menggunakan Retrofit
+        ApiClient.instance.loginUser(email, password).enqueue(object : Callback<LoginResponse> {
+            override fun onResponse(call: Call<LoginResponse>, response: Response<LoginResponse>) {
+                btnLogin.isEnabled = true
+                btnLogin.text = "Masuk Sekarang"
+
+                val loginResponse = response.body()
+
+                // Cek jika status diblokir oleh Master Admin meskipun HTTP 200
+                if (loginResponse != null &&
+                    (loginResponse.status.equals("blocked", ignoreCase = true) ||
+                            (loginResponse.message ?: "").contains("master admin", ignoreCase = true))
+                ) {
+                    showBlockedByMasterAdminDialog()
+                    return
+                }
+
+                if (response.isSuccessful) {
+                    if (loginResponse != null && loginResponse.status == "success") {
+                        Toast.makeText(
+                            this@LoginActivity,
+                            "Login Berhasil: ${loginResponse.message ?: "Selamat datang"}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        val user = loginResponse.data
+                        val resolvedUserId = user?.user_id ?: user?.id ?: 0
+                        val displayName = user?.user_name?.takeIf { it.isNotBlank() }
+                            ?: user?.nama_lengkap?.takeIf { it.isNotBlank() }
+                            ?: email.substringBefore("@")
+                                .replaceFirstChar { it.uppercase() }
+                        val resolvedEmail = user?.email ?: email
+                        val resolvedRole = user?.role ?: ""
+
+                        // Simpan sesi aktif beserta pilihan "Ingat saya"
+                        PengajuanLocalStore.saveActiveSession(
+                            context = this@LoginActivity,
+                            userId = resolvedUserId,
+                            userName = displayName,
+                            userEmail = resolvedEmail,
+                            userRole = resolvedRole,
+                            rememberMe = rememberMe
+                        )
+
+                        val nextIntent = Intent(this@LoginActivity, HomeActivity::class.java).apply {
+                            putExtra("USER_ID", resolvedUserId)
+                            putExtra("USER_NAME", displayName)
+                            putExtra("USER_EMAIL", resolvedEmail)
+                            putExtra("USER_ROLE", resolvedRole)
+                        }
+                        startActivity(nextIntent)
+                        finish()
+                    } else {
+                        val msg = loginResponse?.message ?: "Login gagal. Silakan coba lagi."
+                        if (msg.contains("master admin", ignoreCase = true)) {
+                            showBlockedByMasterAdminDialog()
+                        } else {
+                            Toast.makeText(this@LoginActivity, msg, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } else {
+                    val rawErrorBody = try {
+                        response.errorBody()?.string() ?: ""
+                    } catch (_: Exception) {
+                        ""
+                    }
+
+                    val errJson = ApiClient.parseErrorJson(rawErrorBody)
+                    val errStatus = errJson?.optString("status", "") ?: ""
+                    val errorMsg = errJson?.optString("message", "")?.takeIf { it.isNotBlank() }
+                        ?: "Email atau kata sandi salah (HTTP ${response.code()})."
+
+                    val isMasterAdminBlocked = errStatus.equals("blocked", ignoreCase = true) ||
+                            errorMsg.contains("master admin", ignoreCase = true)
+
+                    if (isMasterAdminBlocked) {
                         showBlockedByMasterAdminDialog()
                         return
                     }
 
-                    if (response.isSuccessful) {
-                        if (loginResponse != null && loginResponse.status == "success") {
-                            Toast.makeText(
-                                this@LoginActivity,
-                                "Login Berhasil: ${loginResponse.message ?: "Selamat datang"}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-
-                            val user = loginResponse.data
-                            val resolvedUserId = user?.user_id ?: user?.id ?: 0
-                            val displayName = user?.user_name?.takeIf { it.isNotBlank() }
-                                ?: user?.nama_lengkap?.takeIf { it.isNotBlank() }
-                                ?: email.substringBefore("@")
-                                    .replaceFirstChar { it.uppercase() }
-                            val resolvedEmail = user?.email ?: email
-                            val resolvedRole = user?.role ?: ""
-
-                            // Simpan sesi aktif beserta pilihan "Ingat saya"
-                            PengajuanLocalStore.saveActiveSession(
-                                context = this@LoginActivity,
-                                userId = resolvedUserId,
-                                userName = displayName,
-                                userEmail = resolvedEmail,
-                                userRole = resolvedRole,
-                                rememberMe = cbRememberMe.isChecked
-                            )
-
-                            val nextIntent = Intent(this@LoginActivity, HomeActivity::class.java).apply {
-                                putExtra("USER_ID", resolvedUserId)
-                                putExtra("USER_NAME", displayName)
-                                putExtra("USER_EMAIL", resolvedEmail)
-                                putExtra("USER_ROLE", resolvedRole)
-                            }
-                            startActivity(nextIntent)
-                            finish()
-                        } else {
-                            val msg = loginResponse?.message ?: "Login gagal. Silakan coba lagi."
-                            if (msg.contains("master admin", ignoreCase = true)) {
-                                showBlockedByMasterAdminDialog()
-                            } else {
-                                Toast.makeText(this@LoginActivity, msg, Toast.LENGTH_LONG).show()
-                            }
-                        }
+                    if (response.code() in listOf(403, 429, 503) && !isFinishing && !isDestroyed) {
+                        AlertDialog.Builder(this@LoginActivity)
+                            .setTitle(if (response.code() == 503) "Sistem Maintenance" else "Login Ditolak")
+                            .setMessage(errorMsg)
+                            .setPositiveButton("Mengerti", null)
+                            .show()
                     } else {
-                        val rawErrorBody = try {
-                            response.errorBody()?.string() ?: ""
-                        } catch (_: Exception) {
-                            ""
-                        }
-
-                        val errJson = ApiClient.parseErrorJson(rawErrorBody)
-                        val errStatus = errJson?.optString("status", "") ?: ""
-                        val errorMsg = errJson?.optString("message", "")?.takeIf { it.isNotBlank() }
-                            ?: "Email atau kata sandi salah (HTTP ${response.code()})."
-
-                        val isMasterAdminBlocked = errStatus.equals("blocked", ignoreCase = true) ||
-                                errorMsg.contains("master admin", ignoreCase = true)
-
-                        if (isMasterAdminBlocked) {
-                            showBlockedByMasterAdminDialog()
-                            return
-                        }
-
-                        if (response.code() in listOf(403, 429, 503) && !isFinishing && !isDestroyed) {
-                            AlertDialog.Builder(this@LoginActivity)
-                                .setTitle(if (response.code() == 503) "Sistem Maintenance" else "Login Ditolak")
-                                .setMessage(errorMsg)
-                                .setPositiveButton("Mengerti", null)
-                                .show()
-                        } else {
-                            Toast.makeText(this@LoginActivity, errorMsg, Toast.LENGTH_LONG).show()
-                        }
+                        Toast.makeText(this@LoginActivity, errorMsg, Toast.LENGTH_LONG).show()
                     }
                 }
+            }
 
-                override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
-                    btnLogin.isEnabled = true
-                    btnLogin.text = "Masuk Sekarang"
-                    renderServerOffline("Gagal menghubungi ${ApiClient.getDisplayHost()}: ${t.localizedMessage ?: "Timeout"}")
-                    Toast.makeText(
-                        this@LoginActivity,
-                        "Koneksi Gagal: Pastikan HP & laptop di Wi-Fi yang sama dan cek Atur IP (${ApiClient.getDisplayHost()})",
-                        Toast.LENGTH_LONG
-                    ).show()
+            override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
+                if (allowAutoDiscoverRetry && !isFinishing && !isDestroyed) {
+                    btnLogin.text = "Mencari server Wi-Fi..."
+                    ServerAutoDiscovery.discoverAsync(
+                        context = this@LoginActivity,
+                        onStatus = { statusText ->
+                            if (!isFinishing && !isDestroyed) {
+                                renderServerChecking(statusText)
+                            }
+                        },
+                        onFinished = { result ->
+                            if (isFinishing || isDestroyed) return@discoverAsync
+                            val foundUrl = result.foundUrl
+                            if (foundUrl != null) {
+                                ApiClient.setBaseUrl(this@LoginActivity, foundUrl, markAsCustom = false)
+                                val host = ApiClient.getDisplayHost(foundUrl)
+                                renderServerConnected("Sinkron dengan web ($host)")
+                                performLoginRequest(email, password, rememberMe, btnLogin, allowAutoDiscoverRetry = false)
+                            } else {
+                                btnLogin.isEnabled = true
+                                btnLogin.text = "Masuk Sekarang"
+                                renderServerOffline("Gagal menghubungi ${ApiClient.getDisplayHost()}: ${t.localizedMessage ?: "Timeout"}")
+                                Toast.makeText(
+                                    this@LoginActivity,
+                                    "Koneksi Gagal: Pastikan HP & laptop di Wi-Fi ${WifiAccessGuard.REQUIRED_SSID} dan Laragon aktif",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    )
+                    return
                 }
-            })
-        }
+
+                btnLogin.isEnabled = true
+                btnLogin.text = "Masuk Sekarang"
+                renderServerOffline("Gagal menghubungi ${ApiClient.getDisplayHost()}: ${t.localizedMessage ?: "Timeout"}")
+                Toast.makeText(
+                    this@LoginActivity,
+                    "Koneksi Gagal: Pastikan HP & laptop di Wi-Fi ${WifiAccessGuard.REQUIRED_SSID} dan cek Atur IP (${ApiClient.getDisplayHost()})",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        })
     }
 
     override fun onResume() {
@@ -276,7 +354,18 @@ class LoginActivity : AppCompatActivity() {
 
     private fun checkServerConnectionAndSync(allowAutoProbe: Boolean) {
         val currentUrl = ApiClient.getBaseUrl(this)
+        val currentHost = ApiClient.extractHostIp(currentUrl)
         val displayHost = ApiClient.getDisplayHost(currentUrl)
+
+        // Jika IP lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung cari server Wi-Fi tanpa menunggu timeout
+        if (allowAutoProbe &&
+            !ApiClient.isCustomUrlLocked(this) &&
+            !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, currentHost)
+        ) {
+            runAutoWifiDiscovery("Mencari server baru di Wi-Fi ${WifiAccessGuard.REQUIRED_SSID}")
+            return
+        }
+
         renderServerChecking("Memeriksa $displayHost...")
 
         val service = ApiClient.buildServiceForUrl(currentUrl)

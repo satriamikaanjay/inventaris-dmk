@@ -188,7 +188,43 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun syncWithWebServer(allowAutoDiscover: Boolean = true) {
-        val host = ApiClient.getDisplayHost(ApiClient.getBaseUrl(this))
+        val currentUrl = ApiClient.getBaseUrl(this)
+        val currentHost = ApiClient.extractHostIp(currentUrl)
+        val host = ApiClient.getDisplayHost(currentUrl)
+
+        // Jika IP lama berbeda subnet dengan Wi-Fi saat ini (mis. bekas IP USB), langsung pindai server Wi-Fi tanpa tunggu timeout
+        if (allowAutoDiscover &&
+            !ApiClient.isCustomUrlLocked(this) &&
+            !ServerAutoDiscovery.isHostOnActiveWifiSubnet(this, currentHost)
+        ) {
+            updateHomeServerStatus(
+                connected = null,
+                title = "Mencari server di Wi-Fi...",
+                subtitle = "Menyesuaikan jaringan Wi-Fi aktif"
+            )
+            ServerAutoDiscovery.discoverAsync(
+                context = this,
+                onStatus = { statusText ->
+                    if (!isFinishing && !isDestroyed) {
+                        updateHomeServerStatus(
+                            connected = null,
+                            title = "Mencari server di Wi-Fi...",
+                            subtitle = statusText
+                        )
+                    }
+                },
+                onFinished = { result ->
+                    if (isFinishing || isDestroyed) return@discoverAsync
+                    val foundUrl = result.foundUrl
+                    if (foundUrl != null) {
+                        ApiClient.setBaseUrl(this@HomeActivity, foundUrl, markAsCustom = false)
+                    }
+                    syncWithWebServer(allowAutoDiscover = false)
+                }
+            )
+            return
+        }
+
         updateHomeServerStatus(
             connected = null,
             title = "Menyinkronkan dengan server...",
